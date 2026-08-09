@@ -78,7 +78,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <body>
 
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v1.8</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v1.9</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -296,6 +296,89 @@ document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
   if(b.dataset.p==="data") stats();
 });
 
+
+/* ---------- 값 사전 : 라벨이 없어도 값만 보고 판별 ---------- */
+const DIC = {
+  proc: [
+    ["워시드", ["fully washed","washed","wet process","워시드","수세식","습식"]],
+    ["내추럴", ["natural","dry process","내추럴","자연건조","건식"]],
+    ["허니", ["black honey","red honey","yellow honey","white honey","honey","허니"]],
+    ["펄프드 내추럴", ["pulped natural","semi washed","semi-washed","펄프드","펄프트"]],
+    ["무산소 발효", ["anaerobic","carbonic maceration","무산소","카보닉","언에어로빅"]],
+    ["습식 탈각", ["giling basah","wet hulled","길링바사","웻헐"]],
+    ["디카페인", ["decaf","swiss water","sugarcane","디카페인"]]
+  ],
+  variety: ["geisha","gesha","게이샤","bourbon","부르봉","버번","yellow bourbon","red bourbon",
+    "pink bourbon","핑크버번","caturra","카투라","catuai","카투아이","typica","티피카",
+    "pacamara","파카마라","pacas","파카스","maragogype","마라고지페","mundo novo","문도노보",
+    "sl28","sl34","ruiru","batian","heirloom","재래종","에어룸","castillo","카스티조",
+    "colombia","tabi","java","자바","wush wush","sidra","시드라","laurina","라우리나",
+    "sudan rume","수단루메","ethiopian landrace","74110","74112","74158","kent","s795"],
+  origin: [["에티오피아",["ethiopia","에티오피아"]],["케냐",["kenya","케냐"]],
+    ["콜롬비아",["colombia","콜롬비아"]],["브라질",["brazil","brasil","브라질"]],
+    ["과테말라",["guatemala","과테말라"]],["코스타리카",["costa rica","코스타리카"]],
+    ["파나마",["panama","파나마"]],["온두라스",["honduras","온두라스"]],
+    ["엘살바도르",["el salvador","엘살바도르"]],["니카라과",["nicaragua","니카라과"]],
+    ["페루",["peru","페루"]],["볼리비아",["bolivia","볼리비아"]],["에콰도르",["ecuador","에콰도르"]],
+    ["멕시코",["mexico","멕시코"]],["르완다",["rwanda","르완다"]],["부룬디",["burundi","부룬디"]],
+    ["탄자니아",["tanzania","탄자니아"]],["인도네시아",["indonesia","인도네시아","sumatra","수마트라"]],
+    ["예멘",["yemen","예멘"]],["인도",["india","인도"]],["파푸아뉴기니",["papua","png","파푸아"]]],
+  region: ["yirgacheffe","예가체프","이르가체페","guji","구지","sidamo","시다모","limu","jimma","짐마",
+    "harrar","하라","huila","우일라","후일라","nariño","narino","나리뇨","tolima","톨리마","cauca","카우카",
+    "antioquia","안티오키아","huehuetenango","우에우에테낭고","antigua","안티구아","acatenango",
+    "santa rosa","tarrazú","tarrazu","타라주","west valley","tres rios","boquete","보케테",
+    "volcan","chiriqui","cerrado","세하도","sul de minas","술데미나스","mogiana","모지아나",
+    "carmo de minas","까르모","nyeri","니에리","kirinyaga","키리냐가","embu","muranga",
+    "kayanza","ngozi","gakenke","aceh","아체","toraja","토라자","mandheling","만델링"]
+};
+function scanValues(txt){
+  const low=" "+txt.toLowerCase().replace(/\s+/g," ")+" ";
+  const hit=(list)=>{ for(const k of list){ if(low.includes(k.toLowerCase())) return k; } return null; };
+  let n=0;
+  // 가공
+  if(!$("b_proc").value){
+    for(const [label,keys] of DIC.proc){ if(hit(keys)){ $("b_proc").value=label; n++; break; } }
+  }
+  // 원산지
+  if(!$("b_origin").value){
+    for(const [label,keys] of DIC.origin){ if(hit(keys)){ $("b_origin").value=label; n++; break; } }
+  }
+  // 품종 (여러 개면 모두)
+  if(!$("b_var").value){
+    const found=DIC.variety.filter(v=>low.includes(" "+v.toLowerCase())||low.includes(v.toLowerCase()));
+    if(found.length){ $("b_var").value=[...new Set(found)].slice(0,4).join(", "); n++; }
+  }
+  // 지역
+  if(!$("b_region").value){
+    const r=DIC.region.find(v=>low.includes(v.toLowerCase()));
+    if(r){ $("b_region").value=r; n++; }
+  }
+  // 고도 — "1,900m ~ 2,100m", "1,463 - 1,981 masl", "1600m" 모두 대응
+  if(!$("b_alt").value){
+    const range=txt.match(/(?:\d{1,2}[,.]\d{3}|\d{3,4})\s*(?:m\b|masl|미터)?\s*[~\-–]\s*(?:\d{1,2}[,.]\d{3}|\d{3,4})\s*(?:m\b|masl|미터)/i);
+    const single=txt.match(/(?:\d{1,2}[,.]\d{3}|\d{3,4})\s*(?:m\b|masl|미터)/i);
+    const m=range||single;
+    if(m){ $("b_alt").value=m[0].replace(/\s+/g," ").trim(); n++; }
+  }
+  // 스크린
+  if(!$("b_screen").value){
+    const m=txt.match(/(?:screen|scr|스크린)\s*[:\s]*([0-9]{2}\s*\/\s*[0-9]{2}|[0-9]{2}\+?)/i)
+          || txt.match(/\b(1[4-9]\s*\/\s*1[4-9])\b/);
+    if(m){ $("b_screen").value=(m[1]||m[0]).trim(); n++; }
+  }
+  // 등급
+  if(!$("b_grade").value){
+    const m=txt.match(/\b(AA|AB|G[1-4]|Grade\s*[1-4]|SHG|SHB|EP|Supremo|Excelso|Micro\s*Lot|마이크로랏|스페셜티|프리미엄)\b/i);
+    if(m){ $("b_grade").value=m[0].trim(); n++; }
+  }
+  // 수확
+  if(!$("b_harvest").value){
+    const m=txt.match(/(20\d{2}\s*\/\s*\d{2}|20\d{2}\s*(?:crop|하베스트|수확))|(\d{1,2}\s*[~\-]\s*\d{1,2}\s*월)/i);
+    if(m){ $("b_harvest").value=m[0].trim(); n++; }
+  }
+  return n;
+}
+
 /* ---------- 생두 파서 ---------- */
 const FIELDS=[
   ["b_origin",["원산지"]],
@@ -337,9 +420,21 @@ function parseText(txt){
     if(cand.length) $("b_name").value=cand.sort((a,b)=>b.length-a.length)[0]
       .replace(/^\[[^\]]*\]\s*/,"").trim();
   }
+  hit += scanValues(txt);                       // 라벨이 없어도 값으로 채운다
   if(!$("b_raw").value) $("b_raw").value=txt.slice(0,4000);
   return hit;
 }
+let pasteTimer=null;
+$("paste").addEventListener("input",()=>{
+  clearTimeout(pasteTimer);
+  pasteTimer=setTimeout(()=>{
+    const t=$("paste").value.trim();
+    if(t.length<10) return;
+    const n=parseText(t);
+    $("parsemsg").textContent=n?`자동으로 ${n}개 항목을 채웠습니다. 아래에서 확인하세요.`
+      :"인식된 항목이 없습니다. 직접 입력하세요.";
+  },400);
+});
 $("parse").onclick=()=>{
   const t=$("paste").value.trim();
   if(!t){ $("parsemsg").textContent="붙여넣은 내용이 없습니다."; return; }
@@ -681,7 +776,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"1.8",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"1.9",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
