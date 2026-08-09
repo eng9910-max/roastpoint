@@ -77,7 +77,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
 </head>
 <body>
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v1.1</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v1.2</span>
   <button class="ghost" id="undo" title="Ctrl+Z">되돌리기</button>
   <button class="ghost" id="redo" title="Ctrl+Shift+Z">다시</button>
   <a href="./" style="font-size:12.5px;color:var(--setpoint);margin-left:auto">← 기록장</a>
@@ -145,6 +145,9 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
         <button class="ghost" id="ref_clr">모두 지우기</button>
       </div>
       <ul class="refs" id="reflist"></ul>
+      <label style="display:flex;align-items:center;gap:7px;margin-top:8px;font-size:13px;color:var(--ink)">
+        <input type="checkbox" id="norm" style="width:auto"> 정규화 비교 (기종이 다를 때)
+      </label>
       <p class="hint">점선이 비교용 프로파일, 굵은 선이 지금 편집 중인 곡선, 회색이 실측 로그입니다.</p>
     </div>
 
@@ -2566,8 +2569,33 @@ function rescale(){
   yHi=Math.max(215,Math.ceil((Math.max(...vs,200)+10)/10)*10);
 }
 function draw(){
-  rescale();
+  const NORM=isNorm();
+  if(NORM){ xMax=1; yLo=-0.05; yHi=1.08; } else rescale();
   const svg=$("chart"); svg.innerHTML="";
+  if(NORM){
+    for(let g=0;g<=10;g++){
+      svg.appendChild(el("line",{x1:X(g/10),x2:X(g/10),y1:M.t,y2:H-M.b,stroke:"#EDF0EF","stroke-width":1}));
+      const tx=el("text",{x:X(g/10),y:H-M.b+16,"text-anchor":"middle","font-size":10,fill:"#9AA8A5"});
+      tx.textContent=(g*10)+"%"; svg.appendChild(tx);
+      svg.appendChild(el("line",{x1:M.l,x2:W-M.r,y1:Y(g/10),y2:Y(g/10),stroke:"#E6EAE9","stroke-width":1}));
+      const ty=el("text",{x:M.l-7,y:Y(g/10)+3.5,"text-anchor":"end","font-size":10,fill:"#9AA8A5"});
+      ty.textContent=(g*10)+"%"; svg.appendChild(ty);
+    }
+    svg.appendChild(el("rect",{x:M.l,y:M.t,width:W-M.l-M.r,height:H-M.t-M.b,fill:"transparent"}));
+    const line=(pp,color,dash,w)=>{
+      if(pp.length<2) return;
+      const d=pp.map((p,i)=>`${i?"L":"M"}${X(p[0]).toFixed(1)} ${Y(p[1]).toFixed(1)}`).join(" ");
+      const a={d,fill:"none",stroke:color,"stroke-width":w};
+      if(dash) a["stroke-dasharray"]=dash;
+      svg.appendChild(el("path",a));
+    };
+    S.logs.forEach(l=>line(normPts(l.pts),"#9AA8A5",null,1.4));
+    (S.refs||[]).filter(r=>r.on).forEach(r=>line(normPts(r.pts),r.color,"6 4",1.8));
+    line(normPts(S.temps),"#C4462A",null,2.4);
+    $("ptcount").textContent="정규화 비교 — 시간·온도를 각각 0~100%로 눕혔습니다";
+    renderStats(); renderDiff();
+    return;
+  }
   for(let v=Math.ceil(yLo/20)*20; v<=yHi; v+=20){
     svg.appendChild(el("line",{x1:M.l,x2:W-M.r,y1:Y(v),y2:Y(v),stroke:"#E6EAE9","stroke-width":1}));
     const t=el("text",{x:M.l-7,y:Y(v)+3.5,"text-anchor":"end","font-size":10,fill:"#9AA8A5"});
@@ -2694,6 +2722,23 @@ $("alog").onclick=()=>{
 };
 
 
+
+
+/* ---------- 정규화 비교 ---------- */
+/* 기종이 다르면 온도의 절대값을 비교할 수 없다.
+   시간은 총 로스팅 시간으로, 온도는 터닝포인트~배출 구간으로 각각 0~1로 눕혀
+   '곡선의 모양'만 남긴다.                                            */
+function normPts(pts){
+  if(!pts||pts.length<2) return [];
+  const g=i=>Array.isArray(pts[i])?{t:pts[i][0],v:pts[i][1]}:pts[i];
+  const n=pts.length, tEnd=g(n-1).t||1;
+  let lo=g(0).v;                       // 터닝포인트(최저점)
+  for(let i=0;i<n;i++){ const p=g(i); if(p.v<lo) lo=p.v; if(p.t>tEnd*0.3) break; }
+  const hi=g(n-1).v, span=(hi-lo)||1;
+  return pts.map((_,i)=>{ const p=g(i); return [p.t/tEnd,(p.v-lo)/span]; });
+}
+const isNorm=()=>$("norm") && $("norm").checked;
+$("norm") && $("norm").addEventListener("change",()=>{ draw(); });
 
 /* ---------- 비교 레이어 ---------- */
 const REFPAL=["#2E6070","#7A5EA8","#3F7A5E","#B0762C","#B0436E","#4A6FA5"];
@@ -3034,7 +3079,7 @@ $("cplink").onclick=async()=>{
 
 /* ---------- 저장 / 불러오기 ---------- */
 $("save").onclick=()=>{
-  const d={v:"1.1",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
+  const d={v:"1.2",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
            coolT:+$("coolT").value,coolV:+$("coolV").value};
   const b=new Blob([JSON.stringify(d,null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);

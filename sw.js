@@ -2,7 +2,7 @@
    1) 공유 시트로 들어온 파일을 가로채 캐시에 넣고 앱으로 넘김
    2) 오프라인에서도 앱이 열리도록 최소 캐싱                     */
 
-const APP_CACHE   = "roast-app-v7";
+const APP_CACHE   = "roast-app-v8";
 const SHARE_CACHE = "roast-shared";
 const SCOPE       = self.registration.scope;
 const SHARE_KEY   = new URL("__shared__", SCOPE).href;
