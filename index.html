@@ -79,7 +79,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v3.3</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v3.4</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -321,6 +321,25 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     </div>
     <p class="note" id="d_msg"></p>
   </div>
+  <div class="block">
+    <h2>기기 간 동기화</h2>
+    <p class="lead">폰과 PC를 같은 <b>동기화 키</b>로 묶으면 기록이 오갑니다.
+    키는 그 자체가 비밀번호이니 남에게 알리지 마세요. 기기를 바꿔도 키만 있으면 복구됩니다.</p>
+    <div class="grid g5">
+      <div class="wide"><label>동기화 키</label>
+        <div class="row"><input type="text" id="y_key" style="flex:1" placeholder="비워두면 동기화하지 않습니다">
+        <button class="ghost" id="y_gen">새로 만들기</button></div></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button id="y_up">지금 올리기</button>
+      <button id="y_down">지금 내려받기 (합치기)</button>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink);margin:0">
+        <input type="checkbox" id="y_auto" style="width:auto"> 자동
+      </label>
+    </div>
+    <p class="note" id="y_msg"></p>
+  </div>
+
   <div class="block">
     <h2>요약</h2>
     <div id="d_stats"></div>
@@ -753,7 +772,7 @@ const BF=["b_name","b_proc","b_alt","b_var","b_screen","b_harvest","b_moist","b_
 let beanCats=[];
 $("b_save").onclick=()=>{
   if(!$("b_name").value.trim()){ $("b_msg").textContent="이름은 필요합니다."; return; }
-  const o={id:uid(),img:pendingImg||null,noteCats:beanCats.slice()};
+  const o=stamp({id:uid(),img:pendingImg||null,noteCats:beanCats.slice()});
   BF.forEach(f=>o[f.slice(2)]=$(f).value.trim());
   DB.beans.push(o); renderBeans(); persist(); clearBean();
   $("b_msg").textContent="저장했습니다. 데이터 탭에서 파일로 내보내는 걸 잊지 마세요.";
@@ -850,6 +869,59 @@ function parseWithMap(lines,h,map,fname){
 }
 
 
+
+/* ---------- 기기 간 동기화 ----------
+   서버에는 JSON 한 덩어리만 둔다. 합칠 때는 id 기준으로 합집합을 만들고,
+   같은 id면 마지막으로 고친 쪽(mt)을 남긴다. */
+const SYNC_URL="api/sync";
+function stamp(o){ o.mt=Date.now(); return o; }
+function mergeList(a,b){
+  const m=new Map();
+  [...(a||[]),...(b||[])].forEach(x=>{
+    const p=m.get(x.id);
+    if(!p||(x.mt||0)>=(p.mt||0)) m.set(x.id,x);
+  });
+  return [...m.values()];
+}
+function syncKey(){ return ($("y_key").value||"").trim(); }
+async function syncUp(quiet){
+  const k=syncKey();
+  if(!k){ if(!quiet) $("y_msg").textContent="동기화 키를 먼저 넣으세요."; return; }
+  try{
+    const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
+      method:"PUT",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({v:"3.4",at:Date.now(),...DB})});
+    const j=await r.json();
+    if(!r.ok) throw new Error(j.error||"실패");
+    if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
+  }catch(e){ $("y_msg").textContent="올리기 실패: "+e.message; }
+}
+async function syncDown(quiet){
+  const k=syncKey();
+  if(!k){ if(!quiet) $("y_msg").textContent="동기화 키를 먼저 넣으세요."; return; }
+  try{
+    const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`);
+    const d=await r.json();
+    if(!d){ if(!quiet) $("y_msg").textContent="서버에 저장된 내용이 없습니다."; return; }
+    const nb=DB.beans.length, nr=DB.roasts.length;
+    DB.beans=mergeList(DB.beans,d.beans);
+    DB.roasts=mergeList(DB.roasts,d.roasts);
+    DB.settings=Object.assign({},d.settings||{},DB.settings);
+    applySettings(); renderBeans(); renderRoasts(); stats(); persist();
+    $("y_msg").textContent=`합쳤습니다 — 생두 ${nb}→${DB.beans.length} · 로스팅 ${nr}→${DB.roasts.length}`;
+  }catch(e){ $("y_msg").textContent="내려받기 실패: "+e.message; }
+}
+$("y_gen").onclick=()=>{
+  const a=new Uint8Array(24); crypto.getRandomValues(a);
+  $("y_key").value=btoa(String.fromCharCode(...a)).replace(/[+/=]/g,"").slice(0,32);
+  DB.settings.syncKey=$("y_key").value; persist();
+  $("y_msg").innerHTML="키를 만들었습니다. <b>다른 기기에도 같은 키를 넣으세요.</b> 어딘가에 적어두시고요.";
+};
+$("y_key").addEventListener("input",()=>{ DB.settings.syncKey=syncKey(); persist(); });
+$("y_auto").addEventListener("change",()=>{ DB.settings.syncAuto=$("y_auto").checked; persist(); });
+$("y_up").onclick=()=>syncUp(false);
+$("y_down").onclick=()=>syncDown(false);
+
 /* ---------- 자동 저장 (IndexedDB) ----------
    파일을 새로 배포해도 데이터는 남는다. 저장 영역이 출처(origin) 단위이기 때문. */
 const IDB={db:null};
@@ -888,6 +960,7 @@ function persist(){
       const n=DB.beans.length, m=DB.roasts.length;
       $("savestate").textContent=`저장됨 · 생두 ${n} · 로스팅 ${m}`;
       $("savestate").className="pill ok";
+      if(DB.settings.syncAuto&&DB.settings.syncKey) syncUp(true);
     }catch(e){
       $("savestate").textContent="자동 저장 실패 — 파일로 내보내세요";
       $("savestate").className="pill warn";
@@ -909,6 +982,8 @@ async function restore(){
     $("savestate").textContent="저장 영역을 쓸 수 없습니다"; $("savestate").className="pill warn";
   }
   applySettings(); renderBeans(); renderRoasts(); stats();
+  if(DB.settings.syncKey){ $("y_key").value=DB.settings.syncKey; }
+  if(DB.settings.syncAuto){ $("y_auto").checked=true; await syncDown(true); }
 }
 
 /* ---------- 장비 설정 ---------- */
@@ -1369,7 +1444,7 @@ $("r_save").onclick=()=>{
   if($("c_total").value) cup.total=+$("c_total").value;
   if($("c_note").value.trim()) cup.note=$("c_note").value.trim();
   if($("c_date").value) cup.date=$("c_date").value;
-  const rec={
+  const rec=stamp({
     id:editingId||uid(), beanId:$("r_bean").value, machine:$("r_machine").value.trim(),
     prof:$("r_prof").value.trim(), date:$("r_date").value,
     inG:+$("r_in").value||null, outG:+$("r_out").value||null,
@@ -1381,7 +1456,7 @@ $("r_save").onclick=()=>{
     cost:(()=>{ const b=DB.beans.find(x=>x.id===$("r_bean").value);
       const up=b?unitPrice(b):null, g=+$("r_in").value;
       return (up&&g)?Math.round(up*g):null; })()
-  };
+  });
   if(editingId){
     const i=DB.roasts.findIndex(x=>x.id===editingId);
     if(i>=0) DB.roasts[i]=rec; else DB.roasts.push(rec);
@@ -1424,7 +1499,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"3.3",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"3.4",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
