@@ -79,7 +79,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v3.4</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v3.5</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -325,7 +325,28 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <h2>기기 간 동기화</h2>
     <p class="lead">폰과 PC를 같은 <b>동기화 키</b>로 묶으면 기록이 오갑니다.
     키는 그 자체가 비밀번호이니 남에게 알리지 마세요. 기기를 바꿔도 키만 있으면 복구됩니다.</p>
-    <div class="grid g5">
+    <div class="row" style="margin-bottom:9px">
+      <label style="margin:0">방식</label>
+      <select id="y_mode" style="width:auto">
+        <option value="kv">동기화 키 (서버 보관)</option>
+        <option value="gh">GitHub 비공개 저장소</option>
+      </select>
+    </div>
+
+    <div id="y_gh" hidden class="extra" style="margin-bottom:9px">
+      <p class="tagline">GitHub — 내 저장소에 JSON 한 개로 보관됩니다</p>
+      <div class="grid g5">
+        <div><label>저장소 (소유자/이름)</label><input type="text" id="g_repo" placeholder="eng9910-max/roastpoint-data"></div>
+        <div><label>파일 경로</label><input type="text" id="g_path" placeholder="db.json"></div>
+        <div class="wide"><label>토큰 (Fine-grained · Contents 읽기·쓰기)</label>
+          <input type="password" id="g_token" placeholder="github_pat_..."></div>
+      </div>
+      <p class="note">토큰은 이 기기에만 저장되고 서버로 가지 않습니다.
+      <b>비공개 저장소</b>를 쓰고, 그 저장소 하나에만 권한을 주고, 만료일을 짧게 잡으세요.
+      저장할 때마다 커밋이 남아 <b>이력이 통째로 보존</b>됩니다.</p>
+    </div>
+
+    <div class="grid g5" id="y_kv">
       <div class="wide"><label>동기화 키</label>
         <div class="row"><input type="text" id="y_key" style="flex:1" placeholder="비워두면 동기화하지 않습니다">
         <button class="ghost" id="y_gen">새로 만들기</button></div></div>
@@ -870,6 +891,72 @@ function parseWithMap(lines,h,map,fname){
 
 
 
+
+/* ---------- GitHub 백엔드 ----------
+   비공개 저장소의 JSON 파일 하나를 읽고 쓴다. 저장할 때마다 커밋이 남는다. */
+function b64enc(str){
+  const b=new TextEncoder().encode(str); let s="";
+  for(let i=0;i<b.length;i+=0x8000) s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));
+  return btoa(s);
+}
+function b64dec(b64){
+  const bin=atob(b64.replace(/\s/g,"")); const a=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i);
+  return new TextDecoder().decode(a);
+}
+function ghCfg(){
+  return { repo:($("g_repo").value||"").trim(),
+           path:($("g_path").value||"db.json").trim(),
+           token:($("g_token").value||"").trim() };
+}
+async function ghApi(url,opt){
+  const {token}=ghCfg();
+  const r=await fetch("https://api.github.com/"+url,Object.assign({},opt,{
+    headers:Object.assign({"Accept":"application/vnd.github+json",
+      "Authorization":"Bearer "+token},(opt&&opt.headers)||{})}));
+  if(r.status===404) return null;
+  const j=await r.json().catch(()=>null);
+  if(!r.ok) throw new Error((j&&j.message)||("HTTP "+r.status));
+  return j;
+}
+async function ghDown(quiet){
+  const c=ghCfg();
+  if(!c.repo||!c.token){ if(!quiet) $("y_msg").textContent="저장소와 토큰을 넣으세요."; return; }
+  try{
+    const j=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
+    if(!j){ if(!quiet) $("y_msg").textContent="저장소에 아직 파일이 없습니다. 먼저 올리세요."; return; }
+    const d=JSON.parse(b64dec(j.content||""));
+    const nb=DB.beans.length, nr=DB.roasts.length;
+    DB.beans=mergeList(DB.beans,d.beans);
+    DB.roasts=mergeList(DB.roasts,d.roasts);
+    DB.settings=Object.assign({},d.settings||{},DB.settings);
+    applySettings(); renderBeans(); renderRoasts(); stats(); persist();
+    $("y_msg").textContent=`합쳤습니다 — 생두 ${nb}→${DB.beans.length} · 로스팅 ${nr}→${DB.roasts.length}`;
+  }catch(e){ $("y_msg").textContent="내려받기 실패: "+e.message; }
+}
+async function ghUp(quiet){
+  const c=ghCfg();
+  if(!c.repo||!c.token){ if(!quiet) $("y_msg").textContent="저장소와 토큰을 넣으세요."; return; }
+  try{
+    const cur=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
+    const body={message:`로스트포인트 ${new Date().toISOString().slice(0,16)} — 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`,
+      content:b64enc(JSON.stringify({v:"3.5",at:Date.now(),...DB}))};
+    if(cur&&cur.sha) body.sha=cur.sha;
+    await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`,
+      {method:"PUT",body:JSON.stringify(body)});
+    if(!quiet) $("y_msg").textContent="올렸습니다. 저장소에 커밋이 남았습니다.";
+  }catch(e){ $("y_msg").textContent="올리기 실패: "+e.message; }
+}
+function syncMode(){ return $("y_mode").value; }
+$("y_mode").addEventListener("change",()=>{
+  const gh=syncMode()==="gh";
+  $("y_gh").hidden=!gh; $("y_kv").hidden=gh;
+  DB.settings.syncMode=syncMode(); persist();
+});
+["g_repo","g_path","g_token"].forEach(id=>$(id).addEventListener("input",()=>{
+  DB.settings[id]= $(id).value.trim(); persist();
+}));
+
 /* ---------- 기기 간 동기화 ----------
    서버에는 JSON 한 덩어리만 둔다. 합칠 때는 id 기준으로 합집합을 만들고,
    같은 id면 마지막으로 고친 쪽(mt)을 남긴다. */
@@ -890,7 +977,7 @@ async function syncUp(quiet){
   try{
     const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
       method:"PUT",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({v:"3.4",at:Date.now(),...DB})});
+      body:JSON.stringify({v:"3.5",at:Date.now(),...DB})});
     const j=await r.json();
     if(!r.ok) throw new Error(j.error||"실패");
     if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
@@ -919,8 +1006,8 @@ $("y_gen").onclick=()=>{
 };
 $("y_key").addEventListener("input",()=>{ DB.settings.syncKey=syncKey(); persist(); });
 $("y_auto").addEventListener("change",()=>{ DB.settings.syncAuto=$("y_auto").checked; persist(); });
-$("y_up").onclick=()=>syncUp(false);
-$("y_down").onclick=()=>syncDown(false);
+$("y_up").onclick=()=>syncMode()==="gh"?ghUp(false):syncUp(false);
+$("y_down").onclick=()=>syncMode()==="gh"?ghDown(false):syncDown(false);
 
 /* ---------- 자동 저장 (IndexedDB) ----------
    파일을 새로 배포해도 데이터는 남는다. 저장 영역이 출처(origin) 단위이기 때문. */
@@ -960,7 +1047,9 @@ function persist(){
       const n=DB.beans.length, m=DB.roasts.length;
       $("savestate").textContent=`저장됨 · 생두 ${n} · 로스팅 ${m}`;
       $("savestate").className="pill ok";
-      if(DB.settings.syncAuto&&DB.settings.syncKey) syncUp(true);
+      if(DB.settings.syncAuto){
+        if(syncMode()==="gh") ghUp(true); else if(DB.settings.syncKey) syncUp(true);
+      }
     }catch(e){
       $("savestate").textContent="자동 저장 실패 — 파일로 내보내세요";
       $("savestate").className="pill warn";
@@ -982,8 +1071,12 @@ async function restore(){
     $("savestate").textContent="저장 영역을 쓸 수 없습니다"; $("savestate").className="pill warn";
   }
   applySettings(); renderBeans(); renderRoasts(); stats();
-  if(DB.settings.syncKey){ $("y_key").value=DB.settings.syncKey; }
-  if(DB.settings.syncAuto){ $("y_auto").checked=true; await syncDown(true); }
+  if(DB.settings.syncKey) $("y_key").value=DB.settings.syncKey;
+  ["g_repo","g_path","g_token"].forEach(id=>{ if(DB.settings[id]) $(id).value=DB.settings[id]; });
+  if(DB.settings.syncMode){ $("y_mode").value=DB.settings.syncMode;
+    $("y_mode").dispatchEvent(new Event("change")); }
+  if(DB.settings.syncAuto){ $("y_auto").checked=true;
+    if(syncMode()==="gh") await ghDown(true); else await syncDown(true); }
 }
 
 /* ---------- 장비 설정 ---------- */
@@ -1499,7 +1592,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"3.4",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"3.5",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
