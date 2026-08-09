@@ -78,7 +78,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <body>
 
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v1.5</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v1.7</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -118,10 +118,13 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
         <input type="file" id="imgfile" accept="image/*">
         <input type="file" id="camfile" accept="image/*" capture="environment">
         <div class="row" style="margin-top:6px">
-          <button class="ghost" id="cam">카메라로 찍기</button>
-          <button class="ghost" id="ocr" disabled>글자 추출 (내장 OCR)</button>
-          <span class="note" id="ocrmsg"></span>
+          <button id="camfull">카메라 앱 열기 · 텍스트 추출</button>
+          <button class="ghost" id="cam">사진만 찍기 · 기록 보관용</button>
+          <button class="ghost" id="ocr" disabled>내장 OCR</button>
         </div>
+        <p class="note" id="ocrmsg"></p>
+        <p class="note" id="camnote" hidden>카메라가 <b>평소 모드</b>로 열립니다. 텍스트 추출로 글자를 잡은 뒤
+        <b>공유 → 로스트포인트</b>를 고르면 이 화면으로 돌아옵니다.</p>
         <img id="thumb" class="thumb" hidden alt="">
       </div>
     </div>
@@ -186,6 +189,19 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     </div>
     <input type="file" id="logfile" accept=".csv,text/csv,text/plain">
     <p class="note" id="logmsg"></p>
+    <div id="mapper" class="extra" hidden style="margin-top:10px">
+      <p class="tagline">이 로그는 처음 보는 형식입니다 — 열만 짚어주세요</p>
+      <p class="lead">한 번 지정하면 같은 기종의 다음 로그부터는 자동으로 읽습니다.</p>
+      <div class="grid g5">
+        <div><label>시간 열</label><select id="m_time"></select></div>
+        <div><label>온도 열 (배기·원두)</label><select id="m_temp"></select></div>
+        <div><label>계획 온도 열 (없으면 비움)</label><select id="m_set"></select></div>
+        <div><label>시간 단위</label><select id="m_unit">
+          <option value="1">초</option><option value="0.001">밀리초</option>
+          <option value="60">분</option></select></div>
+      </div>
+      <div class="row" style="margin-top:9px"><button id="m_apply">이 설정으로 읽기</button></div>
+    </div>
   </div>
 
   <div class="block">
@@ -202,6 +218,12 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <div class="extra">
       <p class="tagline">로그에서 채워진 값 — 필요하면 고치세요</p>
       <div class="grid g5">
+        <div><label>로스터 기종</label><input type="text" id="r_machine" list="machines" placeholder="IKAWA Pro V2">
+          <datalist id="machines">
+            <option>IKAWA Pro V2</option><option>IKAWA Pro V3</option><option>IKAWA Home</option>
+            <option>Nucleus LINK</option><option>Kaffelogic Nano 7</option>
+            <option>ROEST</option><option>Stronghold</option><option>드럼 로스터</option>
+          </datalist></div>
         <div><label>프로파일</label><input type="text" id="r_prof"></div>
         <div><label>날짜</label><input type="date" id="r_date"></div>
         <div><label>예열 ℃</label><input type="number" step="0.1" id="r_pre"></div>
@@ -338,6 +360,32 @@ $("clip").onclick=async()=>{
   }
 };
 
+
+/* ---------- 카메라 앱을 평소 모드로 열기 ---------- */
+$("camfull").onclick=()=>{
+  const android=/Android/i.test(navigator.userAgent);
+  if(!android){
+    $("ocrmsg").textContent="이 기능은 안드로이드에서만 동작합니다. 아이폰은 입력칸을 길게 눌러 '텍스트 스캔'을 쓰세요.";
+    return;
+  }
+  $("camnote").hidden=false;
+  const urls=[
+    "intent://#Intent;action=android.media.action.STILL_IMAGE_CAMERA;end",
+    "intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.APP_CAMERA;end"
+  ];
+  let i=0;
+  const tryNext=()=>{
+    if(i>=urls.length){
+      $("ocrmsg").textContent="카메라 앱을 열지 못했습니다. 직접 카메라를 실행한 뒤 공유로 보내주세요.";
+      return;
+    }
+    const before=Date.now();
+    location.href=urls[i++];
+    setTimeout(()=>{ if(Date.now()-before<1500 && !document.hidden) tryNext(); },1200);
+  };
+  tryNext();
+};
+
 /* ---------- 이미지 ---------- */
 function shrink(file,cb){
   const r=new FileReader();
@@ -438,6 +486,62 @@ function renderBeans(){
 }
 window.delBean=i=>{ if(confirm("삭제할까요?")){ DB.beans.splice(i,1); renderBeans(); } };
 
+
+/* ---------- 기종별 열 매핑 ---------- */
+const MAPS = {};                       // 헤더 지문 → {t,v,sp,unit}
+function headerKey(h){ return h.join("|").toLowerCase(); }
+function autoMap(h){
+  const low=h.map(x=>x.toLowerCase());
+  const find=(...cands)=>{
+    for(const c of cands){ const i=low.findIndex(x=>x===c); if(i>=0) return i; }
+    for(const c of cands){ const i=low.findIndex(x=>x.includes(c)); if(i>=0) return i; }
+    return -1;
+  };
+  const t=find("time","시간","seconds","sec","elapsed");
+  const v=find("temp above","bean temp","bt","temperature","원두온도","배기온도","temp");
+  const sp=find("setpoint","target","sv","설정온도");
+  return (t>=0&&v>=0)?{t,v,sp,unit:1}:null;
+}
+let pendingCsv=null;
+function fillMapper(h){
+  const opts=h.map((x,i)=>`<option value="${i}">${i}: ${x||"(빈 열)"}</option>`).join("");
+  $("m_time").innerHTML=opts; $("m_temp").innerHTML=opts;
+  $("m_set").innerHTML=`<option value="-1">— 없음 —</option>`+opts;
+  $("mapper").hidden=false;
+}
+$("m_apply").onclick=()=>{
+  if(!pendingCsv) return;
+  const map={t:+$("m_time").value, v:+$("m_temp").value,
+             sp:+$("m_set").value, unit:+$("m_unit").value};
+  MAPS[headerKey(pendingCsv.h)]=map;
+  try{
+    applyLog(parseWithMap(pendingCsv.lines,pendingCsv.h,map,pendingCsv.name));
+    $("mapper").hidden=true; pendingCsv=null;
+  }catch(err){ $("logmsg").textContent="읽지 못했습니다: "+err.message; }
+};
+function parseWithMap(lines,h,map,fname){
+  const is=h.findIndex(x=>x.toLowerCase()==="state");
+  const pts=[], all=[];
+  for(let i=1;i<lines.length;i++){
+    const c=lines[i].split(",");
+    if(c.length<2) continue;
+    const t=parseFloat(c[map.t])*map.unit, v=parseFloat(c[map.v]);
+    if(isNaN(t)||isNaN(v)) continue;
+    all.push({t,v});
+    if(is<0||(c[is]||"").trim()==="ROASTING") pts.push({t,v});
+  }
+  if(pts.length<10) throw new Error("데이터가 너무 적습니다");
+  const end=pts[pts.length-1];
+  let tp=pts[0]; for(const q of pts){ if(q.v<tp.v) tp=q; else if(q.t>60) break; }
+  const q4=pts.filter(q=>q.t>=end.t*0.75);
+  const ror=q4.length>1?(q4[q4.length-1].v-q4[0].v)/((q4[q4.length-1].t-q4[0].t)/60):null;
+  const c=estimateCrack(pts);
+  return { prof:fname.replace(/\.csv$/i,"").replace(/^Roast[_ ]?data[:_ ]*/i,"")
+             .replace(/^Roasted[_ ]?with[_ ]*/i,"").replace(/_/g," ").trim(),
+           pre:all[0].v, drop:end.v, dur:end.t, tp:tp.t, tpv:tp.v,
+           crack:c?Math.round(c.t):null, ror };
+}
+
 /* ---------- 로그 파싱 ---------- */
 function estimateCrack(pts){
   const r=[];
@@ -459,7 +563,13 @@ function readLog(text,fname){
   const lines=text.trim().split(/\r?\n/);
   const h=lines[0].split(",").map(x=>x.trim());
   const it=h.indexOf("time"), iv=h.indexOf("temp above"), is=h.indexOf("state");
-  if(it<0||iv<0) throw new Error("IKAWA 로그 형식이 아닙니다");
+  if(it<0||iv<0){
+    const known=MAPS[headerKey(h)]||autoMap(h);
+    if(known) return parseWithMap(lines,h,known,fname);
+    pendingCsv={lines,h,name:fname}; fillMapper(h);
+    throw new Error("열 이름이 달라 자동 인식하지 못했습니다. 아래에서 지정해주세요.");
+  }
+  if(!$("r_machine").value) $("r_machine").value="IKAWA Pro V2";
   const pts=[], all=[];
   for(let i=1;i<lines.length;i++){
     const c=lines[i].split(","); if(c.length<3) continue;
@@ -527,7 +637,8 @@ $("r_save").onclick=()=>{
   if($("c_note").value.trim()) cup.note=$("c_note").value.trim();
   if($("c_date").value) cup.date=$("c_date").value;
   DB.roasts.push({
-    id:uid(), beanId:$("r_bean").value, prof:$("r_prof").value.trim(), date:$("r_date").value,
+    id:uid(), beanId:$("r_bean").value, machine:$("r_machine").value.trim(),
+    prof:$("r_prof").value.trim(), date:$("r_date").value,
     inG:+$("r_in").value||null, outG:+$("r_out").value||null,
     loss:parseFloat($("r_loss").value)||null,
     pre:+$("r_pre").value||null, drop:+$("r_drop").value||null, dur:+$("r_dur").value||null,
@@ -540,7 +651,7 @@ $("r_save").onclick=()=>{
 };
 function clearRoast(){
   ["r_prof","r_in","r_out","r_loss","r_pre","r_drop","r_dur","r_crack","r_dtr","r_ror",
-   "c_total","c_note"].forEach(id=>$(id).value="");
+   "c_total","c_note","r_machine"].forEach(id=>$(id).value="");
   CUP.forEach(([k])=>{$("c_"+k).value=0;$("o_"+k).textContent="–";});
   $("r_bean").value=""; pendingLog=null; $("logmsg").textContent="";
 }
@@ -549,22 +660,22 @@ $("r_clear").onclick=()=>{clearRoast();$("r_msg").textContent="";};
 function beanName(id){ const b=DB.beans.find(x=>x.id===id); return b?b.name:"(삭제됨)"; }
 function renderRoasts(){
   $("r_count").textContent=DB.roasts.length+"건";
-  $("r_table").innerHTML=`<tr><th>날짜</th><th>생두</th><th>프로파일</th><th class="num">배출℃</th>
+  $("r_table").innerHTML=`<tr><th>날짜</th><th>생두</th><th>기종</th><th>프로파일</th><th class="num">배출℃</th>
     <th class="num">시간</th><th class="num">DTR</th><th class="num">감량</th><th>컵</th><th></th></tr>`+
     (DB.roasts.length?DB.roasts.slice().reverse().map(r=>{
       const i=DB.roasts.indexOf(r);
       const cup=r.cup?(r.cup.total?r.cup.total+"점":(r.cup.note?"메모":"점수")):"";
-      return `<tr><td>${r.date||""}</td><td>${beanName(r.beanId)}</td><td>${r.prof||""}</td>
+      return `<tr><td>${r.date||""}</td><td>${beanName(r.beanId)}</td><td>${r.machine||""}</td><td>${r.prof||""}</td>
         <td class="num">${r.drop?.toFixed(1)??""}</td><td class="num">${r.dur?fmt(r.dur):""}</td>
         <td class="num">${r.dtr?.toFixed(1)??""}</td><td class="num">${r.loss?.toFixed(1)??""}</td>
         <td>${cup}</td><td><button class="ghost sm" onclick="delRoast(${i})">삭제</button></td></tr>`;
-    }).join(""):`<tr><td colspan="9" style="color:var(--muted)">아직 없습니다</td></tr>`);
+    }).join(""):`<tr><td colspan="10" style="color:var(--muted)">아직 없습니다</td></tr>`);
 }
 window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); renderRoasts(); } };
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"1.5",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"1.7",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
@@ -585,11 +696,11 @@ $("d_file").onchange=async e=>{
 };
 $("d_csv").onclick=()=>{
   if(!DB.roasts.length){ $("d_msg").textContent="기록이 없습니다."; return; }
-  const cols=["date","bean","proc","alt","var","harvest","prof","pre","drop","dur","crack","dtr","inG","outG","loss","acid","sweet","body","aroma","balance","total","note"];
+  const cols=["date","machine","bean","proc","alt","var","harvest","prof","pre","drop","dur","crack","dtr","inG","outG","loss","acid","sweet","body","aroma","balance","total","note"];
   const rows=[cols.join(",")];
   DB.roasts.forEach(r=>{
     const b=DB.beans.find(x=>x.id===r.beanId)||{}, c=r.cup||{};
-    const v={date:r.date,bean:b.name,proc:b.proc,alt:b.alt,var:b.var,harvest:b.harvest,
+    const v={date:r.date,machine:r.machine,bean:b.name,proc:b.proc,alt:b.alt,var:b.var,harvest:b.harvest,
       prof:r.prof,pre:r.pre,drop:r.drop,dur:r.dur,crack:r.crack,dtr:r.dtr,
       inG:r.inG,outG:r.outG,loss:r.loss,...c};
     rows.push(cols.map(k=>{
