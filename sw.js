@@ -1,8 +1,8 @@
-/* 로스트포인트 — 서비스워커 v3
+/* 로스트포인트 — 서비스워커 v5
    1) 공유 시트로 들어온 파일을 가로채 캐시에 넣고 앱으로 넘김
    2) 오프라인에서도 앱이 열리도록 최소 캐싱                     */
 
-const APP_CACHE   = "roast-app-v4";
+const APP_CACHE   = "roast-app-v5";
 const SHARE_CACHE = "roast-shared";
 const SCOPE       = self.registration.scope;
 const SHARE_KEY   = new URL("__shared__", SCOPE).href;
@@ -30,6 +30,7 @@ self.addEventListener("fetch", e => {
   if (e.request.method === "POST" && url.pathname.endsWith("/share")) {
     e.respondWith((async () => {
       const files = [];
+      let   shared_text = "";
       const diag  = { at: new Date().toISOString(), entries: [], error: null };
       try {
         const fd = await e.request.formData();
@@ -44,14 +45,14 @@ self.addEventListener("fetch", e => {
             const s = String(val ?? "");
             diag.entries.push({ field: key, kind: "text", size: s.length,
                                 head: s.slice(0, 120) });
-            if (s.trim().length > 200) files.push({ name: key + ".txt", text: s });
+            if (s.trim()) shared_text += (shared_text ? "\n" : "") + s;
           }
         }
       } catch (err) {
         diag.error = String(err && err.message || err);
       }
       const cache = await caches.open(SHARE_CACHE);
-      await cache.put(SHARE_KEY, new Response(JSON.stringify({ files, diag }), {
+      await cache.put(SHARE_KEY, new Response(JSON.stringify({ files, shared_text, diag }), {
         headers: { "Content-Type": "application/json" }
       }));
       return Response.redirect(new URL("./?shared=1", SCOPE).href, 303);

@@ -78,7 +78,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <body>
 
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v1.4</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v1.5</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -102,8 +102,11 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
         <textarea id="paste" placeholder="원산지 Brazil 브라질&#10;가공방식 Pulped Natural&#10;품종 Yellow Bourbon ..."></textarea>
         <div class="row" style="margin-top:6px">
           <button id="parse">읽어서 채우기</button>
+          <button class="ghost" id="clip">클립보드에서 붙여넣기</button>
           <span class="note" id="parsemsg"></span>
         </div>
+        <p class="note">가장 정확한 방법은 <b>구글 렌즈</b>입니다. 라벨이나 화면을 렌즈로 찍어 텍스트를 선택한 뒤,
+        <b>복사 → 위 버튼</b> 또는 <b>공유 → 로스트포인트</b>를 고르면 이 칸으로 바로 들어옵니다.</p>
       </div>
 
       <div class="wide">
@@ -116,7 +119,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
         <input type="file" id="camfile" accept="image/*" capture="environment">
         <div class="row" style="margin-top:6px">
           <button class="ghost" id="cam">카메라로 찍기</button>
-          <button class="ghost" id="ocr" disabled>글자 추출 (OCR)</button>
+          <button class="ghost" id="ocr" disabled>글자 추출 (내장 OCR)</button>
           <span class="note" id="ocrmsg"></span>
         </div>
         <img id="thumb" class="thumb" hidden alt="">
@@ -320,6 +323,19 @@ $("parse").onclick=()=>{
   if(!t){ $("parsemsg").textContent="붙여넣은 내용이 없습니다."; return; }
   const n=parseText(t);
   $("parsemsg").textContent=n?`${n}개 항목을 채웠습니다. 아래에서 확인하세요.`:"인식된 항목이 없습니다. 직접 입력하세요.";
+};
+
+
+$("clip").onclick=async()=>{
+  try{
+    const t=await navigator.clipboard.readText();
+    if(!t||!t.trim()){ $("parsemsg").textContent="클립보드가 비어 있습니다."; return; }
+    $("paste").value=t;
+    const n=parseText(t);
+    $("parsemsg").textContent=n?`${n}개 항목을 채웠습니다.`:"인식된 항목이 없습니다.";
+  }catch(err){
+    $("parsemsg").textContent="클립보드를 읽지 못했습니다. 칸을 길게 눌러 직접 붙여넣으세요.";
+  }
 };
 
 /* ---------- 이미지 ---------- */
@@ -548,7 +564,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"1.4",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"1.5",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
@@ -622,7 +638,8 @@ async function pickupShared(){
       history.replaceState(null,"",location.pathname); return;
     }
     const data=await res.json(); await c.delete(key);
-    const files=data.files||[], diag=data.diag||{};
+    const files=data.files||[], diag=data.diag||{}, sharedText=(data.shared_text||"").trim();
+    const isLog=t=>/temp above/i.test(t)||(/setpoint/i.test(t)&&/ROASTING/i.test(t));
     let lines=(diag.entries||[]).map(e=>
       `<tr><td>${e.field}</td><td>${e.kind}</td><td>${e.name||""}</td>
        <td>${e.type||""}</td><td class="num">${e.size??""}</td></tr>`).join("");
@@ -631,10 +648,27 @@ async function pickupShared(){
     html+=`<table><tr><th>필드</th><th>종류</th><th>파일명</th><th>형식</th><th class="num">크기</th></tr>`+
       (lines||`<tr><td colspan="5" style="color:var(--muted)">받은 항목이 없습니다</td></tr>`)+`</table>`;
 
-    let done=0, errs=[];
+    let done=0, errs=[], beanHit=0;
     for(const f of files){
-      try{ applyLog(readLog(f.text,f.name)); done++; }
-      catch(err){ errs.push(`${f.name}: ${err.message}`); }
+      if(isLog(f.text)){
+        try{ applyLog(readLog(f.text,f.name)); done++; }
+        catch(err){ errs.push(`${f.name}: ${err.message}`); }
+      }else{
+        $("paste").value=f.text; beanHit+=parseText(f.text);
+      }
+    }
+    if(sharedText && !isLog(sharedText)){
+      $("paste").value=sharedText; beanHit+=parseText(sharedText);
+    }else if(sharedText && isLog(sharedText)){
+      try{ applyLog(readLog(sharedText,"shared.csv")); done++; }catch(err){ errs.push(err.message); }
+    }
+    if(beanHit){
+      html+=`<p class="lead" style="color:var(--ok);margin-top:8px">
+        생두 정보 ${beanHit}개 항목을 채웠습니다. 아래에서 확인하고 저장하세요.</p>`;
+      show(html);
+      document.querySelector('nav button[data-p="beans"]').click();
+      history.replaceState(null,"",location.pathname);
+      return;
     }
     if(done){
       html+=`<p class="lead" style="color:var(--ok);margin-top:8px">로그 ${done}개를 불러왔습니다.</p>`;
