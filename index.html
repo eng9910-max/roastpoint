@@ -78,7 +78,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <body>
 
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v2.3</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v2.4</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -94,18 +94,20 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
   <div class="block">
     <h2>① 생두 정보 넣기</h2>
-    <p class="lead">판매처 페이지든 봉투 라벨이든, <b>글자를 이 칸에 넣기만 하면</b> 아래 항목이 자동으로 채워집니다.
+    <p class="lead"><b>글자든 그림이든 이 칸에 넣기만 하면 알아서 구분합니다.</b>
+    글자는 바로 읽어 아래 항목을 채우고, 그림이면 글자를 뽑을 방법을 안내합니다.
     라벨이 붙어 있지 않은 문장도 값만 보고 알아냅니다.</p>
 
-    <textarea id="paste" placeholder="여기에 붙여넣으세요 — 붙이는 즉시 읽습니다" style="min-height:96px"></textarea>
+    <textarea id="paste" placeholder="여기에 붙여넣으세요 — 글자는 즉시 읽고, 이미지는 붙여넣거나 끌어다 놓으세요" style="min-height:96px"></textarea>
     <div class="row" style="margin-top:6px">
       <button id="clip">클립보드에서 가져오기</button>
-      <button class="ghost" id="ocrbtn" hidden>이 이미지에서 글자 뽑기</button>
+      <button id="lensbtn" hidden>구글 렌즈로 보내기</button>
+      <button class="ghost" id="ocrbtn" hidden>내장 OCR (정확도 낮음)</button>
       <span class="note" id="parsemsg"></span>
     </div>
-    <p class="note">이미지를 <b>이 칸에 그대로 붙여넣거나 끌어다 놓아도</b> 됩니다.
-    상세정보가 그림으로만 된 페이지(엠아이 등)에 쓰세요. 다만 한국어 인식률이 완벽하지 않으니
-    <b>구글 렌즈로 뽑아 붙여넣는 쪽이 더 정확합니다.</b></p>
+    <p class="note" id="imgnote">상세정보가 그림으로만 된 페이지(엠아이 등)는 이미지를 이 칸에 붙여넣으세요.
+    <b>구글 렌즈로 보내기</b>를 누르면 이미지가 클립보드에 복사되고 렌즈가 열립니다 —
+    거기서 붙여넣고 인식된 글자를 복사해 돌아오면 됩니다.</p>
     <p class="note" id="scanhint"></p>
 
     <div style="margin-top:16px">
@@ -470,6 +472,8 @@ function parseText(txt){
       .replace(/^\[[^\]]*\]\s*/,"").trim();
   }
   hit += scanValues(txt);                       // 라벨이 없어도 값으로 채운다
+  const fixed=normalizeFields();                // 오인식 교정
+  if(fixed.length) window.__fixed=fixed; else window.__fixed=null;
   if(!$("b_raw").value) $("b_raw").value=txt.slice(0,4000);
   return hit;
 }
@@ -480,8 +484,9 @@ $("paste").addEventListener("input",()=>{
     const t=$("paste").value.trim();
     if(t.length<10) return;
     const n=parseText(t);
-    $("parsemsg").textContent=n?`자동으로 ${n}개 항목을 채웠습니다. 아래에서 확인하세요.`
-      :"인식된 항목이 없습니다. 직접 입력하세요.";
+    $("parsemsg").innerHTML=(n?`자동으로 ${n}개 항목을 채웠습니다. 아래에서 확인하세요.`
+      :"인식된 항목이 없습니다. 직접 입력하세요.")
+      +(window.__fixed?`<br><span style="color:var(--ok)">교정: ${window.__fixed.join(" · ")}</span>`:"");
   },400);
 });
 
@@ -551,7 +556,7 @@ function loadTess(){
 }
 function acceptOcrImage(file){
   if(!file||!/^image\//.test(file.type)) return false;
-  shrink(file,d=>{ ocrImg=d; $("ocrbtn").hidden=false;
+  shrink(file,d=>{ ocrImg=d; $("ocrbtn").hidden=false; $("lensbtn").hidden=false;
     $("parsemsg").textContent="이미지를 받았습니다. 「글자 뽑기」를 누르세요."; });
   return true;
 }
@@ -585,6 +590,65 @@ $("ocrbtn").onclick=async()=>{
   $("ocrbtn").disabled=false;
 };
 
+
+/* ---------- 구글 렌즈로 보내기 ----------
+   웹앱은 렌즈를 직접 호출할 수 없다. 이미지를 클립보드에 넣고 렌즈를 열어주는 것까지가 한계. */
+async function toClipboardImage(dataUrl){
+  try{
+    const blob=await (await fetch(dataUrl)).blob();
+    if(!navigator.clipboard||!window.ClipboardItem) return false;
+    await navigator.clipboard.write([new ClipboardItem({[blob.type]:blob})]);
+    return true;
+  }catch(e){ return false; }
+}
+$("lensbtn").onclick=async()=>{
+  if(!ocrImg) return;
+  const ok=await toClipboardImage(ocrImg);
+  $("parsemsg").innerHTML = ok
+    ? "이미지를 복사했습니다. 렌즈 창에서 <b>붙여넣기</b> → 글자 선택 → 복사 → 여기로 돌아와 붙여넣으세요."
+    : "이미지 복사가 막혔습니다. 렌즈 창에서 <b>이미지 업로드</b>로 직접 올리세요.";
+  const a=document.createElement("a");
+  a.href="https://lens.google.com/"; a.target="_blank"; a.rel="noopener";
+  document.body.appendChild(a); a.click(); a.remove();
+};
+
+/* ---------- 인식값 교정 ----------
+   OCR 오인식("과테말과")이 라벨 파싱으로 그대로 들어오는 걸 사전으로 되돌린다. */
+function near(a,b){                       // 한 글자 차이까지 같은 것으로 본다
+  a=flat(a); b=flat(b);
+  if(a===b) return true;
+  if(Math.abs(a.length-b.length)>1||a.length<3) return false;
+  let i=0,j=0,diff=0;
+  while(i<a.length&&j<b.length){
+    if(a[i]===b[j]){ i++; j++; continue; }
+    if(++diff>1) return false;
+    if(a.length>b.length) i++; else if(a.length<b.length) j++; else { i++; j++; }
+  }
+  return diff+ (a.length-i) + (b.length-j) <= 1;
+}
+function normalizeFields(){
+  let fixed=[];
+  const v=$("b_origin").value.trim();
+  if(v){
+    for(const [label,keys] of DIC.origin){
+      if(keys.some(k=>near(v,k))||near(v,label)){
+        if(v!==label){ $("b_origin").value=label; fixed.push(`원산지 "${v}" → ${label}`); }
+        break;
+      }
+    }
+  }
+  const pv=$("b_proc").value.trim();
+  if(pv){
+    for(const [label,keys] of DIC.proc){
+      if(keys.some(k=>near(pv,k))||near(pv,label)){
+        if(pv!==label){ $("b_proc").value=label; fixed.push(`가공 "${pv}" → ${label}`); }
+        break;
+      }
+    }
+  }
+  return fixed;
+}
+
 /* ---------- 이름 자동 생성 ---------- */
 $("b_auto").onclick=()=>{
   const parts=[$("b_origin").value,$("b_farm").value,$("b_var").value,$("b_proc").value]
@@ -607,7 +671,7 @@ $("b_save").onclick=()=>{
 };
 function clearBean(){
   BF.forEach(f=>$(f).value=""); $("paste").value="";
-  pendingImg=null; $("thumb").hidden=true; ocrImg=null; $("ocrbtn").hidden=true;
+  pendingImg=null; $("thumb").hidden=true; ocrImg=null; $("ocrbtn").hidden=true; $("lensbtn").hidden=true;
   $("parsemsg").textContent=""; $("ocrmsg").textContent="";
 }
 $("b_clear").onclick=()=>{clearBean();$("b_msg").textContent="";};
@@ -970,7 +1034,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"2.3",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"2.4",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
