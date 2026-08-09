@@ -77,7 +77,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
 </head>
 <body>
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v1.2</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v1.4</span>
   <button class="ghost" id="undo" title="Ctrl+Z">되돌리기</button>
   <button class="ghost" id="redo" title="Ctrl+Shift+Z">다시</button>
   <a href="./" style="font-size:12.5px;color:var(--setpoint);margin-left:auto">← 기록장</a>
@@ -96,6 +96,12 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
 
     <div class="stats" id="stats"></div>
     <div id="logread" class="hint" style="margin-top:12px"></div>
+
+    <div style="margin-top:20px" id="phaseblock">
+      <h2>구간 비율 · 진단</h2>
+      <table id="phasetbl"></table>
+      <p class="hint" id="phasenote"></p>
+    </div>
 
     <div style="margin-top:20px" id="diffblock" hidden>
       <h2>레이어 간 온도 차이</h2>
@@ -127,6 +133,38 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
         <select id="preset" style="flex:1"><option value="">— 추천 프로파일 불러오기 —</option></select>
         <button class="ghost" id="loadpreset">적용</button>
       </div>
+    </div>
+
+
+    <div>
+      <h2>프로파일 라이브러리 <span class="pill" id="libcount">0</span></h2>
+      <textarea id="bulk" rows="2" placeholder="공유 링크를 여러 줄 붙여넣으세요 — 한 번에 다 들어갑니다"></textarea>
+      <div class="row" style="margin-top:6px">
+        <button class="ghost" id="bulkadd">일괄 넣기</button>
+        <button class="ghost" id="libcur">현재 곡선 넣기</button>
+        <button class="ghost" id="libsave">라이브러리 저장</button>
+        <button class="ghost" id="libload">불러오기</button>
+        <input type="file" id="libfile" accept=".json">
+      </div>
+      <p class="hint" id="libmsg">로그를 넣으면 그 계획 곡선도 라이브러리에 자동으로 담깁니다.</p>
+    </div>
+
+    <div>
+      <h2>생두로 프로파일 추천받기</h2>
+      <div class="row">
+        <div style="flex:1"><label>가공</label><select id="rc_proc">
+          <option value="washed">워시드</option><option value="natural">내추럴</option>
+          <option value="pn">펄프드 내추럴</option><option value="honey">허니</option></select></div>
+        <div style="flex:1"><label>고도 m</label><input type="number" id="rc_alt" placeholder="1700"></div>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <div style="flex:1"><label>품종</label><input type="text" id="rc_var" placeholder="파카마라 / 게이샤 …"></div>
+        <div style="flex:1"><label>용도</label><select id="rc_use">
+          <option value="filter">필터·드립</option><option value="espresso">에스프레소</option>
+          <option value="latte">라떼</option></select></div>
+      </div>
+      <button id="rc_go" class="wide" style="margin-top:8px">추천받기</button>
+      <div id="rc_out" style="margin-top:8px"></div>
     </div>
 
     <div>
@@ -2593,7 +2631,7 @@ function draw(){
     (S.refs||[]).filter(r=>r.on).forEach(r=>line(normPts(r.pts),r.color,"6 4",1.8));
     line(normPts(S.temps),"#C4462A",null,2.4);
     $("ptcount").textContent="정규화 비교 — 시간·온도를 각각 0~100%로 눕혔습니다";
-    renderStats(); renderDiff();
+    renderStats(); renderDiff(); renderPhases();
     return;
   }
   for(let v=Math.ceil(yLo/20)*20; v<=yHi; v+=20){
@@ -2639,7 +2677,7 @@ function draw(){
     t.textContent=p[1].toFixed(1); svg.appendChild(t);
   });
   $("ptcount").textContent=`온도점 ${S.temps.length} / 20`;
-  renderStats(); renderDiff();
+  renderStats(); renderDiff(); renderPhases();
 }
 
 /* ---------- 드래그 ---------- */
@@ -2723,6 +2761,108 @@ $("alog").onclick=()=>{
 
 
 
+
+
+/* ---------- 프로파일 라이브러리 ---------- */
+S.lib=[];
+function libAdd(name,pts,fans){
+  if(!pts||pts.length<2) return false;
+  const key=name+"|"+pts.length+"|"+pts[pts.length-1][0];
+  if(S.lib.some(x=>x.key===key)) return false;
+  S.lib.push({key,name:name||"프로파일",pts:pts.map(p=>[p[0],p[1]]),fans:fans||[]});
+  return true;
+}
+function libRender(){ $("libcount").textContent=S.lib.length; }
+$("bulkadd").onclick=()=>{
+  const lines=$("bulk").value.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+  let ok=0;
+  lines.forEach(l=>{ const d=decodeToPts(l); if(d&&libAdd(d.name,d.pts)) ok++; });
+  libRender(); $("bulk").value="";
+  $("libmsg").textContent=ok?`${ok}개를 라이브러리에 담았습니다.`:"읽을 수 있는 링크가 없습니다.";
+};
+$("libcur").onclick=()=>{ libAdd(fullName(),S.temps,readFans()); libRender();
+  $("libmsg").textContent="현재 곡선을 담았습니다."; };
+$("libsave").onclick=()=>{
+  if(!S.lib.length){ alert("라이브러리가 비어 있습니다."); return; }
+  const b=new Blob([JSON.stringify({v:"1.4",lib:S.lib},null,1)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(b);
+  a.download="roastpoint-profiles.json"; a.click(); URL.revokeObjectURL(a.href);
+};
+$("libload").onclick=()=>$("libfile").click();
+$("libfile").onchange=async e=>{
+  try{ const d=JSON.parse(await e.target.files[0].text());
+    let n=0; (d.lib||[]).forEach(x=>{ if(libAdd(x.name,x.pts,x.fans)) n++; });
+    libRender(); $("libmsg").textContent=`${n}개를 더했습니다. 총 ${S.lib.length}개.`;
+  }catch{ $("libmsg").textContent="읽지 못했습니다."; }
+};
+
+/* ---------- 생두 → 목표값 → 추천 ----------
+   블랙박스가 아니라 규칙이다. 왜 그 숫자가 나왔는지 화면에 같이 적는다. */
+function targetFor({proc,alt,vari,use}){
+  let t={pre:148,drop:203,dur:400,ror4:3.0}, why=[];
+  const add=(o,txt)=>{ for(const k in o) t[k]+=o[k]; why.push(txt); };
+  if(proc==="washed")      add({pre:+3,drop:-1},"워시드 — 표면 당분이 없어 초반 열을 조금 더 준다");
+  else if(proc==="natural")add({pre:-4,drop:-2},"내추럴 — 잔여당이 타기 쉬워 낮게 시작하고 얕게 끊는다");
+  else if(proc==="pn")     add({pre:-1,drop:+1},"펄프드 내추럴 — 중간, 단맛을 살려 조금 깊게");
+  else                     add({pre:-1,drop:0}, "허니 — 내추럴과 워시드의 중간");
+  const a=+alt||0;
+  if(a>=1800)      add({pre:+6,dur:+40},`고도 ${a}m — 고밀도라 예열을 올리고 시간을 늘린다`);
+  else if(a>=1500) add({pre:+2,dur:+20},`고도 ${a}m — 중고밀도`);
+  else if(a&&a<1300) add({pre:-5,dur:-30},`고도 ${a}m — 저밀도라 초반 화력을 낮춘다`);
+  const v=(vari||"").toLowerCase();
+  if(/파카마라|pacamara|마라고지페|maragog/.test(v))
+    add({pre:+4,dur:+50},"대립종 — 알이 커서 속까지 열이 가는 데 오래 걸린다");
+  else if(/게이샤|기샤|geisha|gesha/.test(v))
+    add({pre:-3,dur:+20,ror4:-0.8},"게이샤 — 납작하고 향이 잘 날아가 후반을 눕힌다");
+  else if(/재래|heirloom|landrace|74110|74112/.test(v))
+    add({dur:-20},"소립 재래종 — 빨리 익는다");
+  if(use==="espresso") add({drop:+4,dur:+30},"에스프레소 — 바디와 단맛을 위해 조금 더 발달시킨다");
+  else if(use==="latte") add({drop:+5,dur:+20},"라떼 — 우유를 뚫으려면 더 깊게");
+  else add({},"필터·드립 — 기준값");
+  return {t,why};
+}
+function profStats(pts){
+  const n=pts.length, end=pts[n-1], dur=end[0]||1;
+  const at=t=>{ for(let i=1;i<n;i++){ const a=pts[i-1],b=pts[i];
+    if(t<=b[0]) return b[0]===a[0]?b[1]:a[1]+(b[1]-a[1])*(t-a[0])/(b[0]-a[0]); } return end[1]; };
+  const ror4=(end[1]-at(dur*0.75))/((dur*0.25)/60);
+  return {pre:pts[0][1],drop:end[1],dur,ror4};
+}
+$("rc_go").onclick=()=>{
+  const lib=S.lib.length?S.lib:Object.keys(PRESETS).map(k=>({name:k.split(" — ")[0],pts:PRESETS[k].temps,fans:PRESETS[k].fans}));
+  const {t,why}=targetFor({proc:$("rc_proc").value,alt:$("rc_alt").value,
+                           vari:$("rc_var").value,use:$("rc_use").value});
+  const ranked=lib.map(p=>{
+    const st=profStats(p.pts);
+    const d=Math.abs(st.pre-t.pre)/2 + Math.abs(st.drop-t.drop)*2
+          + Math.abs(st.dur-t.dur)/20 + Math.abs(st.ror4-t.ror4)*6;
+    return {p,st,score:Math.max(0,100-d)};
+  }).sort((a,b)=>b.score-a.score).slice(0,3);
+
+  const fix=st=>{
+    const f=[];
+    if(Math.abs(st.pre-t.pre)>=2) f.push(`예열 ${st.pre>t.pre?"−":"+"}${Math.abs(st.pre-t.pre).toFixed(0)}℃`);
+    if(Math.abs(st.drop-t.drop)>=1) f.push(`배출 ${st.drop>t.drop?"−":"+"}${Math.abs(st.drop-t.drop).toFixed(1)}℃`);
+    if(Math.abs(st.dur-t.dur)>=20) f.push(`총시간 ${st.dur>t.dur?"−":"+"}${Math.abs(st.dur-t.dur).toFixed(0)}초`);
+    return f.length?f.join(" · "):"그대로 써도 됩니다";
+  };
+  $("rc_out").innerHTML =
+    `<p class="hint" style="margin:0 0 6px">목표 — 예열 <b>${t.pre.toFixed(0)}℃</b> ·
+      배출 <b>${t.drop.toFixed(1)}℃</b> · 총 <b>${fmt(t.dur)}</b> · 후반 <b>${t.ror4.toFixed(1)}℃/분</b><br>
+      ${why.map(w=>"· "+w).join("<br>")}</p>` +
+    `<table><tr><th>프로파일</th><th class="num">점수</th><th>고칠 곳</th><th></th></tr>` +
+    ranked.map((r,i)=>`<tr><td>${r.p.name}</td><td class="num">${r.score.toFixed(0)}</td>
+      <td>${fix(r.st)}</td>
+      <td><button class="ghost" style="padding:1px 6px" onclick="useRec(${i})">편집기로</button></td></tr>`).join("")+
+    `</table><p class="hint">라이브러리가 비어 있으면 기본 프리셋으로 계산합니다. 링크를 모아 넣을수록 정확해집니다.</p>`;
+  window.__rec=ranked;
+};
+window.useRec=i=>{
+  const r=window.__rec&&window.__rec[i]; if(!r) return;
+  pushHist(); S.temps=r.p.pts.map(p=>[...p]);
+  if(r.p.fans&&r.p.fans.length) setFans(r.p.fans);
+  $("pbase").value=r.p.name; $("pname").value="추천 수정본"; syncName(); draw();
+};
 
 /* ---------- 정규화 비교 ---------- */
 /* 기종이 다르면 온도의 절대값을 비교할 수 없다.
@@ -2883,6 +3023,68 @@ function estimateCrack(pts){
 }
 
 
+
+/* ---------- 구간 비율 · 진단 ----------
+   로스팅에서 기종을 넘어 비교되는 값들:
+   총시간 / 배출온도 / 크랙 시점 비율 / DTR / 후반 승온율 / 곡선 결함     */
+function seriesMetrics(pts,{isLog}){
+  const g=i=>Array.isArray(pts[i])?{t:pts[i][0],v:pts[i][1]}:pts[i];
+  const n=pts.length; if(n<2) return null;
+  const end=g(n-1), dur=end.t||1;
+  let tp=g(0); for(let i=0;i<n;i++){ const p=g(i); if(p.v<tp.v) tp=p; else if(p.t>60) break; }
+  const arr=[]; for(let i=0;i<n;i++) arr.push(g(i));
+  const at=t=>{ for(let i=1;i<n;i++){ const a=arr[i-1],b=arr[i];
+      if(t<=b.t) return b.t===a.t?b.v:a.v+(b.v-a.v)*(t-a.t)/(b.t-a.t); } return end.v; };
+  const rorAt=(a,b)=>(at(b)-at(a))/((b-a)/60);
+  const crack=isLog?(estimateCrack(arr)||{}).t:null;
+  const q=[rorAt(0,dur*0.25),rorAt(dur*0.25,dur*0.5),rorAt(dur*0.5,dur*0.75),rorAt(dur*0.75,dur)];
+  const flaws=[];
+  if(q[3]<1.0) flaws.push("베이킹 위험");
+  if(q[3]>q[2]+0.5) flaws.push("후반 플릭");
+  if(q[3]<0) flaws.push("크래시");
+  return { dur, drop:end.v, tp:tp.t, crack,
+           crackPct: crack?crack/dur*100:null,
+           dtr: crack?(dur-crack)/dur*100:null,
+           ror4:q[3], ror3:q[2], flaws };
+}
+function renderPhases(){
+  const rows=[];
+  const push=(name,color,pts,isLog)=>{
+    const m=seriesMetrics(pts,{isLog}); if(!m) return;
+    rows.push({name,color,m});
+  };
+  push(fullName()||"편집 곡선","#C4462A",S.temps,false);
+  (S.refs||[]).filter(r=>r.on).forEach(r=>push(r.name,r.color,r.pts,false));
+  (S.logs||[]).forEach(l=>push(l.name+" 실측","#9AA8A5",l.pts,true));
+
+  $("phasetbl").innerHTML=
+    `<tr><th>곡선</th><th class="num">총시간</th><th class="num">배출℃</th>
+     <th class="num">크랙</th><th class="num">크랙 시점</th><th class="num">DTR</th>
+     <th class="num">후반 승온</th><th>진단</th></tr>`+
+    rows.map(r=>{
+      const m=r.m;
+      const flag=m.flaws.length
+        ? `<span class="pill bad">${m.flaws.join(" · ")}</span>`
+        : `<span class="pill good">정상</span>`;
+      return `<tr><td style="color:${r.color}">${r.name}</td>
+        <td class="num">${fmt(m.dur)}</td>
+        <td class="num">${m.drop.toFixed(1)}</td>
+        <td class="num">${m.crack?fmt(m.crack):"–"}</td>
+        <td class="num">${m.crackPct?m.crackPct.toFixed(0)+"%":"–"}</td>
+        <td class="num">${m.dtr?m.dtr.toFixed(1)+"%":"–"}</td>
+        <td class="num">${m.ror4.toFixed(1)}</td>
+        <td>${flag}</td></tr>`;
+    }).join("");
+
+  $("phasenote").innerHTML=
+    `<b>크랙 시점</b>은 전체 시간의 몇 %에서 1차 크랙이 왔는지입니다. 온도의 절대값과 달리
+     <b>기종이 달라도 그대로 비교되는 값</b>이라, 샘플 로스터에서 잡은 감을 큰 로스터로 옮길 때 목표로 씁니다.
+     설계 곡선은 크랙을 예측할 수 없어 실측 로그에서만 나옵니다.<br>
+     진단 — <b>베이킹</b>: 후반 승온이 1℃/분 아래로 죽어 단맛이 빠지는 상태.
+     <b>플릭</b>: 크랙 이후 승온이 다시 올라 향이 무너지는 상태.
+     <b>크래시</b>: 승온이 음수로 꺾인 상태.`;
+}
+
 /* ---------- 레이어 간 차이 ---------- */
 function at(pts,t){                       // [[t,v]] 또는 [{t,v}] 모두 지원
   const g=i=>Array.isArray(pts[i])?{t:pts[i][0],v:pts[i][1]}:pts[i];
@@ -2992,6 +3194,10 @@ $("csvfile").onchange=async e=>{
       (c?` · 크랙 추정 <b>${fmt(c.t)}</b> · DTR 약 <b>${((end-c.t)/end*100).toFixed(0)}%</b>`
         :` · 크랙 플릭을 찾지 못했습니다`);
   }).join("<br>");
+  S.logs.forEach(l=>{ if(l.sp&&l.sp.length>2){
+      const sc=l.sp.map(p=>({t:p.t*0.2,v:p.v}));
+      libAdd(l.name,simplifyTo(sc,14).map(p=>[Math.round(p.t/0.2),Math.round(p.v*10)/10]));
+  }}); libRender();
   $("spbox").innerHTML=S.logs.map((l,i)=>
     l.sp&&l.sp.length?`<span style="display:inline-flex;gap:3px;margin:0 4px 4px 0">
       <button class="ghost" onclick="loadSetpoint(${i})">${l.name} → 편집</button>
@@ -3079,7 +3285,7 @@ $("cplink").onclick=async()=>{
 
 /* ---------- 저장 / 불러오기 ---------- */
 $("save").onclick=()=>{
-  const d={v:"1.2",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
+  const d={v:"1.4",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
            coolT:+$("coolT").value,coolV:+$("coolV").value};
   const b=new Blob([JSON.stringify(d,null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
@@ -3108,7 +3314,7 @@ $("loadpreset").onclick=()=>{
 };
 
 setFans(PRESETS["파카마라 워시드 v1.0 — 대립·고밀도"].fans);
-renderRefs();
+renderRefs(); libRender();
 draw();
 </script>
 </body>
