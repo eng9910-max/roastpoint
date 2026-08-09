@@ -78,7 +78,8 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <body>
 
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v3.2</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v3.3</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -309,7 +310,9 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <section class="pane" id="p-data">
   <div class="block">
     <h2>저장 · 불러오기</h2>
-    <p class="lead">전부 JSON 한 파일로 쌓입니다. 브라우저에 남기지 않으니 작업 후 반드시 저장하세요. 나중에 파이썬으로 옮길 때도 그대로 읽힙니다.</p>
+    <p class="lead"><b>입력하는 즉시 이 기기에 자동 저장됩니다.</b> 앱을 닫거나 파일을 새로 올려도 남습니다.
+    다만 브라우저 저장 영역이라 <b>기기를 바꾸거나 데이터를 지우면 사라지니</b>, 가끔 파일로 내보내 백업하세요.
+    내보낸 JSON은 나중에 파이썬으로 옮길 때도 그대로 읽힙니다.</p>
     <div class="row">
       <button id="d_save">전체 저장</button>
       <button class="ghost" id="d_load">불러오기 (합치기)</button>
@@ -752,7 +755,7 @@ $("b_save").onclick=()=>{
   if(!$("b_name").value.trim()){ $("b_msg").textContent="이름은 필요합니다."; return; }
   const o={id:uid(),img:pendingImg||null,noteCats:beanCats.slice()};
   BF.forEach(f=>o[f.slice(2)]=$(f).value.trim());
-  DB.beans.push(o); renderBeans(); clearBean();
+  DB.beans.push(o); renderBeans(); persist(); clearBean();
   $("b_msg").textContent="저장했습니다. 데이터 탭에서 파일로 내보내는 걸 잊지 마세요.";
 };
 function clearBean(){
@@ -788,7 +791,7 @@ function renderBeans(){
   sel.innerHTML=`<option value="">— 생두 선택 —</option>`+
     DB.beans.map(b=>`<option value="${b.id}">${b.name}</option>`).join("");
 }
-window.delBean=i=>{ if(confirm("삭제할까요?")){ DB.beans.splice(i,1); renderBeans(); } };
+window.delBean=i=>{ if(confirm("삭제할까요?")){ DB.beans.splice(i,1); renderBeans(); persist(); } };
 
 
 /* ---------- 기종별 열 매핑 ---------- */
@@ -846,10 +849,72 @@ function parseWithMap(lines,h,map,fname){
            crack:c?Math.round(c.t):null, ror };
 }
 
+
+/* ---------- 자동 저장 (IndexedDB) ----------
+   파일을 새로 배포해도 데이터는 남는다. 저장 영역이 출처(origin) 단위이기 때문. */
+const IDB={db:null};
+function idbOpen(){
+  return new Promise((res,rej)=>{
+    if(IDB.db) return res(IDB.db);
+    const q=indexedDB.open("roastpoint",1);
+    q.onupgradeneeded=()=>{ q.result.createObjectStore("kv"); };
+    q.onsuccess=()=>{ IDB.db=q.result; res(IDB.db); };
+    q.onerror=()=>rej(q.error);
+  });
+}
+async function idbSet(k,v){
+  const db=await idbOpen();
+  return new Promise((res,rej)=>{
+    const t=db.transaction("kv","readwrite");
+    t.objectStore("kv").put(v,k);
+    t.oncomplete=()=>res(); t.onerror=()=>rej(t.error);
+  });
+}
+async function idbGet(k){
+  const db=await idbOpen();
+  return new Promise((res,rej)=>{
+    const t=db.transaction("kv","readonly");
+    const r=t.objectStore("kv").get(k);
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
+  });
+}
+let saveTimer=null;
+function persist(){
+  clearTimeout(saveTimer);
+  $("savestate").textContent="저장 중…";
+  saveTimer=setTimeout(async()=>{
+    try{
+      await idbSet("db",JSON.parse(JSON.stringify(DB)));
+      const n=DB.beans.length, m=DB.roasts.length;
+      $("savestate").textContent=`저장됨 · 생두 ${n} · 로스팅 ${m}`;
+      $("savestate").className="pill ok";
+    }catch(e){
+      $("savestate").textContent="자동 저장 실패 — 파일로 내보내세요";
+      $("savestate").className="pill warn";
+    }
+  },400);
+}
+async function restore(){
+  try{
+    const d=await idbGet("db");
+    if(d&&(d.beans||d.roasts)){
+      DB.beans=d.beans||[]; DB.roasts=d.roasts||[];
+      DB.settings=d.settings||{};
+      $("savestate").textContent=`불러옴 · 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`;
+      $("savestate").className="pill ok";
+    }else{
+      $("savestate").textContent="새로 시작"; $("savestate").className="pill";
+    }
+  }catch(e){
+    $("savestate").textContent="저장 영역을 쓸 수 없습니다"; $("savestate").className="pill warn";
+  }
+  applySettings(); renderBeans(); renderRoasts(); stats();
+}
+
 /* ---------- 장비 설정 ---------- */
 const SF=["s_machine","s_model","s_serial","s_batch"];
 SF.forEach(id=>$(id).addEventListener("input",()=>{
-  DB.settings[id.slice(2)]=$(id).value.trim();
+  DB.settings[id.slice(2)]=$(id).value.trim(); persist();
 }));
 function applySettings(){
   SF.forEach(id=>{ const v=DB.settings[id.slice(2)]; if(v) $(id).value=v; });
@@ -1014,7 +1079,7 @@ function applyAlog(A){
       b={id:uid(),name:A.beans,img:null};
       if(A.moisture) b.moist=A.moisture;
       if(A.density) b.dens=A.density;
-      DB.beans.push(b); renderBeans();
+      DB.beans.push(b); renderBeans(); persist();
     }
     $("r_bean").value=b.id;
   }
@@ -1325,7 +1390,7 @@ $("r_save").onclick=()=>{
     DB.roasts.push(rec);
     $("r_msg").textContent="저장했습니다.";
   }
-  renderRoasts(); clearRoast();
+  renderRoasts(); persist(); clearRoast();
 };
 function clearRoast(){
   ["r_prof","r_in","r_out","r_loss","r_pre","r_drop","r_dur","r_crack","r_dtr","r_ror",
@@ -1355,11 +1420,11 @@ function renderRoasts(){
         <button class="ghost sm" onclick="delRoast(${i})">삭제</button></td></tr>`;
     }).join(""):`<tr><td colspan="11" style="color:var(--muted)">아직 없습니다</td></tr>`);
 }
-window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); renderRoasts(); } };
+window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); renderRoasts(); persist(); } };
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"3.2",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"3.3",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
@@ -1375,7 +1440,7 @@ $("d_file").onchange=async e=>{
     const hr=new Set(DB.roasts.map(x=>x.id));
     (d.roasts||[]).forEach(x=>{if(!hr.has(x.id))DB.roasts.push(x)});
     if(d.settings) { Object.assign(DB.settings,d.settings); applySettings(); }
-    renderBeans(); renderRoasts(); stats();
+    renderBeans(); renderRoasts(); stats(); persist();
     $("d_msg").textContent=`불러왔습니다 — 생두 ${DB.beans.length}종 · 로스팅 ${DB.roasts.length}건`;
   }catch{ $("d_msg").textContent="읽지 못했습니다."; }
 };
@@ -1528,7 +1593,7 @@ pickupShared();
   }
 })();
 
-applySettings(); renderBeans(); renderRoasts(); stats();
+restore();
 </script>
 </body>
 </html>
