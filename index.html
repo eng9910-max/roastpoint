@@ -78,11 +78,12 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <body>
 
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v1.2</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v1.4</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
     <button data-p="data">데이터</button>
+    <a href="studio.html" style="display:flex;align-items:center;padding:0 14px;font-size:14.5px;color:var(--setpoint);text-decoration:none">스튜디오 →</a>
   </nav>
 </header>
 
@@ -175,6 +176,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
   <div class="block">
     <h2>① 로스트 로그 넣기 — 자동으로 채워집니다</h2>
     <p class="note" id="pwahint" hidden></p>
+    <div id="sharediag" class="extra" hidden style="margin-bottom:10px"></div>
     <div id="logdrop" tabindex="0" role="button">
       <b>IKAWA 로그 CSV 놓기</b>
       <span>예열 · 배출 · 시간 · 터닝포인트 · 크랙 추정 · DTR이 자동 계산됩니다</span>
@@ -546,7 +548,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"1.2",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"1.4",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
@@ -605,24 +607,50 @@ if("serviceWorker" in navigator){
 }
 async function pickupShared(){
   if(!new URLSearchParams(location.search).has("shared")) return;
+  const box=$("sharediag"); box.hidden=false;
+  const show=(html)=>{ box.innerHTML=html; };
   try{
-    const key=new URL("__shared__",location.href.replace(/[^/]*$/,"")).href;
+    const base=location.href.split("?")[0].replace(/[^/]*$/,"");
+    const key=new URL("__shared__",base).href;
     const c=await caches.open("roast-shared");
     const res=await c.match(key);
-    if(res){
-      const files=await res.json();
-      await c.delete(key);
-      let done=0;
-      for(const f of files){
-        try{ applyLog(readLog(f.text,f.name)); done++; }
-        catch(err){ $("logmsg").textContent=f.name+": "+err.message; }
-      }
-      if(done){
-        document.querySelector('nav button[data-p="roasts"]').click();
-        $("r_msg").textContent="공유로 받은 로그를 불러왔습니다. 생두와 중량만 넣으면 됩니다.";
-      }
+    if(!res){
+      show(`<p class="tagline">공유 수신 진단</p>
+        <p class="lead">공유로 열리긴 했지만 <b>서비스워커가 파일을 받지 못했습니다.</b>
+        앱을 완전히 닫았다가 아이콘으로 한 번 실행한 뒤 다시 시도해보세요.
+        그래도 같으면 알려주세요.</p>`);
+      history.replaceState(null,"",location.pathname); return;
     }
-  }catch(err){}
+    const data=await res.json(); await c.delete(key);
+    const files=data.files||[], diag=data.diag||{};
+    let lines=(diag.entries||[]).map(e=>
+      `<tr><td>${e.field}</td><td>${e.kind}</td><td>${e.name||""}</td>
+       <td>${e.type||""}</td><td class="num">${e.size??""}</td></tr>`).join("");
+    let html=`<p class="tagline">공유 수신 진단</p>`;
+    if(diag.error) html+=`<p class="lead" style="color:var(--actual)">읽는 중 오류: ${diag.error}</p>`;
+    html+=`<table><tr><th>필드</th><th>종류</th><th>파일명</th><th>형식</th><th class="num">크기</th></tr>`+
+      (lines||`<tr><td colspan="5" style="color:var(--muted)">받은 항목이 없습니다</td></tr>`)+`</table>`;
+
+    let done=0, errs=[];
+    for(const f of files){
+      try{ applyLog(readLog(f.text,f.name)); done++; }
+      catch(err){ errs.push(`${f.name}: ${err.message}`); }
+    }
+    if(done){
+      html+=`<p class="lead" style="color:var(--ok);margin-top:8px">로그 ${done}개를 불러왔습니다.</p>`;
+      document.querySelector('nav button[data-p="roasts"]').click();
+    }else{
+      const head=(files[0]&&files[0].text||"").slice(0,160).replace(/[<>]/g,"");
+      html+=`<p class="lead" style="color:var(--actual);margin-top:8px">
+        로그로 읽지 못했습니다. ${errs.join(" / ")||"파일이 오지 않았습니다."}</p>`;
+      if(head) html+=`<p class="note">받은 내용 앞부분:<br><span class="mono">${head}</span></p>`;
+    }
+    html+=`<p class="note" style="margin-top:8px">이 진단 내용을 그대로 알려주시면 원인을 잡을 수 있습니다.</p>`;
+    show(html);
+  }catch(err){
+    show(`<p class="tagline">공유 수신 진단</p><p class="lead" style="color:var(--actual)">
+      처리 중 오류: ${err.message}</p>`);
+  }
   history.replaceState(null,"",location.pathname);
 }
 pickupShared();
