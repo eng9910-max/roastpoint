@@ -79,10 +79,11 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v3.5</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v3.7</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
+    <button data-p="profiles">프로파일</button>
     <button data-p="data">데이터</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 14px;font-size:14.5px;color:var(--setpoint);text-decoration:none">스튜디오 →</a>
   </nav>
@@ -306,6 +307,17 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
   </div>
 </section>
 
+<!-- ================= 프로파일 ================= -->
+<section class="pane" id="p-profiles">
+  <div class="block">
+    <h2>프로파일 <span id="pf_count" class="pill"></span></h2>
+    <p class="lead">로스트 로그를 넣거나 IKAWA 프로파일 링크를 공유하면 <b>여기에 자동으로 쌓입니다.</b>
+    생두와 마찬가지로 하나의 대상이고, 로스팅 기록이 이걸 가리킵니다.
+    같은 프로파일로 여러 번 볶으면 <b>평균 결과</b>가 모여 어떤 프로파일이 잘 나왔는지 보입니다.</p>
+    <table id="pf_table"></table>
+  </div>
+</section>
+
 <!-- ================= 데이터 ================= -->
 <section class="pane" id="p-data">
   <div class="block">
@@ -372,7 +384,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
-const DB={beans:[],roasts:[],settings:{}};
+const DB={beans:[],roasts:[],profiles:[],settings:{}};
 let editingId=null;
 let pendingLog=null, pendingImg=null;
 const fmt=s=>`${Math.floor(s/60)}:${String(Math.round(s%60)).padStart(2,"0")}`;
@@ -886,7 +898,7 @@ function parseWithMap(lines,h,map,fname){
   return { prof:fname.replace(/\.csv$/i,"").replace(/^Roast[_ ]?data[:_ ]*/i,"")
              .replace(/^Roasted[_ ]?with[_ ]*/i,"").replace(/_/g," ").trim(),
            pre:all[0].v, drop:end.v, dur:end.t, tp:tp.t, tpv:tp.v,
-           crack:c?Math.round(c.t):null, ror };
+           crack:c?Math.round(c.t):null, ror, sp:spThin };
 }
 
 
@@ -929,8 +941,9 @@ async function ghDown(quiet){
     const nb=DB.beans.length, nr=DB.roasts.length;
     DB.beans=mergeList(DB.beans,d.beans);
     DB.roasts=mergeList(DB.roasts,d.roasts);
+    DB.profiles=mergeList(DB.profiles,d.profiles);
     DB.settings=Object.assign({},d.settings||{},DB.settings);
-    applySettings(); renderBeans(); renderRoasts(); stats(); persist();
+    applySettings(); renderBeans(); renderRoasts(); renderProfiles(); stats(); persist();
     $("y_msg").textContent=`합쳤습니다 — 생두 ${nb}→${DB.beans.length} · 로스팅 ${nr}→${DB.roasts.length}`;
   }catch(e){ $("y_msg").textContent="내려받기 실패: "+e.message; }
 }
@@ -940,7 +953,7 @@ async function ghUp(quiet){
   try{
     const cur=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
     const body={message:`로스트포인트 ${new Date().toISOString().slice(0,16)} — 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`,
-      content:b64enc(JSON.stringify({v:"3.5",at:Date.now(),...DB}))};
+      content:b64enc(JSON.stringify({v:"3.7",at:Date.now(),...DB}))};
     if(cur&&cur.sha) body.sha=cur.sha;
     await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`,
       {method:"PUT",body:JSON.stringify(body)});
@@ -977,7 +990,7 @@ async function syncUp(quiet){
   try{
     const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
       method:"PUT",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({v:"3.5",at:Date.now(),...DB})});
+      body:JSON.stringify({v:"3.7",at:Date.now(),...DB})});
     const j=await r.json();
     if(!r.ok) throw new Error(j.error||"실패");
     if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
@@ -993,8 +1006,9 @@ async function syncDown(quiet){
     const nb=DB.beans.length, nr=DB.roasts.length;
     DB.beans=mergeList(DB.beans,d.beans);
     DB.roasts=mergeList(DB.roasts,d.roasts);
+    DB.profiles=mergeList(DB.profiles,d.profiles);
     DB.settings=Object.assign({},d.settings||{},DB.settings);
-    applySettings(); renderBeans(); renderRoasts(); stats(); persist();
+    applySettings(); renderBeans(); renderRoasts(); renderProfiles(); stats(); persist();
     $("y_msg").textContent=`합쳤습니다 — 생두 ${nb}→${DB.beans.length} · 로스팅 ${nr}→${DB.roasts.length}`;
   }catch(e){ $("y_msg").textContent="내려받기 실패: "+e.message; }
 }
@@ -1060,7 +1074,7 @@ async function restore(){
   try{
     const d=await idbGet("db");
     if(d&&(d.beans||d.roasts)){
-      DB.beans=d.beans||[]; DB.roasts=d.roasts||[];
+      DB.beans=d.beans||[]; DB.roasts=d.roasts||[]; DB.profiles=d.profiles||[];
       DB.settings=d.settings||{};
       $("savestate").textContent=`불러옴 · 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`;
       $("savestate").className="pill ok";
@@ -1070,7 +1084,7 @@ async function restore(){
   }catch(e){
     $("savestate").textContent="저장 영역을 쓸 수 없습니다"; $("savestate").className="pill warn";
   }
-  applySettings(); renderBeans(); renderRoasts(); stats();
+  applySettings(); renderBeans(); renderRoasts(); renderProfiles(); stats();
   if(DB.settings.syncKey) $("y_key").value=DB.settings.syncKey;
   ["g_repo","g_path","g_token"].forEach(id=>{ if(DB.settings[id]) $(id).value=DB.settings[id]; });
   if(DB.settings.syncMode){ $("y_mode").value=DB.settings.syncMode;
@@ -1078,6 +1092,51 @@ async function restore(){
   if(DB.settings.syncAuto){ $("y_auto").checked=true;
     if(syncMode()==="gh") await ghDown(true); else await syncDown(true); }
 }
+
+
+/* ---------- 프로파일 저장소 ----------
+   프로파일은 여러 배치에 재사용되므로 생두처럼 독립된 대상으로 둔다.
+   로스팅 기록은 profileId 로 그것을 가리킨다. */
+function profKey(pts){
+  return pts.map(p=>Math.round(p[0])+":"+Math.round(p[1]*10)).join(",");
+}
+function addProfile(name,pts,src){
+  if(!pts||pts.length<2) return null;
+  const key=profKey(pts);
+  const hit=DB.profiles.find(x=>x.key===key);
+  if(hit){ if(!hit.name&&name) hit.name=name; return hit.id; }
+  const p=stamp({id:uid(),key,name:name||"이름 없음",src:src||"",pts:pts.map(q=>[q[0],q[1]])});
+  DB.profiles.push(p); renderProfiles(); persist();
+  return p.id;
+}
+function profStat(pts){
+  const n=pts.length,end=pts[n-1],dur=end[0]||1;
+  const at=x=>{ for(let i=1;i<n;i++){ const a=pts[i-1],b=pts[i];
+    if(x<=b[0]) return b[0]===a[0]?b[1]:a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0]); } return end[1]; };
+  return {pre:pts[0][1],drop:end[1],dur,ror4:(end[1]-at(dur*0.75))/((dur*0.25)/60)};
+}
+function renderProfiles(){
+  $("pf_count").textContent=DB.profiles.length+"개";
+  const avg=a=>a.length?(a.reduce((x,y)=>x+y,0)/a.length):null;
+  $("pf_table").innerHTML=`<tr><th>이름</th><th>출처</th><th class="num">예열</th><th class="num">배출</th>
+    <th class="num">시간</th><th class="num">쓴 횟수</th><th class="num">평균 감량</th>
+    <th class="num">평균 DTR</th><th class="num">평균 컵</th><th></th></tr>`+
+    (DB.profiles.length?DB.profiles.map((p,i)=>{
+      const st=profStat(p.pts);
+      const used=DB.roasts.filter(r=>r.profileId===p.id);
+      const L=avg(used.filter(r=>r.loss).map(r=>r.loss));
+      const D=avg(used.filter(r=>r.dtr).map(r=>r.dtr));
+      const C=avg(used.filter(r=>r.cup&&r.cup.sum).map(r=>r.cup.sum));
+      return `<tr><td>${p.name}</td><td><span class="pill">${p.src||"—"}</span></td>
+        <td class="num">${st.pre.toFixed(1)}</td><td class="num">${st.drop.toFixed(1)}</td>
+        <td class="num">${fmt(st.dur)}</td><td class="num">${used.length||""}</td>
+        <td class="num">${L!=null?L.toFixed(1)+"%":""}</td>
+        <td class="num">${D!=null?D.toFixed(0)+"%":""}</td>
+        <td class="num">${C!=null?C.toFixed(0)+"/72":""}</td>
+        <td><button class="ghost sm" onclick="delProfile(${i})">삭제</button></td></tr>`;
+    }).join(""):`<tr><td colspan="10" style="color:var(--muted)">아직 없습니다</td></tr>`);
+}
+window.delProfile=i=>{ if(confirm("삭제할까요? 기록은 남습니다.")){ DB.profiles.splice(i,1); renderProfiles(); persist(); } };
 
 /* ---------- 장비 설정 ---------- */
 const SF=["s_machine","s_model","s_serial","s_batch"];
@@ -1090,6 +1149,45 @@ function applySettings(){
 function prefillFromSettings(){
   if(!$("r_machine").value&&DB.settings.machine) $("r_machine").value=DB.settings.machine;
   if(!$("r_in").value&&DB.settings.batch) { $("r_in").value=DB.settings.batch; recalc(); }
+}
+
+
+/* ---------- IKAWA 프로파일 링크 인식 ----------
+   공유로 들어온 것이 '로스팅 전 프로파일'이면 곡선만 들어 있다.
+   기록에 붙일 게 아니라 스튜디오에서 열어야 하므로 따로 처리한다. */
+function pbFieldsR(buf){
+  const out=[]; let i=0;
+  while(i<buf.length){
+    let key=0,sh=0,c;
+    do{ c=buf[i++]; key|=(c&0x7f)<<sh; sh+=7; }while(c&0x80);
+    const f=key>>>3, w=key&7;
+    if(w===0){ let v=0,s2=0,d; do{ d=buf[i++]; v+=(d&0x7f)*Math.pow(2,s2); s2+=7; }while(d&0x80);
+      out.push([f,v,0]); }
+    else if(w===2){ let n=0,s3=0,d; do{ d=buf[i++]; n|=(d&0x7f)<<s3; s3+=7; }while(d&0x80);
+      out.push([f,buf.subarray(i,i+n),2]); i+=n; }
+    else if(w===5){ i+=4; } else if(w===1){ i+=8; } else break;
+  }
+  return out;
+}
+function decodeIkawaLink(text){
+  const m=String(text).match(/share\.ikawa\.support\/\S*?[?&]([A-Za-z0-9+/=_-]{24,})/);
+  if(!m) return null;
+  let buf; try{
+    let t=m[1].replace(/-/g,"+").replace(/_/g,"/"); while(t.length%4) t+="=";
+    const bin=atob(t); buf=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) buf[i]=bin.charCodeAt(i);
+  }catch{ return null; }
+  let name="", T=[];
+  try{
+    for(const [f,v,w] of pbFieldsR(buf)){
+      if(f===3&&w===2) name=new TextDecoder().decode(v);
+      else if(f===4&&w===2){ const d={}; for(const [a,b,c2] of pbFieldsR(v)) if(c2===0) d[a]=b;
+        T.push([(d[1]||0)/10,(d[2]||0)/10]); }
+    }
+  }catch{ return null; }
+  if(T.length<2) return null;
+  return { name:name||"이름 없음", pts:T, link:m[0].startsWith("http")?m[0]:"https://"+m[0],
+           pre:T[0][1], drop:T[T.length-1][1], dur:T[T.length-1][0] };
 }
 
 /* ---------- 로그 파싱 ---------- */
@@ -1128,12 +1226,18 @@ function readLog(text,fname){
     : (inlet ? "흡기 온도가 기록돼 있습니다 — <b>흡기 센서가 있는 기종(Pro V3 계열)</b>으로 보입니다."
              : "흡기 온도 열이 비어 있습니다 — <b>배기 센서만 있는 기종(Pro V2 계열)</b>으로 보입니다.");
   if(!$("r_machine").value) $("r_machine").value=DB.settings.machine||"IKAWA Pro V2";
-  const pts=[], all=[];
+  const ip=h.indexOf("setpoint");
+  const pts=[], all=[], sp=[];
   for(let i=1;i<lines.length;i++){
     const c=lines[i].split(","); if(c.length<3) continue;
     all.push({t:+c[it],v:+c[iv]});
-    if(is<0||(c[is]||"").trim()==="ROASTING") pts.push({t:+c[it],v:+c[iv]});
+    if(is<0||(c[is]||"").trim()==="ROASTING"){
+      pts.push({t:+c[it],v:+c[iv]});
+      if(ip>=0) sp.push([+c[it],+c[ip]]);
+    }
   }
+  const spThin=sp.filter((p,i)=>i===0||i===sp.length-1||Math.round(p[0])%10===0)
+                 .map(p=>[Math.round(p[0]),Math.round(p[1]*10)/10]);
   if(pts.length<10) throw new Error("로스팅 구간이 없습니다");
   const end=pts[pts.length-1];
   let tp=pts[0]; for(const p of pts){ if(p.v<tp.v) tp=p; else if(p.t>60) break; }
@@ -1143,10 +1247,12 @@ function readLog(text,fname){
   return { prof:fname.replace(/\.csv$/i,"").replace(/^Roast[_ ]?data[:_ ]*/i,"")
              .replace(/^Roasted[_ ]?with[_ ]*/i,"").replace(/_/g," ").trim(),
            pre:all[0].v, drop:end.v, dur:end.t, tp:tp.t, tpv:tp.v,
-           crack:c?Math.round(c.t):null, ror };
+           crack:c?Math.round(c.t):null, ror, sp:spThin };
 }
+let pendingProfileId=null;
 function applyLog(L){
   pendingLog=L;
+  pendingProfileId = (L.sp&&L.sp.length>2) ? addProfile(L.prof,L.sp,"로그") : null;
   $("r_prof").value=L.prof; $("r_pre").value=L.pre.toFixed(1);
   $("r_drop").value=L.drop.toFixed(1); $("r_dur").value=L.dur.toFixed(1);
   $("r_crack").value=L.crack??""; $("r_ror").value=L.ror!==null?L.ror.toFixed(1):"";
@@ -1469,7 +1575,7 @@ function showRec(){
   html+=`<p class="lead" style="margin:0">예열 <b>${t.pre.toFixed(0)}℃</b> ·
     배출 <b>${t.drop.toFixed(1)}℃</b> · 총 <b>${fmt(t.dur)}</b> · 후반 <b>${t.ror4.toFixed(1)}℃/분</b></p>
     <p class="note">${why.map(w=>"· "+w).join("<br>")}</p>`;
-  const POOL=BUILTIN.concat(RECLIB);
+  const POOL=BUILTIN.concat(DB.profiles.map(p=>({name:p.name,src:p.src||"내 기록",pts:p.pts}))).concat(RECLIB);
   if(POOL.length){
     const stat=pts=>{ const n=pts.length,end=pts[n-1],dur=end[0]||1;
       const at=x=>{ for(let i=1;i<n;i++){ const p=pts[i-1],q=pts[i];
@@ -1508,7 +1614,7 @@ $("rec_file").onchange=async e=>{
 /* ---------- 로스팅 저장 ---------- */
 window.editRoast=i=>{
   const r=DB.roasts[i]; if(!r) return;
-  editingId=r.id;
+  editingId=r.id; pendingProfileId=r.profileId||null;
   $("r_bean").value=r.beanId||""; showRec(); $("r_machine").value=r.machine||"";
   $("r_prof").value=r.prof||""; $("r_date").value=r.date||"";
   $("r_in").value=r.inG??""; $("r_out").value=r.outG??"";
@@ -1539,7 +1645,7 @@ $("r_save").onclick=()=>{
   if($("c_date").value) cup.date=$("c_date").value;
   const rec=stamp({
     id:editingId||uid(), beanId:$("r_bean").value, machine:$("r_machine").value.trim(),
-    prof:$("r_prof").value.trim(), date:$("r_date").value,
+    prof:$("r_prof").value.trim(), profileId:pendingProfileId||null, date:$("r_date").value,
     inG:+$("r_in").value||null, outG:+$("r_out").value||null,
     loss:parseFloat($("r_loss").value)||null,
     pre:+$("r_pre").value||null, drop:+$("r_drop").value||null, dur:+$("r_dur").value||null,
@@ -1558,7 +1664,7 @@ $("r_save").onclick=()=>{
     DB.roasts.push(rec);
     $("r_msg").textContent="저장했습니다.";
   }
-  renderRoasts(); persist(); clearRoast();
+  renderRoasts(); renderProfiles(); persist(); clearRoast();
 };
 function clearRoast(){
   ["r_prof","r_in","r_out","r_loss","r_pre","r_drop","r_dur","r_crack","r_dtr","r_ror",
@@ -1566,7 +1672,7 @@ function clearRoast(){
   CUP.forEach(([k])=>{$("c_"+k).value=0;$("o_"+k).textContent="–";});
   CATA.forEach(([k])=>$("f_"+k).checked=false);
   $("c_sum").value=""; $("c_rest").value=""; $("c_autohint").textContent="";
-  $("r_bean").value=""; $("recbox").hidden=true; pendingLog=null; $("logmsg").textContent="";
+  $("r_bean").value=""; $("recbox").hidden=true; pendingLog=null; pendingProfileId=null; $("logmsg").textContent="";
   editingId=null; $("r_save").textContent="로스팅 저장";
 }
 $("r_clear").onclick=()=>{clearRoast();$("r_msg").textContent="";};
@@ -1592,7 +1698,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"3.5",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"3.7",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
@@ -1607,6 +1713,9 @@ $("d_file").onchange=async e=>{
     (d.beans||[]).forEach(x=>{if(!have.has(x.id))DB.beans.push(x)});
     const hr=new Set(DB.roasts.map(x=>x.id));
     (d.roasts||[]).forEach(x=>{if(!hr.has(x.id))DB.roasts.push(x)});
+    const hp=new Set(DB.profiles.map(x=>x.id));
+    (d.profiles||[]).forEach(x=>{if(!hp.has(x.id))DB.profiles.push(x)});
+    renderProfiles();
     if(d.settings) { Object.assign(DB.settings,d.settings); applySettings(); }
     renderBeans(); renderRoasts(); stats(); persist();
     $("d_msg").textContent=`불러왔습니다 — 생두 ${DB.beans.length}종 · 로스팅 ${DB.roasts.length}건`;
@@ -1673,6 +1782,23 @@ async function pickupShared(){
     const files=data.files||[], diag=data.diag||{}, sharedText=(data.shared_text||"").trim();
     const images=data.images||[];
     const isLog=t=>/temp above/i.test(t)||(/setpoint/i.test(t)&&/ROASTING/i.test(t));
+    const prof=decodeIkawaLink(sharedText)||decodeIkawaLink((files[0]||{}).text||"");
+    if(prof){
+      $("r_prof").value=prof.name;
+      pendingProfileId=addProfile(prof.name,prof.pts,"링크");
+      const enc=encodeURIComponent(prof.link);
+      html+=`<p class="lead" style="color:var(--ok);margin-top:8px">
+        <b>로스팅 전 프로파일</b>을 받았습니다 — ${prof.name}<br>
+        예열 ${prof.pre.toFixed(1)}℃ · 배출 ${prof.drop.toFixed(1)}℃ · 총 ${fmt(prof.dur)} · 제어점 ${prof.pts.length}개</p>
+        <p class="note">여기에는 <b>계획 곡선만</b> 들어 있습니다. 볶은 결과(배출·크랙·감량)는 로스팅이 끝난 뒤
+        <b>로스트 로그</b>를 공유해야 들어옵니다. 프로파일 이름은 미리 채워뒀습니다.</p>
+        <p style="margin-top:8px"><a href="studio.html#link=${enc}"
+           style="color:var(--setpoint);font-size:14px">스튜디오에서 열어 고치기 →</a></p>`;
+      show(html);
+      document.querySelector('nav button[data-p="roasts"]').click();
+      history.replaceState(null,"",location.pathname);
+      return;
+    }
     let lines=(diag.entries||[]).map(e=>
       `<tr><td>${e.field}</td><td>${e.kind}</td><td>${e.name||""}</td>
        <td>${e.type||""}</td><td class="num">${e.size??""}</td></tr>`).join("");

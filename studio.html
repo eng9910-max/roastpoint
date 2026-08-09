@@ -77,7 +77,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
 </head>
 <body>
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v1.6</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v1.7</span>
   <button class="ghost" id="undo" title="Ctrl+Z">되돌리기</button>
   <button class="ghost" id="redo" title="Ctrl+Shift+Z">다시</button>
   <a href="./" style="font-size:12.5px;color:var(--setpoint);margin-left:auto">← 기록장</a>
@@ -3303,7 +3303,7 @@ $("cplink").onclick=async()=>{
 
 /* ---------- 저장 / 불러오기 ---------- */
 $("save").onclick=()=>{
-  const d={v:"1.6",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
+  const d={v:"1.7",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
            coolT:+$("coolT").value,coolV:+$("coolV").value};
   const b=new Blob([JSON.stringify(d,null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
@@ -3335,6 +3335,16 @@ $("loadpreset").onclick=()=>{
 
 setFans(PRESETS["파카마라 워시드 v1.0 — 대립·고밀도"].fans);
 renderRefs(); libRender();
+/* 기록장에서 넘어온 프로파일 링크 자동 적재 */
+(function(){
+  const m=location.hash.match(/link=([^&]+)/);
+  if(!m) return;
+  try{
+    $("inlink").value=decodeURIComponent(m[1]);
+    $("declink").click();
+    history.replaceState(null,"",location.pathname);
+  }catch(e){}
+})();
 draw();
 </script>
 </body>
