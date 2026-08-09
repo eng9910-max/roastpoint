@@ -77,7 +77,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
 </head>
 <body>
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v1.4</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v1.6</span>
   <button class="ghost" id="undo" title="Ctrl+Z">되돌리기</button>
   <button class="ghost" id="redo" title="Ctrl+Shift+Z">다시</button>
   <a href="./" style="font-size:12.5px;color:var(--setpoint);margin-left:auto">← 기록장</a>
@@ -127,7 +127,11 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
       <label for="pbase">원본 (기반이 된 프로파일)</label>
       <input type="text" id="pbase" placeholder="Caravela" style="margin-bottom:7px">
       <label for="pname">수정본 이름</label>
-      <input type="text" id="pname" value="My Profile v1.0">
+      <input type="text" id="pname" value="My Profile">
+      <div class="row" style="margin-top:6px">
+        <div style="flex:1"><label for="pver">버전</label><input type="text" id="pver" value="v1.0"></div>
+        <button class="ghost" id="verup" style="align-self:flex-end">버전 올리기</button>
+      </div>
       <p class="hint" style="margin-top:5px">앱에 들어갈 이름: <b id="fullname" class="mono"></b></p>
       <div class="row" style="margin-top:7px">
         <select id="preset" style="flex:1"><option value="">— 추천 프로파일 불러오기 —</option></select>
@@ -2799,7 +2803,7 @@ $("libfile").onchange=async e=>{
 /* ---------- 생두 → 목표값 → 추천 ----------
    블랙박스가 아니라 규칙이다. 왜 그 숫자가 나왔는지 화면에 같이 적는다. */
 function targetFor({proc,alt,vari,use}){
-  let t={pre:148,drop:203,dur:400,ror4:3.0}, why=[];
+  let t={pre:143,drop:203,dur:400,ror4:3.0}, why=[];
   const add=(o,txt)=>{ for(const k in o) t[k]+=o[k]; why.push(txt); };
   if(proc==="washed")      add({pre:+3,drop:-1},"워시드 — 표면 당분이 없어 초반 열을 조금 더 준다");
   else if(proc==="natural")add({pre:-4,drop:-2},"내추럴 — 잔여당이 타기 쉬워 낮게 시작하고 얕게 끊는다");
@@ -2861,7 +2865,8 @@ window.useRec=i=>{
   const r=window.__rec&&window.__rec[i]; if(!r) return;
   pushHist(); S.temps=r.p.pts.map(p=>[...p]);
   if(r.p.fans&&r.p.fans.length) setFans(r.p.fans);
-  $("pbase").value=r.p.name; $("pname").value="추천 수정본"; syncName(); draw();
+  $("pbase").value=r.p.name; $("pname").value="추천 수정본"; $("pver").value="v1.0";
+  syncName(); draw();
 };
 
 /* ---------- 정규화 비교 ---------- */
@@ -2962,19 +2967,28 @@ function loadSetpoint(i){
   const keep=simplifyTo(scaled,14).map(p=>[Math.round(p.t/0.2),Math.round(p.v*10)/10]);
   pushHist();
   S.temps=keep;
-  $("pbase").value=l.name; $("pname").value="v1.0 수정"; syncName();
+  $("pbase").value=l.name; $("pname").value="수정본"; $("pver").value="v1.0"; syncName();
   draw();
 }
 window.loadSetpoint=loadSetpoint;
 
 /* ---------- 이름 조합 ---------- */
 function fullName(){
-  const b=$("pbase").value.trim(), n=$("pname").value.trim()||"Profile";
-  return b ? `${b} > ${n}` : n;
+  const b=$("pbase").value.trim(), n=$("pname").value.trim()||"Profile",
+        v=$("pver").value.trim();
+  const core = b ? `${b} > ${n}` : n;
+  return v ? `${core} ${v}` : core;
 }
+$("verup").onclick=()=>{
+  const cur=$("pver").value.trim()||"v1.0";
+  const m=cur.match(/^v?(\d+)\.(\d+)$/i);
+  $("pver").value = m ? `v${m[1]}.${+m[2]+1}` : "v1.1";
+  syncName();
+};
 function syncName(){ $("fullname").textContent=fullName(); }
 $("pbase").addEventListener("input",syncName);
 $("pname").addEventListener("input",syncName);
+$("pver").addEventListener("input",syncName);
 syncName();
 
 /* ---------- 되돌리기 ---------- */
@@ -3252,8 +3266,12 @@ $("declink").onclick=()=>{
     }
   }catch{ alert("해독하지 못했습니다."); return; }
   if(T.length<2){ alert("온도점을 찾지 못했습니다."); return; }
-  const nm=(name||"Imported").split(" > ");
-  $("pbase").value=nm[0]; $("pname").value=(nm[1]||"v1.0 수정"); syncName();
+  const full=(name||"Imported").trim();
+  const vm=full.match(/\s(v\d+\.\d+)$/i);
+  const core=vm?full.slice(0,-vm[0].length).trim():full;
+  const nm=core.split(" > ");
+  $("pbase").value=nm[0]; $("pname").value=(nm[1]||"수정본");
+  $("pver").value=vm?vm[1]:"v1.0"; syncName();
   pushHist(); S.temps=T.map(([t,v])=>[t/10,v/10]);
   setFans(F.map(([t,v])=>[t/10,Math.round(v/255*100)]));
   if(C.length){ $("coolT").value=Math.round(C[0][0]/10-S.temps[S.temps.length-1][0]);
@@ -3285,7 +3303,7 @@ $("cplink").onclick=async()=>{
 
 /* ---------- 저장 / 불러오기 ---------- */
 $("save").onclick=()=>{
-  const d={v:"1.4",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
+  const d={v:"1.6",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
            coolT:+$("coolT").value,coolV:+$("coolV").value};
   const b=new Blob([JSON.stringify(d,null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
@@ -3297,7 +3315,8 @@ $("loadfile").onchange=async e=>{
   try{
     const d=JSON.parse(await e.target.files[0].text());
     if(!Array.isArray(d.temps)) throw 0;
-    $("pbase").value=d.base||""; $("pname").value=d.name||"Profile"; syncName();
+    $("pbase").value=d.base||""; $("pname").value=d.name||"Profile";
+    $("pver").value=d.ver||"v1.0"; syncName();
     S.temps=d.temps.map(p=>[...p]);
     setFans(d.fans||[]); if(d.coolT)$("coolT").value=d.coolT; if(d.coolV)$("coolV").value=d.coolV;
     draw();
@@ -3310,7 +3329,8 @@ $("preset").innerHTML='<option value="">— 추천 프로파일 불러오기 —
 $("loadpreset").onclick=()=>{
   const k=$("preset").value; if(!k) return;
   pushHist(); S.temps=PRESETS[k].temps.map(p=>[...p]); setFans(PRESETS[k].fans);
-  $("pbase").value=k.split(" — ")[0]; $("pname").value="v1.0"; syncName(); draw();
+  $("pbase").value=k.split(" — ")[0]; $("pname").value="수정본"; $("pver").value="v1.0";
+  syncName(); draw();
 };
 
 setFans(PRESETS["파카마라 워시드 v1.0 — 대립·고밀도"].fans);

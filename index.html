@@ -78,7 +78,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <body>
 
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v2.6</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v3.1</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -158,7 +158,9 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
         <div><label>구입일</label><input type="date" id="b_bought"></div>
         <div><label>구입 중량 (g)</label><input type="number" step="1" id="b_qty" placeholder="1000"></div>
         <div><label>구입 가격 (원)</label><input type="number" step="100" id="b_price"></div>
-        <div class="wide"><label>판매처 컵노트</label><input type="text" id="b_notes"></div>
+        <div class="wide"><label>판매처 컵노트 — 적힌 그대로 두세요. 아래에 분류만 붙습니다</label>
+          <input type="text" id="b_notes">
+          <p class="note" id="b_notecats"></p></div>
         <div class="wide"><label>추가 정보 — 수상 경력, 농장 이야기, 특이사항</label>
           <textarea id="b_memo" style="min-height:52px"></textarea></div>
         <div class="wide"><label>원문 (검색용, 통째로 보관)</label><textarea id="b_raw" style="min-height:52px"></textarea></div>
@@ -224,10 +226,20 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <h2>② 손으로 넣을 것 — 셋뿐입니다</h2>
     <div class="core">
       <div class="grid g5">
-        <div><label>생두 *</label><select id="r_bean"></select></div>
+        <div class="wide"><label>생두 *</label><select id="r_bean"></select></div>
         <div><label>투입량 g</label><input type="number" step="0.1" id="r_in"></div>
         <div><label>배출량 g</label><input type="number" step="0.1" id="r_out"></div>
         <div><label>감량률 %</label><input type="text" id="r_loss" readonly></div>
+      </div>
+    </div>
+
+    <div class="extra" id="recbox" hidden>
+      <p class="tagline">이 생두의 권장 목표</p>
+      <div id="rec_out"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="ghost" id="rec_lib">프로파일 파일로 순위 매기기</button>
+        <input type="file" id="rec_file" accept=".json">
+        <a href="studio.html" style="font-size:13px;color:var(--setpoint)">스튜디오에서 만들기 →</a>
       </div>
     </div>
 
@@ -254,15 +266,32 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
   <div class="block">
     <h2>③ 컵 평가</h2>
-    <p class="lead">점수만, 서술만, 둘 다 — 편한 대로. 빈칸은 저장되지 않습니다.</p>
+    <p class="lead">SCA의 <b>Coffee Value Assessment</b> 정동 평가를 따랐습니다. 8개 항목을 0~9로 매기고,
+    향미는 아래에서 해당하는 것만 고르면 됩니다. 다 채울 필요 없습니다 — 빈 항목은 저장되지 않습니다.</p>
     <div class="extra">
+      <p class="tagline">정동 평가 (0~9) — 0은 미평가</p>
       <div class="sliders" id="cupsl"></div>
       <div class="grid g5" style="margin-top:11px">
-        <div><label>총점 (선택)</label><input type="number" step="0.25" id="c_total"></div>
+        <div><label>합계 (0~72)</label><input type="text" id="c_sum" readonly></div>
+        <div><label>총점 직접 입력 (선택)</label><input type="number" step="0.25" id="c_total"></div>
         <div><label>마신 날</label><input type="date" id="c_date"></div>
-        <div class="wide"><label>노트</label><textarea id="c_note" placeholder="산미가 날카롭고 단맛이 얕음. 3일차보다 7일차가 나음."></textarea></div>
+        <div><label>로스팅 후 며칠</label><input type="text" id="c_rest" readonly></div>
       </div>
+      <p class="note">CVA 정동 평가의 합계는 최대 72점입니다. 100점 환산은 SCA가 제공하는 계산기를 쓰세요 —
+      환산식이 개정될 수 있어 앱에서 임의로 계산하지 않습니다.</p>
     </div>
+
+    <div class="extra" style="margin-top:9px">
+      <p class="tagline">향미 — 해당하는 것만 (SCA 플레이버 휠 분류)</p>
+      <div id="cata"></div>
+      <div class="grid g5" style="margin-top:9px">
+        <div class="wide"><label>노트 — 자유롭게</label>
+          <textarea id="c_note" placeholder="산미가 날카롭고 단맛이 얕음. 3일차보다 7일차가 나음."></textarea></div>
+      </div>
+      <p class="note" id="c_autohint"></p>
+    </div>
+  </div>
+
     <div class="row" style="margin-top:11px">
       <button id="r_save">로스팅 저장</button>
       <button class="ghost" id="r_clear">비우기</button>
@@ -417,13 +446,23 @@ function scanValues(txt){
     const m=txt.match(/\b(AA\+?|AB|PB|G[1-4]|Grade\s*[1-4]|SHG|SHB|HB|EP|NY\s*2|Supremo|Excelso|Micro\s*Lot|마이크로랏|스페셜티|프리미엄|스탠다드)\b/i);
     if(m){ $("b_grade").value=m[0].trim(); n++; }
   }
+  // 수분 · 밀도 — "수 분 11.1", "수분(%) 11.1", "11.1 수분", 줄바꿈·붙어쓰기 모두
+  const num=(labels,pat)=>{
+    const L="(?:"+labels.join("|")+")";
+    const U="(?:\\s*\\([^)]{0,10}\\))?";        // (%) (g/L) 같은 단위 표기
+    const SEP="[\\s:·・.=-]*";
+    let m=new RegExp(L+U+SEP+"("+pat+")","i").exec(txt);   // 라벨 → 값
+    if(m) return m[1];
+    m=new RegExp("("+pat+")"+SEP+L,"i").exec(txt);          // 값 → 라벨
+    return m?m[1]:null;
+  };
   if(!$("b_moist").value){
-    const m=txt.match(/(?:수\s*분|moisture)\s*[:\s]*([0-9]{1,2}(?:\.[0-9])?)\s*%?/i);
-    if(m){ $("b_moist").value=m[1]; n++; }
+    const v=num(["수\\s*분\\s*함?\\s*량?","moisture(?:\\s*content)?"],"[0-9]{1,2}(?:\\.[0-9]{1,2})?");
+    if(v&&+v>=5&&+v<=20){ $("b_moist").value=v; n++; }
   }
   if(!$("b_dens").value){
-    const m=txt.match(/(?:밀\s*도|density)\s*[:\s]*([0-9]{3}(?:\.[0-9])?)/i);
-    if(m){ $("b_dens").value=m[1]; n++; }
+    const v=num(["밀\\s*도","density","bulk\\s*density"],"[0-9]{3,4}(?:\\.[0-9])?");
+    if(v&&+v>=500&&+v<=1000){ $("b_dens").value=v; n++; }
   }
   if(!$("b_harvest").value){
     const m=txt.match(/(20\d{2}\s*\/\s*\d{2}|20\d{2}\s*(?:crop|하베스트|수확|년))|(\d{1,2}\s*[~\-]\s*\d{1,2}\s*월)/i);
@@ -474,7 +513,12 @@ function parseText(txt){
   }
   hit += scanValues(txt);                       // 라벨이 없어도 값으로 채운다
   const fixed=normalizeFields();                // 오인식 교정
-  if(fixed.length) window.__fixed=fixed; else window.__fixed=null;
+  window.__fixed=fixed.length?fixed:null;
+  const LBL={b_origin:"원산지",b_proc:"가공",b_var:"품종",b_region:"지역",b_farm:"농장",
+             b_alt:"고도",b_screen:"스크린",b_grade:"등급",b_harvest:"수확",
+             b_moist:"수분",b_dens:"밀도"};
+  window.__missing=Object.keys(LBL).filter(k=>!$(k).value).map(k=>LBL[k]);
+  if(typeof showBeanCats==="function") showBeanCats();
   if(!$("b_raw").value) $("b_raw").value=txt.slice(0,4000);
   return hit;
 }
@@ -487,7 +531,9 @@ $("paste").addEventListener("input",()=>{
     const n=parseText(t);
     $("parsemsg").innerHTML=(n?`자동으로 ${n}개 항목을 채웠습니다. 아래에서 확인하세요.`
       :"인식된 항목이 없습니다. 직접 입력하세요.")
-      +(window.__fixed?`<br><span style="color:var(--ok)">교정: ${window.__fixed.join(" · ")}</span>`:"");
+      +(window.__fixed?`<br><span style="color:var(--ok)">교정: ${window.__fixed.join(" · ")}</span>`:"")
+      +(window.__missing&&window.__missing.length
+        ?`<br><span style="color:var(--muted)">못 찾음: ${window.__missing.join(" · ")} — 원문에 없거나 표기가 다릅니다</span>`:"");
   },400);
 });
 
@@ -668,13 +714,43 @@ $("b_auto").onclick=()=>{
   $("b_name").value=parts.join(" ")+(yr?" "+yr.replace(/\s/g,""):"");
 };
 
+
+/* ---------- 판매처 컵노트 → 플레이버 휠 분류 ----------
+   원문은 그대로 둔다. 치환하면 정보가 사라지므로 분류만 따로 붙인다. */
+function classifyText(txt){
+  if(!txt) return {cats:[],unknown:[]};
+  const low=" "+txt.toLowerCase().replace(/\s+/g," ")+" ";
+  const sq=low.replace(/[\s·,]/g,"");
+  const cats=[], matched=[];
+  CATA.forEach(([k,n,words])=>{
+    const w=words.find(x=>low.includes(x.toLowerCase())||sq.includes(x.toLowerCase().replace(/\s/g,"")));
+    if(w){ cats.push({k,n}); matched.push(w); }
+  });
+  // 쉼표로 끊어 분류에 안 걸린 낱말을 모은다
+  const unknown=txt.split(/[,·/]/).map(x=>x.trim()).filter(x=>x&&x.length<=12)
+    .filter(x=>{ const t=x.toLowerCase().replace(/\s/g,"");
+      return !CATA.some(([,,ws])=>ws.some(w=>t.includes(w.toLowerCase().replace(/\s/g,""))
+                                          ||w.toLowerCase().replace(/\s/g,"").includes(t))); });
+  return {cats,unknown};
+}
+function showBeanCats(){
+  const r=classifyText($("b_notes").value);
+  beanCats=r.cats.map(c=>c.k);
+  $("b_notecats").innerHTML = (r.cats.length
+    ? `분류: ${r.cats.map(c=>`<span class="pill ok">${c.n}</span>`).join(" ")}` : "")
+    + (r.unknown.length
+    ? `<br><span style="color:var(--muted)">분류 없음(원문 유지): ${r.unknown.join(", ")}</span>` : "");
+}
+$("b_notes").addEventListener("input",showBeanCats);
+
 /* ---------- 생두 저장 ---------- */
 const BF=["b_name","b_proc","b_alt","b_var","b_screen","b_harvest","b_moist","b_dens",
           "b_origin","b_region","b_farm","b_grade","b_seller","b_bought","b_qty","b_price",
           "b_notes","b_memo","b_raw"];
+let beanCats=[];
 $("b_save").onclick=()=>{
   if(!$("b_name").value.trim()){ $("b_msg").textContent="이름은 필요합니다."; return; }
-  const o={id:uid(),img:pendingImg||null};
+  const o={id:uid(),img:pendingImg||null,noteCats:beanCats.slice()};
   BF.forEach(f=>o[f.slice(2)]=$(f).value.trim());
   DB.beans.push(o); renderBeans(); clearBean();
   $("b_msg").textContent="저장했습니다. 데이터 탭에서 파일로 내보내는 걸 잊지 마세요.";
@@ -683,6 +759,7 @@ function clearBean(){
   BF.forEach(f=>$(f).value=""); $("paste").value="";
   pendingImg=null; $("thumb").hidden=true; ocrImg=null; $("ocrbtn").hidden=true; $("lensbtn").hidden=true; $("savebtn").hidden=true;
   $("parsemsg").textContent=""; $("ocrmsg").textContent="";
+  beanCats=[]; $("b_notecats").innerHTML="";
 }
 $("b_clear").onclick=()=>{clearBean();$("b_msg").textContent="";};
 
@@ -957,19 +1034,181 @@ function recalc(){
 ["r_in","r_out","r_dur","r_crack"].forEach(id=>$(id).addEventListener("input",recalc));
 
 /* ---------- 컵 평가 ---------- */
-const CUP=[["acid","산미"],["sweet","단맛"],["body","바디"],["aroma","향"],["balance","밸런스"]];
+/* ---------- SCA CVA 정동 평가 8항목 ---------- */
+const CUP=[["frag","프래그런스"],["aroma","아로마"],["flavor","플레이버"],["after","애프터테이스트"],
+           ["acid","산미"],["sweet","단맛"],["mouth","마우스필"],["overall","전체"]];
 $("cupsl").innerHTML=CUP.map(([k,n])=>
   `<div class="sl"><label for="c_${k}">${n}</label>
-   <input type="range" id="c_${k}" min="0" max="5" step="1" value="0">
+   <input type="range" id="c_${k}" min="0" max="9" step="1" value="0">
    <output id="o_${k}">–</output></div>`).join("");
-CUP.forEach(([k])=>$("c_"+k).addEventListener("input",e=>
-  $("o_"+k).textContent=e.target.value==="0"?"–":e.target.value));
+function cupSum(){
+  let t=0,any=false;
+  CUP.forEach(([k])=>{ const v=+$("c_"+k).value; if(v>0){ t+=v; any=true; } });
+  $("c_sum").value=any?`${t} / 72`:"";
+}
+CUP.forEach(([k])=>$("c_"+k).addEventListener("input",e=>{
+  $("o_"+k).textContent=e.target.value==="0"?"–":e.target.value; cupSum();
+}));
+
+/* ---------- 향미 분류표 (SCA 플레이버 휠 대분류) ---------- */
+const CATA=[
+  ["floral","꽃",["자스민","장미","히비스커스","라벤더","꽃","플로럴","floral","jasmine","rose","chamomile","오렌지꽃","베르가못","bergamot"]],
+  ["berry","베리",["딸기","블루베리","라즈베리","블랙베리","크랜베리","베리","berry","strawberry","blueberry","raspberry","blackcurrant","블랙커런트"]],
+  ["dried","건과일",["건포도","건자두","프룬","무화과","대추","건과","raisin","prune","fig","date","dried"]],
+  ["citrus","시트러스",["레몬","라임","오렌지","자몽","귤","감귤","시트러스","citrus","lemon","lime","orange","grapefruit","블러드오렌지","유자"]],
+  ["fruit","기타 과일",["사과","배","복숭아","살구","자두","체리","포도","파인애플","망고","리치","멜론","수박","apple","peach","apricot","plum","cherry","grape","pineapple","mango","lychee","tropical","열대과일","다크체리"]],
+  ["ferment","발효·사워",["와인","위스키","럼","발효","사워","시큼","젖산","wine","whisky","rum","fermented","sour","boozy","알코올"]],
+  ["green","풋내·채소",["풋내","건초","허브","olive","완두","콩비린","green","grassy","herb","vegetal","hay","피망"]],
+  ["roast","로스티",["탄맛","스모키","담배","탄내","roasted","smoky","burnt","tobacco","ash","구운"]],
+  ["spice","향신료",["계피","시나몬","정향","넛맥","후추","생강","spice","cinnamon","clove","nutmeg","pepper","anise"]],
+  ["nutty","견과",["아몬드","헤이즐넛","땅콩","호두","피칸","견과","almond","hazelnut","peanut","walnut","pecan","nutty"]],
+  ["cocoa","카카오",["초콜릿","다크초콜릿","밀크초콜릿","카카오","코코아","chocolate","cocoa","cacao"]],
+  ["sweetsp","단맛류",["캐러멜","흑설탕","갈색설탕","꿀","메이플","바닐라","당밀","조청","caramel","brown sugar","honey","maple","vanilla","molasses","설탕"]],
+  ["other","기타",["차","홍차","얼그레이","레몬그라스","민트","tea","black tea","earl grey","mint"]]
+];
+$("cata").innerHTML=`<div class="sliders">`+CATA.map(([k,n])=>
+  `<label style="display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink)">
+   <input type="checkbox" id="f_${k}" style="width:auto"> ${n}</label>`).join("")+`</div>`;
+function classifyNotes(txt){
+  if(!txt) return [];
+  const low=" "+txt.toLowerCase().replace(/\s+/g," ")+" ";
+  const sq=low.replace(/[\s·,]/g,"");
+  const hit=[];
+  CATA.forEach(([k,n,words])=>{
+    if(words.some(w=>low.includes(w.toLowerCase())||sq.includes(w.toLowerCase().replace(/\s/g,"")))){
+      $("f_"+k).checked=true; hit.push(n);
+    }
+  });
+  return hit;
+}
+$("c_note").addEventListener("input",()=>{
+  const h=classifyNotes($("c_note").value);
+  $("c_autohint").innerHTML=(h.length?`노트에서 자동으로 골랐습니다 — ${h.join(", ")}`:"")+compareSeller();
+});
+function compareSeller(){
+  const b=DB.beans.find(x=>x.id===$("r_bean").value);
+  if(!b||!b.noteCats||!b.noteCats.length) return "";
+  const mine=CATA.filter(([k])=>$("f_"+k).checked).map(([k])=>k);
+  if(!mine.length) return "";
+  const nm=k=>(CATA.find(x=>x[0]===k)||[,k])[1];
+  const both=b.noteCats.filter(k=>mine.includes(k)).map(nm);
+  const onlySeller=b.noteCats.filter(k=>!mine.includes(k)).map(nm);
+  const onlyMine=mine.filter(k=>!b.noteCats.includes(k)).map(nm);
+  let out=`<br><b>판매처 노트와 대조</b> — `;
+  out+=both.length?`<span style="color:var(--ok)">일치: ${both.join(", ")}</span>`:"일치 없음";
+  if(onlySeller.length) out+=` · <span style="color:var(--actual)">판매처만: ${onlySeller.join(", ")}</span>`;
+  if(onlyMine.length) out+=` · 나만: ${onlyMine.join(", ")}`;
+  return out;
+}
+/* 로스팅 후 경과일 */
+function restDays(){
+  const d1=$("r_date").value, d2=$("c_date").value;
+  if(!d1||!d2){ $("c_rest").value=""; return; }
+  const n=Math.round((new Date(d2)-new Date(d1))/86400000);
+  $("c_rest").value=isNaN(n)?"":`${n}일`;
+}
+["r_date","c_date"].forEach(id=>$(id).addEventListener("input",restDays));
+
+
+
+/* ---------- 기본 프로파일 ----------
+   근거가 확인된 것만 담는다. 출처를 함께 표시해 어디서 온 숫자인지 알 수 있게 한다.
+   실측 = 로스트 로그의 계획 곡선 / 해독 = 공유 링크에서 복원 / 설계 = 이 생두에 맞춰 만든 것 */
+const BUILTIN=[
+ {name:"Caravela for IKAWA", src:"실측",
+  pts:[[0,139],[40,133],[60,155.4],[120,170.1],[180,181.1],[240,190.1],[300,196.9],[360,202.0],[422,203.9]]},
+ {name:"Geisha Washed BOP 2020", src:"해독",
+  pts:[[0,99.5],[295,196.6],[395,205.0]]},
+ {name:"El Injerto Pacamara v1.2", src:"설계",
+  pts:[[0,145],[60,163],[120,178],[180,189],[240,195.5],[300,199.5],[360,202],[380,202.5]]},
+ {name:"Garrido Geisha Washed v1.0", src:"설계",
+  pts:[[0,148],[60,166],[120,180],[180,189],[240,195],[300,199],[360,202],[390,203]]},
+ {name:"Santa Lucia PN v1.0 (라떼)", src:"설계",
+  pts:[[0,145],[60,165],[120,180],[180,190],[240,197],[300,202],[360,205.5],[400,207]]},
+ {name:"Typica Natural v1.0", src:"설계",
+  pts:[[0,148],[60,168],[120,182],[180,191],[240,197],[300,201],[380,204]]}
+];
+
+/* ---------- 생두 → 권장 목표 (스튜디오와 같은 규칙) ---------- */
+function targetFor(b){
+  let t={pre:143,drop:203,dur:400,ror4:3.0}, why=[];
+  const add=(o,txt)=>{ for(const k in o) t[k]+=o[k]; why.push(txt); };
+  const proc=(b.proc||"");
+  if(/워시드|washed/i.test(proc))      add({pre:+3,drop:-1},"워시드 — 표면 당분이 없어 초반 열을 조금 더");
+  else if(/내추럴|natural/i.test(proc)&&!/펄프드/.test(proc))
+                                       add({pre:-4,drop:-2},"내추럴 — 잔여당이 타기 쉬워 낮게 시작하고 얕게");
+  else if(/펄프드|pulped/i.test(proc)) add({pre:-1,drop:+1},"펄프드 내추럴 — 중간, 단맛을 살려 조금 깊게");
+  else if(/허니|honey/i.test(proc))    add({pre:-1,drop:0}, "허니 — 내추럴과 워시드의 중간");
+  const alt=parseInt(String(b.alt||"").replace(/[,\s]/g,""))||0;
+  const dens=+b.dens||0;
+  if(dens>=850)      add({pre:+7,dur:+45},`밀도 ${dens}g/L — 고밀도라 예열을 올리고 시간을 늘린다`);
+  else if(dens&&dens<700) add({pre:-5,dur:-30},`밀도 ${dens}g/L — 저밀도라 초반 화력을 낮춘다`);
+  else if(!dens&&alt>=1800) add({pre:+6,dur:+40},`고도 ${alt}m — 고밀도로 추정`);
+  else if(!dens&&alt>=1500) add({pre:+2,dur:+20},`고도 ${alt}m — 중고밀도`);
+  else if(!dens&&alt&&alt<1300) add({pre:-5,dur:-30},`고도 ${alt}m — 저밀도로 추정`);
+  const v=(b.var||"").toLowerCase();
+  if(/파카마라|pacamara|마라고지페|maragog/.test(v))
+    add({pre:+4,dur:+50},"대립종 — 속까지 열이 가는 데 오래 걸린다");
+  else if(/게이샤|기샤|geisha|gesha/.test(v))
+    add({pre:-3,dur:+20,ror4:-0.8},"게이샤 — 납작하고 향이 잘 날아가 후반을 눕힌다");
+  else if(/재래|heirloom|landrace|74110|74112/.test(v))
+    add({dur:-20},"소립 재래종 — 빨리 익는다");
+  const mo=+b.moist||0;
+  if(mo&&mo<9.5) add({pre:-3,dur:-20},`수분 ${mo}% — 마른 크롭이라 빨리 익는다`);
+  else if(mo&&mo>12) add({pre:+3,dur:+20},`수분 ${mo}% — 수분이 많아 건조에 시간이 더 든다`);
+  why.push("기준 예열 143℃ — 보유 로그 26배치의 실제 예열(136~155℃) 중앙값에 맞춘 값");
+  return {t,why};
+}
+let RECLIB=[];
+function showRec(){
+  const b=DB.beans.find(x=>x.id===$("r_bean").value);
+  if(!b){ $("recbox").hidden=true; return; }
+  $("recbox").hidden=false;
+  const {t,why}=targetFor(b);
+  let html=`<p class="lead" style="margin:0">예열 <b>${t.pre.toFixed(0)}℃</b> ·
+    배출 <b>${t.drop.toFixed(1)}℃</b> · 총 <b>${fmt(t.dur)}</b> · 후반 <b>${t.ror4.toFixed(1)}℃/분</b></p>
+    <p class="note">${why.map(w=>"· "+w).join("<br>")}</p>`;
+  const POOL=BUILTIN.concat(RECLIB);
+  if(POOL.length){
+    const stat=pts=>{ const n=pts.length,end=pts[n-1],dur=end[0]||1;
+      const at=x=>{ for(let i=1;i<n;i++){ const p=pts[i-1],q=pts[i];
+        if(x<=q[0]) return q[0]===p[0]?q[1]:p[1]+(q[1]-p[1])*(x-p[0])/(q[0]-p[0]); } return end[1]; };
+      return {pre:pts[0][1],drop:end[1],dur,ror4:(end[1]-at(dur*0.75))/((dur*0.25)/60)}; };
+    const ranked=POOL.map(p=>{ const st=stat(p.pts);
+      const d=Math.abs(st.pre-t.pre)/2+Math.abs(st.drop-t.drop)*2+Math.abs(st.dur-t.dur)/20+Math.abs(st.ror4-t.ror4)*6;
+      return {p,st,score:Math.max(0,100-d)};
+    }).sort((a,b2)=>b2.score-a.score).slice(0,3);
+    html+=`<table><tr><th>프로파일</th><th>출처</th><th class="num">점수</th><th>고칠 곳</th></tr>`+
+      ranked.map(r=>{
+        const f=[];
+        if(Math.abs(r.st.pre-t.pre)>=2) f.push(`예열 ${r.st.pre>t.pre?"−":"+"}${Math.abs(r.st.pre-t.pre).toFixed(0)}℃`);
+        if(Math.abs(r.st.drop-t.drop)>=1) f.push(`배출 ${r.st.drop>t.drop?"−":"+"}${Math.abs(r.st.drop-t.drop).toFixed(1)}℃`);
+        if(Math.abs(r.st.dur-t.dur)>=20) f.push(`총시간 ${r.st.dur>t.dur?"−":"+"}${Math.abs(r.st.dur-t.dur).toFixed(0)}초`);
+        return `<tr><td>${r.p.name}</td>
+          <td><span class="pill">${r.p.src||"불러옴"}</span></td>
+          <td class="num">${r.score.toFixed(0)}</td>
+          <td>${f.length?f.join(" · "):"그대로"}</td></tr>`;
+      }).join("")+`</table>
+      <p class="note">기본으로 담긴 ${BUILTIN.length}개에 더해, 스튜디오에서 저장한
+      <b>프로파일 파일</b>을 불러오면 모아둔 프로파일 전체에 순위를 매깁니다.
+      로그를 스튜디오에 넣으면 그 계획 곡선이 자동으로 라이브러리에 쌓입니다.</p>`;
+  }
+  $("rec_out").innerHTML=html;
+}
+$("r_bean").addEventListener("change",showRec);
+$("rec_lib").onclick=()=>$("rec_file").click();
+$("rec_file").onchange=async e=>{
+  try{ const d=JSON.parse(await e.target.files[0].text());
+    RECLIB=(d.lib||[]).filter(x=>x.pts&&x.pts.length>1);
+    showRec();
+  }catch{ $("rec_out").innerHTML="<p class='note'>읽지 못했습니다.</p>"; }
+};
 
 /* ---------- 로스팅 저장 ---------- */
 window.editRoast=i=>{
   const r=DB.roasts[i]; if(!r) return;
   editingId=r.id;
-  $("r_bean").value=r.beanId||""; $("r_machine").value=r.machine||"";
+  $("r_bean").value=r.beanId||""; showRec(); $("r_machine").value=r.machine||"";
   $("r_prof").value=r.prof||""; $("r_date").value=r.date||"";
   $("r_in").value=r.inG??""; $("r_out").value=r.outG??"";
   $("r_pre").value=r.pre??""; $("r_drop").value=r.drop??"";
@@ -977,6 +1216,8 @@ window.editRoast=i=>{
   $("r_ror").value=r.ror??"";
   const c=r.cup||{};
   CUP.forEach(([k])=>{ const v=c[k]||0; $("c_"+k).value=v; $("o_"+k).textContent=v?v:"–"; });
+  CATA.forEach(([k])=>$("f_"+k).checked=!!(c.flavors&&c.flavors.includes(k)));
+  cupSum(); $("c_autohint").innerHTML=compareSeller();
   $("c_total").value=c.total??""; $("c_note").value=c.note||""; $("c_date").value=c.date||"";
   recalc();
   $("r_save").textContent="수정 저장";
@@ -988,6 +1229,10 @@ $("r_save").onclick=()=>{
   if(!$("r_bean").value){ $("r_msg").textContent="생두를 선택하세요."; return; }
   const cup={};
   CUP.forEach(([k])=>{ const v=+$("c_"+k).value; if(v>0) cup[k]=v; });
+  const fl=CATA.filter(([k])=>$("f_"+k).checked).map(([k])=>k);
+  if(fl.length) cup.flavors=fl;
+  const sum=CUP.reduce((a,[k])=>a+(+$("c_"+k).value||0),0);
+  if(sum>0) cup.sum=sum;
   if($("c_total").value) cup.total=+$("c_total").value;
   if($("c_note").value.trim()) cup.note=$("c_note").value.trim();
   if($("c_date").value) cup.date=$("c_date").value;
@@ -1018,7 +1263,9 @@ function clearRoast(){
   ["r_prof","r_in","r_out","r_loss","r_pre","r_drop","r_dur","r_crack","r_dtr","r_ror",
    "c_total","c_note","r_machine"].forEach(id=>$(id).value="");
   CUP.forEach(([k])=>{$("c_"+k).value=0;$("o_"+k).textContent="–";});
-  $("r_bean").value=""; pendingLog=null; $("logmsg").textContent="";
+  CATA.forEach(([k])=>$("f_"+k).checked=false);
+  $("c_sum").value=""; $("c_rest").value=""; $("c_autohint").textContent="";
+  $("r_bean").value=""; $("recbox").hidden=true; pendingLog=null; $("logmsg").textContent="";
   editingId=null; $("r_save").textContent="로스팅 저장";
 }
 $("r_clear").onclick=()=>{clearRoast();$("r_msg").textContent="";};
@@ -1030,7 +1277,7 @@ function renderRoasts(){
     <th class="num">시간</th><th class="num">DTR</th><th class="num">감량</th><th class="num">원가</th><th>컵</th><th></th></tr>`+
     (DB.roasts.length?DB.roasts.slice().reverse().map(r=>{
       const i=DB.roasts.indexOf(r);
-      const cup=r.cup?(r.cup.total?r.cup.total+"점":(r.cup.note?"메모":"점수"))
+      const cup=r.cup?(r.cup.total?r.cup.total+"점":(r.cup.sum?r.cup.sum+"/72":(r.cup.note?"메모":"점수")))
                     :`<span class="pill warn">미기입</span>`;
       return `<tr><td>${r.date||""}</td><td>${beanName(r.beanId)}</td><td>${r.machine||""}</td><td>${r.prof||""}</td>
         <td class="num">${r.drop?.toFixed(1)??""}</td><td class="num">${r.dur?fmt(r.dur):""}</td>
@@ -1044,7 +1291,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"2.6",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"3.1",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
@@ -1066,13 +1313,14 @@ $("d_file").onchange=async e=>{
 };
 $("d_csv").onclick=()=>{
   if(!DB.roasts.length){ $("d_msg").textContent="기록이 없습니다."; return; }
-  const cols=["date","machine","bean","cost","proc","alt","var","harvest","prof","pre","drop","dur","crack","dtr","inG","outG","loss","acid","sweet","body","aroma","balance","total","note"];
+  const cols=["date","machine","bean","cost","proc","alt","var","harvest","prof","pre","drop","dur","crack","dtr","inG","outG","loss","frag","aroma","flavor","after","acid","sweet","mouth","overall","sum","total","flavors","note"];
   const rows=[cols.join(",")];
   DB.roasts.forEach(r=>{
     const b=DB.beans.find(x=>x.id===r.beanId)||{}, c=r.cup||{};
     const v={date:r.date,machine:r.machine,bean:b.name,cost:r.cost,proc:b.proc,alt:b.alt,var:b.var,harvest:b.harvest,
       prof:r.prof,pre:r.pre,drop:r.drop,dur:r.dur,crack:r.crack,dtr:r.dtr,
-      inG:r.inG,outG:r.outG,loss:r.loss,...c};
+      inG:r.inG,outG:r.outG,loss:r.loss,...c,
+      flavors:(c.flavors||[]).map(k=>(CATA.find(x=>x[0]===k)||[,k])[1]).join(" ")};
     rows.push(cols.map(k=>{
       const s=v[k]===undefined||v[k]===null?"":String(v[k]);
       return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
