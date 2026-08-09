@@ -79,7 +79,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v3.7</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v3.8</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -953,7 +953,7 @@ async function ghUp(quiet){
   try{
     const cur=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
     const body={message:`로스트포인트 ${new Date().toISOString().slice(0,16)} — 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`,
-      content:b64enc(JSON.stringify({v:"3.7",at:Date.now(),...DB}))};
+      content:b64enc(JSON.stringify({v:"3.8",at:Date.now(),...DB}))};
     if(cur&&cur.sha) body.sha=cur.sha;
     await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`,
       {method:"PUT",body:JSON.stringify(body)});
@@ -990,7 +990,7 @@ async function syncUp(quiet){
   try{
     const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
       method:"PUT",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({v:"3.7",at:Date.now(),...DB})});
+      body:JSON.stringify({v:"3.8",at:Date.now(),...DB})});
     const j=await r.json();
     if(!r.ok) throw new Error(j.error||"실패");
     if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
@@ -1698,7 +1698,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"3.7",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"3.8",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
@@ -1782,6 +1782,14 @@ async function pickupShared(){
     const files=data.files||[], diag=data.diag||{}, sharedText=(data.shared_text||"").trim();
     const images=data.images||[];
     const isLog=t=>/temp above/i.test(t)||(/setpoint/i.test(t)&&/ROASTING/i.test(t));
+    let lines=(diag.entries||[]).map(e=>
+      `<tr><td>${e.field}</td><td>${e.kind}</td><td>${e.name||""}</td>
+       <td>${e.type||""}</td><td class="num">${e.size??""}</td></tr>`).join("");
+    let html=`<p class="tagline">공유 수신 진단</p>`;
+    if(diag.error) html+=`<p class="lead" style="color:var(--actual)">읽는 중 오류: ${diag.error}</p>`;
+    html+=`<table><tr><th>필드</th><th>종류</th><th>파일명</th><th>형식</th><th class="num">크기</th></tr>`+
+      (lines||`<tr><td colspan="5" style="color:var(--muted)">받은 항목이 없습니다</td></tr>`)+`</table>`;
+
     const prof=decodeIkawaLink(sharedText)||decodeIkawaLink((files[0]||{}).text||"");
     if(prof){
       $("r_prof").value=prof.name;
@@ -1799,21 +1807,13 @@ async function pickupShared(){
       history.replaceState(null,"",location.pathname);
       return;
     }
-    let lines=(diag.entries||[]).map(e=>
-      `<tr><td>${e.field}</td><td>${e.kind}</td><td>${e.name||""}</td>
-       <td>${e.type||""}</td><td class="num">${e.size??""}</td></tr>`).join("");
-    let html=`<p class="tagline">공유 수신 진단</p>`;
-    if(diag.error) html+=`<p class="lead" style="color:var(--actual)">읽는 중 오류: ${diag.error}</p>`;
-    html+=`<table><tr><th>필드</th><th>종류</th><th>파일명</th><th>형식</th><th class="num">크기</th></tr>`+
-      (lines||`<tr><td colspan="5" style="color:var(--muted)">받은 항목이 없습니다</td></tr>`)+`</table>`;
-
     let done=0, errs=[], beanHit=0;
     if(images.length){
       pendingImg=images[0].dataUrl; ocrImg=images[0].dataUrl;
       $("thumb").src=pendingImg; $("thumb").hidden=false;
       $("ocrbtn").hidden=false; $("lensbtn").hidden=false; $("savebtn").hidden=false;
       html+=`<p class="lead" style="color:var(--ok);margin-top:8px">
-        사진 ${images.length}장을 받았습니다. 생두 탭에서 확인하세요.</p>`;
+        사진 ${images.length}장을 받았습니다. 생두 탭으로 옮겼습니다.</p>`;
       show(html);
       document.querySelector('nav button[data-p="beans"]').click();
       history.replaceState(null,"",location.pathname);
