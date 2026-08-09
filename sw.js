@@ -2,7 +2,7 @@
    1) 공유 시트로 들어온 파일을 가로채 캐시에 넣고 앱으로 넘김
    2) 오프라인에서도 앱이 열리도록 최소 캐싱                     */
 
-const APP_CACHE   = "roast-app-v17";
+const APP_CACHE   = "roast-app-v19";
 const SHARE_CACHE = "roast-shared";
 const SCOPE       = self.registration.scope;
 const SHARE_KEY   = new URL("__shared__", SCOPE).href;
@@ -30,17 +30,27 @@ self.addEventListener("fetch", e => {
   if (e.request.method === "POST" && url.pathname.endsWith("/share")) {
     e.respondWith((async () => {
       const files = [];
+      const images = [];
       let   shared_text = "";
       const diag  = { at: new Date().toISOString(), entries: [], error: null };
       try {
         const fd = await e.request.formData();
         for (const [key, val] of fd.entries()) {
-          if (val && typeof val === "object" && typeof val.text === "function") {
-            // 필드 이름이 무엇이든 파일이면 받는다
-            const text = await val.text();
+          if (val && typeof val === "object" && typeof val.arrayBuffer === "function") {
+            const type = val.type || "";
             diag.entries.push({ field: key, kind: "file", name: val.name || "",
-                                type: val.type || "", size: val.size || text.length });
-            if (text && text.length) files.push({ name: val.name || (key + ".csv"), text });
+                                type, size: val.size || 0 });
+            if (/^image\//.test(type) || /\.(jpe?g|png|webp|heic)$/i.test(val.name || "")) {
+              const buf = new Uint8Array(await val.arrayBuffer());
+              let bin = "";
+              for (let i = 0; i < buf.length; i += 0x8000)
+                bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+              images.push({ name: val.name || "shared.jpg",
+                            dataUrl: "data:" + (type || "image/jpeg") + ";base64," + btoa(bin) });
+            } else {
+              const text = await val.text();
+              if (text && text.length) files.push({ name: val.name || (key + ".csv"), text });
+            }
           } else {
             const s = String(val ?? "");
             diag.entries.push({ field: key, kind: "text", size: s.length,
@@ -52,7 +62,7 @@ self.addEventListener("fetch", e => {
         diag.error = String(err && err.message || err);
       }
       const cache = await caches.open(SHARE_CACHE);
-      await cache.put(SHARE_KEY, new Response(JSON.stringify({ files, shared_text, diag }), {
+      await cache.put(SHARE_KEY, new Response(JSON.stringify({ files, images, shared_text, diag }), {
         headers: { "Content-Type": "application/json" }
       }));
       return Response.redirect(new URL("./?shared=1", SCOPE).href, 303);

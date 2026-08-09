@@ -44,7 +44,9 @@
             "text/plain",
             "application/csv",
             "application/octet-stream",
-            ".csv"
+            ".csv",
+            ".alog",
+            "image/*"
           ]
         }
       ]

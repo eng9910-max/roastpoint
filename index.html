@@ -78,7 +78,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <body>
 
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v2.4</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v2.6</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -101,13 +101,14 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <textarea id="paste" placeholder="여기에 붙여넣으세요 — 글자는 즉시 읽고, 이미지는 붙여넣거나 끌어다 놓으세요" style="min-height:96px"></textarea>
     <div class="row" style="margin-top:6px">
       <button id="clip">클립보드에서 가져오기</button>
-      <button id="lensbtn" hidden>구글 렌즈로 보내기</button>
+      <button id="lensbtn" hidden>이미지를 다른 앱으로 보내기</button>
+      <button class="ghost" id="savebtn" hidden>이미지 저장</button>
       <button class="ghost" id="ocrbtn" hidden>내장 OCR (정확도 낮음)</button>
       <span class="note" id="parsemsg"></span>
     </div>
     <p class="note" id="imgnote">상세정보가 그림으로만 된 페이지(엠아이 등)는 이미지를 이 칸에 붙여넣으세요.
-    <b>구글 렌즈로 보내기</b>를 누르면 이미지가 클립보드에 복사되고 렌즈가 열립니다 —
-    거기서 붙여넣고 인식된 글자를 복사해 돌아오면 됩니다.</p>
+    <b>다른 앱으로 보내기</b>를 누르면 공유 시트가 열립니다 — 거기서 <b>렌즈</b>를 고르면 글자를 뽑을 수 있습니다.
+    목록에 렌즈가 없으면 <b>이미지 저장</b> 후 갤러리에서 렌즈 아이콘을 쓰세요.</p>
     <p class="note" id="scanhint"></p>
 
     <div style="margin-top:16px">
@@ -556,7 +557,7 @@ function loadTess(){
 }
 function acceptOcrImage(file){
   if(!file||!/^image\//.test(file.type)) return false;
-  shrink(file,d=>{ ocrImg=d; $("ocrbtn").hidden=false; $("lensbtn").hidden=false;
+  shrink(file,d=>{ ocrImg=d; $("ocrbtn").hidden=false; $("lensbtn").hidden=false; $("savebtn").hidden=false;
     $("parsemsg").textContent="이미지를 받았습니다. 「글자 뽑기」를 누르세요."; });
   return true;
 }
@@ -591,25 +592,34 @@ $("ocrbtn").onclick=async()=>{
 };
 
 
-/* ---------- 구글 렌즈로 보내기 ----------
-   웹앱은 렌즈를 직접 호출할 수 없다. 이미지를 클립보드에 넣고 렌즈를 열어주는 것까지가 한계. */
-async function toClipboardImage(dataUrl){
-  try{
-    const blob=await (await fetch(dataUrl)).blob();
-    if(!navigator.clipboard||!window.ClipboardItem) return false;
-    await navigator.clipboard.write([new ClipboardItem({[blob.type]:blob})]);
-    return true;
-  }catch(e){ return false; }
+/* ---------- 이미지를 다른 앱으로 넘기기 ----------
+   lens.google.com 은 폰에서 업로드 UI를 주지 않는다(앱 설치 안내만 뜬다).
+   그래서 안드로이드에서는 공유 시트로 넘기는 쪽이 유일하게 동작한다. */
+async function dataUrlToFile(d,name){
+  const blob=await (await fetch(d)).blob();
+  return new File([blob],name,{type:blob.type||"image/jpeg"});
 }
 $("lensbtn").onclick=async()=>{
   if(!ocrImg) return;
-  const ok=await toClipboardImage(ocrImg);
-  $("parsemsg").innerHTML = ok
-    ? "이미지를 복사했습니다. 렌즈 창에서 <b>붙여넣기</b> → 글자 선택 → 복사 → 여기로 돌아와 붙여넣으세요."
-    : "이미지 복사가 막혔습니다. 렌즈 창에서 <b>이미지 업로드</b>로 직접 올리세요.";
+  try{
+    const f=await dataUrlToFile(ocrImg,"green-coffee-label.jpg");
+    if(navigator.canShare&&navigator.canShare({files:[f]})){
+      await navigator.share({files:[f],title:"생두 정보"});
+      $("parsemsg").innerHTML="공유한 앱에서 글자를 <b>복사</b>한 뒤 돌아와 위 칸에 붙여넣으세요.";
+      return;
+    }
+  }catch(e){ if(e && e.name==="AbortError") return; }
+  // 데스크톱 등 공유가 없는 환경 — 렌즈 웹은 PC에서만 업로드가 된다
   const a=document.createElement("a");
   a.href="https://lens.google.com/"; a.target="_blank"; a.rel="noopener";
   document.body.appendChild(a); a.click(); a.remove();
+  $("parsemsg").innerHTML="공유가 지원되지 않아 렌즈 웹을 열었습니다. PC라면 이미지를 끌어다 놓으세요.";
+};
+$("savebtn").onclick=async()=>{
+  if(!ocrImg) return;
+  const a=document.createElement("a");
+  a.href=ocrImg; a.download="green-coffee-label.jpg"; a.click();
+  $("parsemsg").innerHTML="저장했습니다. <b>갤러리에서 열어 렌즈 아이콘</b>을 누르면 글자를 뽑을 수 있습니다.";
 };
 
 /* ---------- 인식값 교정 ----------
@@ -671,7 +681,7 @@ $("b_save").onclick=()=>{
 };
 function clearBean(){
   BF.forEach(f=>$(f).value=""); $("paste").value="";
-  pendingImg=null; $("thumb").hidden=true; ocrImg=null; $("ocrbtn").hidden=true; $("lensbtn").hidden=true;
+  pendingImg=null; $("thumb").hidden=true; ocrImg=null; $("ocrbtn").hidden=true; $("lensbtn").hidden=true; $("savebtn").hidden=true;
   $("parsemsg").textContent=""; $("ocrmsg").textContent="";
 }
 $("b_clear").onclick=()=>{clearBean();$("b_msg").textContent="";};
@@ -1034,7 +1044,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"2.4",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"2.6",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
@@ -1112,6 +1122,7 @@ async function pickupShared(){
     }
     const data=await res.json(); await c.delete(key);
     const files=data.files||[], diag=data.diag||{}, sharedText=(data.shared_text||"").trim();
+    const images=data.images||[];
     const isLog=t=>/temp above/i.test(t)||(/setpoint/i.test(t)&&/ROASTING/i.test(t));
     let lines=(diag.entries||[]).map(e=>
       `<tr><td>${e.field}</td><td>${e.kind}</td><td>${e.name||""}</td>
@@ -1122,6 +1133,17 @@ async function pickupShared(){
       (lines||`<tr><td colspan="5" style="color:var(--muted)">받은 항목이 없습니다</td></tr>`)+`</table>`;
 
     let done=0, errs=[], beanHit=0;
+    if(images.length){
+      pendingImg=images[0].dataUrl; ocrImg=images[0].dataUrl;
+      $("thumb").src=pendingImg; $("thumb").hidden=false;
+      $("ocrbtn").hidden=false; $("lensbtn").hidden=false; $("savebtn").hidden=false;
+      html+=`<p class="lead" style="color:var(--ok);margin-top:8px">
+        사진 ${images.length}장을 받았습니다. 생두 탭에서 확인하세요.</p>`;
+      show(html);
+      document.querySelector('nav button[data-p="beans"]').click();
+      history.replaceState(null,"",location.pathname);
+      return;
+    }
     for(const f of files){
       if(isLog(f.text)){
         try{ applyLog(readLog(f.text,f.name)); done++; }
