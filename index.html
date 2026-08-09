@@ -78,7 +78,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <body>
 
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v2.1</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v2.3</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -100,8 +100,12 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <textarea id="paste" placeholder="여기에 붙여넣으세요 — 붙이는 즉시 읽습니다" style="min-height:96px"></textarea>
     <div class="row" style="margin-top:6px">
       <button id="clip">클립보드에서 가져오기</button>
+      <button class="ghost" id="ocrbtn" hidden>이 이미지에서 글자 뽑기</button>
       <span class="note" id="parsemsg"></span>
     </div>
+    <p class="note">이미지를 <b>이 칸에 그대로 붙여넣거나 끌어다 놓아도</b> 됩니다.
+    상세정보가 그림으로만 된 페이지(엠아이 등)에 쓰세요. 다만 한국어 인식률이 완벽하지 않으니
+    <b>구글 렌즈로 뽑아 붙여넣는 쪽이 더 정확합니다.</b></p>
     <p class="note" id="scanhint"></p>
 
     <div style="margin-top:16px">
@@ -126,7 +130,9 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <div class="core">
       <p class="tagline">프로파일을 좌우하는 값</p>
       <div class="grid g5">
-        <div><label>이름 *</label><input type="text" id="b_name"></div>
+        <div class="wide"><label>이름 * — 목록에서 이 로트를 고를 때 보이는 이름</label>
+          <div class="row"><input type="text" id="b_name" style="flex:1">
+          <button class="ghost" id="b_auto">자동으로 만들기</button></div></div>
         <div><label>가공</label><input type="text" id="b_proc" placeholder="워시드 / 내추럴 / PN"></div>
         <div><label>고도 (m)</label><input type="text" id="b_alt"></div>
         <div><label>품종</label><input type="text" id="b_var"></div>
@@ -150,6 +156,8 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
         <div><label>구입 중량 (g)</label><input type="number" step="1" id="b_qty" placeholder="1000"></div>
         <div><label>구입 가격 (원)</label><input type="number" step="100" id="b_price"></div>
         <div class="wide"><label>판매처 컵노트</label><input type="text" id="b_notes"></div>
+        <div class="wide"><label>추가 정보 — 수상 경력, 농장 이야기, 특이사항</label>
+          <textarea id="b_memo" style="min-height:52px"></textarea></div>
         <div class="wide"><label>원문 (검색용, 통째로 보관)</label><textarea id="b_raw" style="min-height:52px"></textarea></div>
       </div>
       <p class="note">판매처 컵노트는 나중에 내 컵 평가와 나란히 놓고 보기 위한 것입니다. 농장·수확연도는 같은 농장의 다른 해 로트를 비교할 때 쓰입니다.</p>
@@ -170,6 +178,19 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ================= 로스팅 ================= -->
 <section class="pane" id="p-roasts">
+
+  <div class="block">
+    <h2>내 장비</h2>
+    <div class="extra">
+      <div class="grid g5">
+        <div><label>기본 로스터</label><input type="text" id="s_machine" list="machines" placeholder="IKAWA Pro V2"></div>
+        <div><label>모델 · 사양</label><input type="text" id="s_model" placeholder="Pro 50 · 배기센서"></div>
+        <div><label>시리얼</label><input type="text" id="s_serial" placeholder="앱 상단 6자리"></div>
+        <div><label>기본 배치량 g</label><input type="number" id="s_batch" placeholder="50"></div>
+      </div>
+      <p class="note" id="s_hint">한 번 넣어두면 로스팅마다 자동으로 채워집니다. 로그를 읽을 때 센서 구성으로 기종을 추정해 알려주기도 합니다.</p>
+    </div>
+  </div>
 
   <div class="block">
     <h2>① 로스트 로그 넣기 — 자동으로 채워집니다</h2>
@@ -276,7 +297,8 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
-const DB={beans:[],roasts:[]};
+const DB={beans:[],roasts:[],settings:{}};
+let editingId=null;
 let pendingLog=null, pendingImg=null;
 const fmt=s=>`${Math.floor(s/60)}:${String(Math.round(s%60)).padStart(2,"0")}`;
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
@@ -392,6 +414,14 @@ function scanValues(txt){
     const m=txt.match(/\b(AA\+?|AB|PB|G[1-4]|Grade\s*[1-4]|SHG|SHB|HB|EP|NY\s*2|Supremo|Excelso|Micro\s*Lot|마이크로랏|스페셜티|프리미엄|스탠다드)\b/i);
     if(m){ $("b_grade").value=m[0].trim(); n++; }
   }
+  if(!$("b_moist").value){
+    const m=txt.match(/(?:수\s*분|moisture)\s*[:\s]*([0-9]{1,2}(?:\.[0-9])?)\s*%?/i);
+    if(m){ $("b_moist").value=m[1]; n++; }
+  }
+  if(!$("b_dens").value){
+    const m=txt.match(/(?:밀\s*도|density)\s*[:\s]*([0-9]{3}(?:\.[0-9])?)/i);
+    if(m){ $("b_dens").value=m[1]; n++; }
+  }
   if(!$("b_harvest").value){
     const m=txt.match(/(20\d{2}\s*\/\s*\d{2}|20\d{2}\s*(?:crop|하베스트|수확|년))|(\d{1,2}\s*[~\-]\s*\d{1,2}\s*월)/i);
     if(m){ $("b_harvest").value=m[0].trim(); n++; }
@@ -504,10 +534,70 @@ $("drop").addEventListener("drop",e=>takeImage(e.dataTransfer.files[0]));
 window.addEventListener("dragover",e=>e.preventDefault());
 window.addEventListener("drop",e=>e.preventDefault());
 
+
+/* ---------- 이미지 붙여넣기 → OCR (보조 수단) ---------- */
+let ocrImg=null, TESS=null;
+function loadTess(){
+  if(TESS) return TESS;
+  TESS=new Promise((res,rej)=>{
+    if(window.Tesseract) return res(window.Tesseract);
+    const sc=document.createElement("script");
+    sc.src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js";
+    sc.onload=()=>res(window.Tesseract);
+    sc.onerror=()=>rej(new Error("OCR 엔진을 받지 못했습니다 (오프라인이거나 차단됨)"));
+    document.head.appendChild(sc);
+  });
+  return TESS;
+}
+function acceptOcrImage(file){
+  if(!file||!/^image\//.test(file.type)) return false;
+  shrink(file,d=>{ ocrImg=d; $("ocrbtn").hidden=false;
+    $("parsemsg").textContent="이미지를 받았습니다. 「글자 뽑기」를 누르세요."; });
+  return true;
+}
+$("paste").addEventListener("paste",e=>{
+  const items=(e.clipboardData||{}).items||[];
+  for(const it of items){
+    if(it.kind==="file"){ const f=it.getAsFile(); if(acceptOcrImage(f)){ e.preventDefault(); return; } }
+  }
+});
+["dragenter","dragover"].forEach(k=>$("paste").addEventListener(k,e=>e.preventDefault()));
+$("paste").addEventListener("drop",e=>{
+  const f=(e.dataTransfer.files||[])[0];
+  if(f&&acceptOcrImage(f)) e.preventDefault();
+});
+$("ocrbtn").onclick=async()=>{
+  if(!ocrImg) return;
+  $("ocrbtn").disabled=true;
+  $("parsemsg").textContent="OCR 준비 중… 처음 한 번은 한국어 데이터를 내려받습니다.";
+  try{
+    const T=await loadTess();
+    $("parsemsg").textContent="글자 읽는 중…";
+    const {data}=await T.recognize(ocrImg,"kor+eng");
+    const txt=(data&&data.text||"").trim();
+    if(!txt){ $("parsemsg").textContent="글자를 찾지 못했습니다."; }
+    else{
+      $("paste").value=txt;
+      const n=parseText(txt);
+      $("parsemsg").innerHTML=`${n}개 항목을 채웠습니다. <b>오인식이 있을 수 있으니 아래를 꼭 확인하세요.</b>`;
+    }
+  }catch(err){ $("parsemsg").textContent=err.message; }
+  $("ocrbtn").disabled=false;
+};
+
+/* ---------- 이름 자동 생성 ---------- */
+$("b_auto").onclick=()=>{
+  const parts=[$("b_origin").value,$("b_farm").value,$("b_var").value,$("b_proc").value]
+    .map(x=>(x||"").split(",")[0].trim()).filter(Boolean);
+  const yr=($("b_harvest").value.match(/20\d{2}(\s*\/\s*\d{2})?/)||[])[0];
+  if(!parts.length){ $("parsemsg").textContent="먼저 아래 항목이 채워져야 합니다."; return; }
+  $("b_name").value=parts.join(" ")+(yr?" "+yr.replace(/\s/g,""):"");
+};
+
 /* ---------- 생두 저장 ---------- */
 const BF=["b_name","b_proc","b_alt","b_var","b_screen","b_harvest","b_moist","b_dens",
           "b_origin","b_region","b_farm","b_grade","b_seller","b_bought","b_qty","b_price",
-          "b_notes","b_raw"];
+          "b_notes","b_memo","b_raw"];
 $("b_save").onclick=()=>{
   if(!$("b_name").value.trim()){ $("b_msg").textContent="이름은 필요합니다."; return; }
   const o={id:uid(),img:pendingImg||null};
@@ -517,7 +607,7 @@ $("b_save").onclick=()=>{
 };
 function clearBean(){
   BF.forEach(f=>$(f).value=""); $("paste").value="";
-  pendingImg=null; $("thumb").hidden=true;
+  pendingImg=null; $("thumb").hidden=true; ocrImg=null; $("ocrbtn").hidden=true;
   $("parsemsg").textContent=""; $("ocrmsg").textContent="";
 }
 $("b_clear").onclick=()=>{clearBean();$("b_msg").textContent="";};
@@ -535,7 +625,8 @@ function renderBeans(){
         : left.toFixed(0)) : "–";
       return `<tr>
       <td>${b.name||""}${b.img?' <span class="pill ok">사진</span>':''}</td>
-      <td>${b.proc||""}</td><td>${b.var||""}</td><td>${b.alt||""}</td>
+      <td>${b.proc||""}</td><td>${b.var||""}</td>
+      <td>${b.alt||""}${b.dens?` <span class="pill">${b.dens}g/L</span>`:""}${b.moist?` <span class="pill">${b.moist}%</span>`:""}</td>
       <td class="num">${used?used.toFixed(0):"–"}</td>
       <td class="num">${lowPill}</td>
       <td class="num">${up?up.toFixed(1)+"원":"–"}</td>
@@ -604,6 +695,19 @@ function parseWithMap(lines,h,map,fname){
            crack:c?Math.round(c.t):null, ror };
 }
 
+/* ---------- 장비 설정 ---------- */
+const SF=["s_machine","s_model","s_serial","s_batch"];
+SF.forEach(id=>$(id).addEventListener("input",()=>{
+  DB.settings[id.slice(2)]=$(id).value.trim();
+}));
+function applySettings(){
+  SF.forEach(id=>{ const v=DB.settings[id.slice(2)]; if(v) $(id).value=v; });
+}
+function prefillFromSettings(){
+  if(!$("r_machine").value&&DB.settings.machine) $("r_machine").value=DB.settings.machine;
+  if(!$("r_in").value&&DB.settings.batch) { $("r_in").value=DB.settings.batch; recalc(); }
+}
+
 /* ---------- 로그 파싱 ---------- */
 function estimateCrack(pts){
   const r=[];
@@ -631,7 +735,15 @@ function readLog(text,fname){
     pendingCsv={lines,h,name:fname}; fillMapper(h);
     throw new Error("열 이름이 달라 자동 인식하지 못했습니다. 아래에서 지정해주세요.");
   }
-  if(!$("r_machine").value) $("r_machine").value="IKAWA Pro V2";
+  const ib=h.indexOf("temp below");
+  let inlet=false;
+  if(ib>=0) for(let i=1;i<Math.min(lines.length,200);i++){
+    const c=lines[i].split(","); if(+c[ib]>5){ inlet=true; break; }
+  }
+  $("s_hint").innerHTML = ib<0 ? "이 로그에는 흡기 온도 열이 없습니다."
+    : (inlet ? "흡기 온도가 기록돼 있습니다 — <b>흡기 센서가 있는 기종(Pro V3 계열)</b>으로 보입니다."
+             : "흡기 온도 열이 비어 있습니다 — <b>배기 센서만 있는 기종(Pro V2 계열)</b>으로 보입니다.");
+  if(!$("r_machine").value) $("r_machine").value=DB.settings.machine||"IKAWA Pro V2";
   const pts=[], all=[];
   for(let i=1;i<lines.length;i++){
     const c=lines[i].split(","); if(c.length<3) continue;
@@ -655,7 +767,7 @@ function applyLog(L){
   $("r_drop").value=L.drop.toFixed(1); $("r_dur").value=L.dur.toFixed(1);
   $("r_crack").value=L.crack??""; $("r_ror").value=L.ror!==null?L.ror.toFixed(1):"";
   if(!$("r_date").value) $("r_date").value=new Date().toISOString().slice(0,10);
-  recalc();
+  prefillFromSettings(); recalc();
   $("logmsg").innerHTML=`<b>${L.prof}</b> — ${fmt(L.dur)} · 예열 ${L.pre.toFixed(1)}℃ · 배출 ${L.drop.toFixed(1)}℃ · 터닝포인트 ${fmt(L.tp)}`+
     (L.crack?` · 크랙 추정 ${fmt(L.crack)}`:` · <span class="pill warn">크랙 추정 실패 — 직접 넣으세요</span>`);
 }
@@ -780,6 +892,24 @@ CUP.forEach(([k])=>$("c_"+k).addEventListener("input",e=>
   $("o_"+k).textContent=e.target.value==="0"?"–":e.target.value));
 
 /* ---------- 로스팅 저장 ---------- */
+window.editRoast=i=>{
+  const r=DB.roasts[i]; if(!r) return;
+  editingId=r.id;
+  $("r_bean").value=r.beanId||""; $("r_machine").value=r.machine||"";
+  $("r_prof").value=r.prof||""; $("r_date").value=r.date||"";
+  $("r_in").value=r.inG??""; $("r_out").value=r.outG??"";
+  $("r_pre").value=r.pre??""; $("r_drop").value=r.drop??"";
+  $("r_dur").value=r.dur??""; $("r_crack").value=r.crack??"";
+  $("r_ror").value=r.ror??"";
+  const c=r.cup||{};
+  CUP.forEach(([k])=>{ const v=c[k]||0; $("c_"+k).value=v; $("o_"+k).textContent=v?v:"–"; });
+  $("c_total").value=c.total??""; $("c_note").value=c.note||""; $("c_date").value=c.date||"";
+  recalc();
+  $("r_save").textContent="수정 저장";
+  $("r_msg").innerHTML=`<span class="pill">수정 중</span> 컵 평가를 채우고 저장하세요.`;
+  document.querySelector('nav button[data-p="roasts"]').click();
+  $("r_bean").scrollIntoView({behavior:"smooth",block:"center"});
+};
 $("r_save").onclick=()=>{
   if(!$("r_bean").value){ $("r_msg").textContent="생두를 선택하세요."; return; }
   const cup={};
@@ -787,8 +917,8 @@ $("r_save").onclick=()=>{
   if($("c_total").value) cup.total=+$("c_total").value;
   if($("c_note").value.trim()) cup.note=$("c_note").value.trim();
   if($("c_date").value) cup.date=$("c_date").value;
-  DB.roasts.push({
-    id:uid(), beanId:$("r_bean").value, machine:$("r_machine").value.trim(),
+  const rec={
+    id:editingId||uid(), beanId:$("r_bean").value, machine:$("r_machine").value.trim(),
     prof:$("r_prof").value.trim(), date:$("r_date").value,
     inG:+$("r_in").value||null, outG:+$("r_out").value||null,
     loss:parseFloat($("r_loss").value)||null,
@@ -799,15 +929,23 @@ $("r_save").onclick=()=>{
     cost:(()=>{ const b=DB.beans.find(x=>x.id===$("r_bean").value);
       const up=b?unitPrice(b):null, g=+$("r_in").value;
       return (up&&g)?Math.round(up*g):null; })()
-  });
+  };
+  if(editingId){
+    const i=DB.roasts.findIndex(x=>x.id===editingId);
+    if(i>=0) DB.roasts[i]=rec; else DB.roasts.push(rec);
+    $("r_msg").textContent="수정했습니다.";
+  }else{
+    DB.roasts.push(rec);
+    $("r_msg").textContent="저장했습니다.";
+  }
   renderRoasts(); clearRoast();
-  $("r_msg").textContent="저장했습니다.";
 };
 function clearRoast(){
   ["r_prof","r_in","r_out","r_loss","r_pre","r_drop","r_dur","r_crack","r_dtr","r_ror",
    "c_total","c_note","r_machine"].forEach(id=>$(id).value="");
   CUP.forEach(([k])=>{$("c_"+k).value=0;$("o_"+k).textContent="–";});
   $("r_bean").value=""; pendingLog=null; $("logmsg").textContent="";
+  editingId=null; $("r_save").textContent="로스팅 저장";
 }
 $("r_clear").onclick=()=>{clearRoast();$("r_msg").textContent="";};
 
@@ -818,19 +956,21 @@ function renderRoasts(){
     <th class="num">시간</th><th class="num">DTR</th><th class="num">감량</th><th class="num">원가</th><th>컵</th><th></th></tr>`+
     (DB.roasts.length?DB.roasts.slice().reverse().map(r=>{
       const i=DB.roasts.indexOf(r);
-      const cup=r.cup?(r.cup.total?r.cup.total+"점":(r.cup.note?"메모":"점수")):"";
+      const cup=r.cup?(r.cup.total?r.cup.total+"점":(r.cup.note?"메모":"점수"))
+                    :`<span class="pill warn">미기입</span>`;
       return `<tr><td>${r.date||""}</td><td>${beanName(r.beanId)}</td><td>${r.machine||""}</td><td>${r.prof||""}</td>
         <td class="num">${r.drop?.toFixed(1)??""}</td><td class="num">${r.dur?fmt(r.dur):""}</td>
         <td class="num">${r.dtr?.toFixed(1)??""}</td><td class="num">${r.loss?.toFixed(1)??""}</td>
         <td class="num">${r.cost?r.cost.toLocaleString()+"원":""}</td>
-        <td>${cup}</td><td><button class="ghost sm" onclick="delRoast(${i})">삭제</button></td></tr>`;
+        <td>${cup}</td><td><button class="ghost sm" onclick="editRoast(${i})">수정</button>
+        <button class="ghost sm" onclick="delRoast(${i})">삭제</button></td></tr>`;
     }).join(""):`<tr><td colspan="11" style="color:var(--muted)">아직 없습니다</td></tr>`);
 }
 window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); renderRoasts(); } };
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"2.1",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"2.3",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
@@ -845,6 +985,7 @@ $("d_file").onchange=async e=>{
     (d.beans||[]).forEach(x=>{if(!have.has(x.id))DB.beans.push(x)});
     const hr=new Set(DB.roasts.map(x=>x.id));
     (d.roasts||[]).forEach(x=>{if(!hr.has(x.id))DB.roasts.push(x)});
+    if(d.settings) { Object.assign(DB.settings,d.settings); applySettings(); }
     renderBeans(); renderRoasts(); stats();
     $("d_msg").textContent=`불러왔습니다 — 생두 ${DB.beans.length}종 · 로스팅 ${DB.roasts.length}건`;
   }catch{ $("d_msg").textContent="읽지 못했습니다."; }
@@ -985,7 +1126,7 @@ pickupShared();
   }
 })();
 
-renderBeans(); renderRoasts(); stats();
+applySettings(); renderBeans(); renderRoasts(); stats();
 </script>
 </body>
 </html>
