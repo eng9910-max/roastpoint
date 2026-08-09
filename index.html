@@ -78,7 +78,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <body>
 
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v1.7</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v1.8</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -361,31 +361,37 @@ $("clip").onclick=async()=>{
 };
 
 
-/* ---------- 카메라 앱을 평소 모드로 열기 ---------- */
+/* ---------- 카메라 앱을 평소 모드로 열기 ----------
+   설치된 PWA(standalone)에서는 크롬이 intent: 실행을 막는 경우가 많다.
+   앵커 클릭 → window.open 순으로 시도하고, 실패하면 안내로 대체한다. */
+function tryOpen(url){
+  try{
+    const a=document.createElement("a");
+    a.href=url; a.rel="noopener"; a.style.display="none";
+    document.body.appendChild(a); a.click(); a.remove();
+    return true;
+  }catch(e){}
+  try{ return !!window.open(url,"_blank"); }catch(e){ return false; }
+}
 $("camfull").onclick=()=>{
-  const android=/Android/i.test(navigator.userAgent);
-  if(!android){
-    $("ocrmsg").textContent="이 기능은 안드로이드에서만 동작합니다. 아이폰은 입력칸을 길게 눌러 '텍스트 스캔'을 쓰세요.";
+  const note=$("camnote"), msg=$("ocrmsg");
+  if(!/Android/i.test(navigator.userAgent)){
+    msg.textContent="안드로이드 전용입니다. 아이폰은 입력칸을 길게 눌러 '텍스트 스캔'을 쓰세요.";
     return;
   }
-  $("camnote").hidden=false;
-  const urls=[
-    "intent://#Intent;action=android.media.action.STILL_IMAGE_CAMERA;end",
-    "intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.APP_CAMERA;end"
-  ];
-  let i=0;
-  const tryNext=()=>{
-    if(i>=urls.length){
-      $("ocrmsg").textContent="카메라 앱을 열지 못했습니다. 직접 카메라를 실행한 뒤 공유로 보내주세요.";
-      return;
-    }
-    const before=Date.now();
-    location.href=urls[i++];
-    setTimeout(()=>{ if(Date.now()-before<1500 && !document.hidden) tryNext(); },1200);
-  };
-  tryNext();
+  note.hidden=false;
+  const hiddenBefore=document.hidden;
+  tryOpen("intent://#Intent;action=android.media.action.STILL_IMAGE_CAMERA;end");
+  setTimeout(()=>{
+    if(document.hidden!==hiddenBefore) return;      // 카메라로 넘어갔으면 조용히 종료
+    tryOpen("intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.APP_CAMERA;end");
+    setTimeout(()=>{
+      if(document.hidden!==hiddenBefore) return;
+      msg.innerHTML="크롬이 앱 실행을 막았습니다. <b>홈으로 나가 카메라를 직접 연 뒤 "+
+                    "텍스트 추출 → 공유 → 로스트포인트</b>로 보내주세요. 결과는 똑같습니다.";
+    },1400);
+  },1400);
 };
-
 /* ---------- 이미지 ---------- */
 function shrink(file,cb){
   const r=new FileReader();
@@ -675,7 +681,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"1.7",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"1.8",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
