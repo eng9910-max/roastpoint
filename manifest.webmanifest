@@ -1,0 +1,53 @@
+{
+  "name": "로스트포인트 — 로스팅 기록장",
+  "short_name": "로스트포인트",
+  "description": "생두 정보와 IKAWA 로스트 로그, 컵 평가를 한곳에 기록합니다. Roastpoint.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F2F4F3",
+  "theme_color": "#17282D",
+  "lang": "ko",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "share_target": {
+    "action": "share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "files": [
+        {
+          "name": "logfile",
+          "accept": [
+            "text/csv",
+            "text/comma-separated-values",
+            "text/plain",
+            "application/csv",
+            "application/octet-stream",
+            ".csv"
+          ]
+        }
+      ]
+    }
+  }
+}

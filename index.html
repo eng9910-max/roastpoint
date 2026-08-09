@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>로스트포인트 — 로스팅 기록장</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#17282D">
+<style>
+:root{
+  --paper:#F2F4F3; --paper-2:#E6EAE9; --ink:#17282D; --ink-2:#4A5F64;
+  --muted:#9AA8A5; --rule:#CBD4D2; --actual:#C4462A; --setpoint:#2E6070;
+  --mark:#C98A12; --ok:#3F7A5E;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI","Noto Sans KR",sans-serif;font-size:14px;line-height:1.5}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+header{border-bottom:1px solid var(--ink);padding:15px 22px 0;display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap}
+h1{font-size:16px;margin:0 0 12px;font-weight:650;letter-spacing:-.01em}
+.ver{font-family:ui-monospace,Menlo,monospace;font-size:11px;letter-spacing:.08em;
+  border:1px solid var(--ink);border-radius:2px;padding:1px 6px;margin-bottom:12px}
+nav{display:flex;gap:2px;margin-left:auto}
+nav button{font:inherit;font-size:12.5px;border:1px solid var(--rule);border-bottom:0;
+  background:var(--paper-2);color:var(--ink-2);padding:7px 16px;border-radius:3px 3px 0 0;cursor:pointer;
+  position:relative;bottom:-1px}
+nav button.on{background:var(--paper);color:var(--ink);font-weight:600;border-color:var(--ink);
+  border-bottom:1px solid var(--paper)}
+main{max-width:1080px;margin:0 auto;padding:20px 22px 70px}
+section.pane{display:none} section.pane.on{display:block}
+h2{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 8px;font-weight:600}
+.block{margin-bottom:26px}
+.lead{font-size:12.5px;color:var(--ink-2);margin:0 0 10px;max-width:72ch}
+label{display:block;font-size:10px;letter-spacing:.05em;color:var(--ink-2);margin-bottom:3px}
+input[type=text],input[type=number],input[type=date],select,textarea{
+  font:inherit;font-size:13px;width:100%;background:#fff;border:1px solid var(--rule);
+  border-radius:2px;padding:6px 8px;color:var(--ink)}
+textarea{resize:vertical;min-height:60px}
+input[type=file]{display:none}
+button{font:inherit;font-size:11.5px;background:transparent;border:1px solid var(--ink);
+  color:var(--ink);border-radius:2px;padding:6px 11px;cursor:pointer}
+button:hover{background:var(--ink);color:var(--paper)}
+button.ghost{border-color:var(--rule);color:var(--ink-2);background:#fff}
+button.ghost:hover{background:var(--ink);color:var(--paper)}
+button.sm{padding:2px 7px;font-size:10.5px}
+:focus-visible{outline:2px solid var(--actual);outline-offset:2px}
+.row{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.grid{display:grid;gap:9px 11px}
+.g5{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+.wide{grid-column:1/-1}
+.core{background:#fff;border:1px solid var(--rule);border-left:3px solid var(--actual);padding:11px 12px}
+.extra{background:#fff;border:1px solid var(--rule);padding:11px 12px;margin-top:9px}
+.tagline{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+#drop,#logdrop{border:1.5px dashed var(--rule);border-radius:3px;padding:16px;text-align:center;cursor:pointer;background:#fff}
+#drop:hover,#drop.over,#logdrop:hover,#logdrop.over{border-color:var(--actual);background:var(--paper-2)}
+#drop b,#logdrop b{display:block;font-size:12.5px}
+#drop span,#logdrop span{font-size:11px;color:var(--ink-2)}
+table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:10px}
+th,td{border:1px solid var(--rule);padding:5px 8px;text-align:left;background:#fff;vertical-align:top}
+th{background:var(--paper-2);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--ink-2);font-weight:600}
+td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
+.pill{display:inline-block;font-size:10px;border:1px solid var(--rule);border-radius:2px;
+  padding:0 5px;color:var(--ink-2)}
+.pill.ok{border-color:var(--ok);color:var(--ok)}
+.pill.warn{border-color:var(--actual);color:var(--actual)}
+.thumb{max-width:100%;max-height:170px;border:1px solid var(--rule);display:block;margin-top:8px}
+.sliders{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:7px 14px}
+.sl{display:flex;align-items:center;gap:8px;font-size:12px}
+.sl label{margin:0;width:38px;flex:none;font-size:11px;color:var(--ink)}
+.sl input[type=range]{flex:1}
+.sl output{width:16px;text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.note{font-size:11px;color:var(--muted);margin-top:6px}
+.bar{display:flex;gap:7px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--rule);margin-top:22px}
+@media(max-width:640px){nav{width:100%;margin-left:0}nav button{flex:1}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1><span class="ver mono">v1.1</span>
+  <nav>
+    <button class="on" data-p="beans">생두</button>
+    <button data-p="roasts">로스팅</button>
+    <button data-p="data">데이터</button>
+  </nav>
+</header>
+
+<main>
+
+<!-- ================= 생두 ================= -->
+<section class="pane on" id="p-beans">
+
+  <div class="block">
+    <h2>생두 정보 넣기</h2>
+    <p class="lead">셋 중 편한 방법으로. 붙여넣기가 가장 정확하고, 정보가 이미지로만 있거나 봉투 라벨뿐일 때 사진을 씁니다.</p>
+
+    <div class="grid g5">
+      <div class="wide">
+        <label for="paste">① 판매처 페이지 붙여넣기 (Ctrl+A → Ctrl+C → 여기)</label>
+        <textarea id="paste" placeholder="원산지 Brazil 브라질&#10;가공방식 Pulped Natural&#10;품종 Yellow Bourbon ..."></textarea>
+        <div class="row" style="margin-top:6px">
+          <button id="parse">읽어서 채우기</button>
+          <span class="note" id="parsemsg"></span>
+        </div>
+      </div>
+
+      <div class="wide">
+        <label>② 사진 — 화면 캡처 · 봉투 라벨 · 상세 이미지</label>
+        <div id="drop" tabindex="0" role="button">
+          <b>이미지 놓기 · 클릭해서 고르기</b>
+          <span>사진은 그대로 기록에 저장됩니다. 글자 추출은 선택입니다.</span>
+        </div>
+        <input type="file" id="imgfile" accept="image/*">
+        <input type="file" id="camfile" accept="image/*" capture="environment">
+        <div class="row" style="margin-top:6px">
+          <button class="ghost" id="cam">카메라로 찍기</button>
+          <button class="ghost" id="ocr" disabled>글자 추출 (OCR)</button>
+          <span class="note" id="ocrmsg"></span>
+        </div>
+        <img id="thumb" class="thumb" hidden alt="">
+      </div>
+    </div>
+  </div>
+
+  <div class="block">
+    <h2>③ 확인 · 직접 입력</h2>
+
+    <div class="core">
+      <p class="tagline">프로파일을 좌우하는 값</p>
+      <div class="grid g5">
+        <div><label>이름 *</label><input type="text" id="b_name"></div>
+        <div><label>가공</label><input type="text" id="b_proc" placeholder="워시드 / 내추럴 / PN"></div>
+        <div><label>고도 (m)</label><input type="text" id="b_alt"></div>
+        <div><label>품종</label><input type="text" id="b_var"></div>
+        <div><label>스크린</label><input type="text" id="b_screen"></div>
+        <div><label>수확시기</label><input type="text" id="b_harvest" placeholder="1~2월 / 2025"></div>
+        <div><label>수분 %</label><input type="number" step="0.1" id="b_moist"></div>
+        <div><label>밀도 g/L</label><input type="number" step="1" id="b_dens"></div>
+      </div>
+      <p class="note">수확시기는 기록용이 아니라 프로파일 변수입니다. 오래된 크롭일수록 수분이 빠져 같은 곡선에서도 빨리 익습니다.</p>
+    </div>
+
+    <div class="extra">
+      <p class="tagline">기록 · 나중의 비교용</p>
+      <div class="grid g5">
+        <div><label>원산지</label><input type="text" id="b_origin"></div>
+        <div><label>생산지역</label><input type="text" id="b_region"></div>
+        <div><label>농장 · 농장주</label><input type="text" id="b_farm"></div>
+        <div><label>등급</label><input type="text" id="b_grade"></div>
+        <div><label>판매처</label><input type="text" id="b_seller"></div>
+        <div><label>구입일</label><input type="date" id="b_bought"></div>
+        <div class="wide"><label>판매처 컵노트</label><input type="text" id="b_notes"></div>
+        <div class="wide"><label>원문 (검색용, 통째로 보관)</label><textarea id="b_raw" style="min-height:52px"></textarea></div>
+      </div>
+      <p class="note">판매처 컵노트는 나중에 내 컵 평가와 나란히 놓고 보기 위한 것입니다. 농장·수확연도는 같은 농장의 다른 해 로트를 비교할 때 쓰입니다.</p>
+    </div>
+
+    <div class="row" style="margin-top:11px">
+      <button id="b_save">생두 저장</button>
+      <button class="ghost" id="b_clear">비우기</button>
+      <span class="note" id="b_msg"></span>
+    </div>
+  </div>
+
+  <div class="block">
+    <h2>등록된 생두 <span id="b_count" class="pill"></span></h2>
+    <table id="b_table"></table>
+  </div>
+</section>
+
+<!-- ================= 로스팅 ================= -->
+<section class="pane" id="p-roasts">
+
+  <div class="block">
+    <h2>① 로스트 로그 넣기 — 자동으로 채워집니다</h2>
+    <p class="note" id="pwahint" hidden></p>
+    <div id="logdrop" tabindex="0" role="button">
+      <b>IKAWA 로그 CSV 놓기</b>
+      <span>예열 · 배출 · 시간 · 터닝포인트 · 크랙 추정 · DTR이 자동 계산됩니다</span>
+    </div>
+    <input type="file" id="logfile" accept=".csv,text/csv,text/plain">
+    <p class="note" id="logmsg"></p>
+  </div>
+
+  <div class="block">
+    <h2>② 손으로 넣을 것 — 셋뿐입니다</h2>
+    <div class="core">
+      <div class="grid g5">
+        <div><label>생두 *</label><select id="r_bean"></select></div>
+        <div><label>투입량 g</label><input type="number" step="0.1" id="r_in"></div>
+        <div><label>배출량 g</label><input type="number" step="0.1" id="r_out"></div>
+        <div><label>감량률 %</label><input type="text" id="r_loss" readonly></div>
+      </div>
+    </div>
+
+    <div class="extra">
+      <p class="tagline">로그에서 채워진 값 — 필요하면 고치세요</p>
+      <div class="grid g5">
+        <div><label>프로파일</label><input type="text" id="r_prof"></div>
+        <div><label>날짜</label><input type="date" id="r_date"></div>
+        <div><label>예열 ℃</label><input type="number" step="0.1" id="r_pre"></div>
+        <div><label>배출 ℃</label><input type="number" step="0.1" id="r_drop"></div>
+        <div><label>총시간 초</label><input type="number" step="0.1" id="r_dur"></div>
+        <div><label>1차 크랙 초</label><input type="number" step="1" id="r_crack"></div>
+        <div><label>DTR %</label><input type="text" id="r_dtr" readonly></div>
+        <div><label>후반 승온 ℃/분</label><input type="text" id="r_ror" readonly></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="block">
+    <h2>③ 컵 평가</h2>
+    <p class="lead">점수만, 서술만, 둘 다 — 편한 대로. 빈칸은 저장되지 않습니다.</p>
+    <div class="extra">
+      <div class="sliders" id="cupsl"></div>
+      <div class="grid g5" style="margin-top:11px">
+        <div><label>총점 (선택)</label><input type="number" step="0.25" id="c_total"></div>
+        <div><label>마신 날</label><input type="date" id="c_date"></div>
+        <div class="wide"><label>노트</label><textarea id="c_note" placeholder="산미가 날카롭고 단맛이 얕음. 3일차보다 7일차가 나음."></textarea></div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:11px">
+      <button id="r_save">로스팅 저장</button>
+      <button class="ghost" id="r_clear">비우기</button>
+      <span class="note" id="r_msg"></span>
+    </div>
+  </div>
+
+  <div class="block">
+    <h2>로스팅 기록 <span id="r_count" class="pill"></span></h2>
+    <table id="r_table"></table>
+  </div>
+</section>
+
+<!-- ================= 데이터 ================= -->
+<section class="pane" id="p-data">
+  <div class="block">
+    <h2>저장 · 불러오기</h2>
+    <p class="lead">전부 JSON 한 파일로 쌓입니다. 브라우저에 남기지 않으니 작업 후 반드시 저장하세요. 나중에 파이썬으로 옮길 때도 그대로 읽힙니다.</p>
+    <div class="row">
+      <button id="d_save">전체 저장</button>
+      <button class="ghost" id="d_load">불러오기 (합치기)</button>
+      <input type="file" id="d_file" accept=".json">
+      <button class="ghost" id="d_csv">로스팅 기록 CSV</button>
+    </div>
+    <p class="note" id="d_msg"></p>
+  </div>
+  <div class="block">
+    <h2>요약</h2>
+    <div id="d_stats"></div>
+  </div>
+</section>
+
+</main>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const DB={beans:[],roasts:[]};
+let pendingLog=null, pendingImg=null;
+const fmt=s=>`${Math.floor(s/60)}:${String(Math.round(s%60)).padStart(2,"0")}`;
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+/* ---------- 탭 ---------- */
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("on",x===b));
+  document.querySelectorAll(".pane").forEach(p=>p.classList.toggle("on",p.id==="p-"+b.dataset.p));
+  if(b.dataset.p==="data") stats();
+});
+
+/* ---------- 생두 파서 ---------- */
+const FIELDS=[
+  ["b_origin",["원산지"]],
+  ["b_farm",["농장명/농장주명","농장/농장주명","농장명","농장주명","농장"]],
+  ["b_region",["생산지역","재배지역","지역"]],
+  ["b_alt",["재배고도","고도"]],
+  ["b_proc",["가공방식","가공 방식","프로세스","가공"]],
+  ["b_var",["품종"]],
+  ["b_harvest",["수확시기","수확 시기","수확기","크롭"]],
+  ["b_notes",["커핑노트","커핑 노트","컵노트","컵 노트","플레이버"]],
+  ["b_grade",["등급","그레이드"]],
+  ["b_screen",["스크린","screen"]]
+];
+const SKIP=/^(배송비|판매가|정가|상품재고|최소 구매수량|구매혜택|택배|장바구니|찜하기|바로 구매|로그인|회원가입)$/;
+function parseText(txt){
+  const lines=txt.split(/\r?\n/).map(l=>l.replace(/\s+/g," ").trim()).filter(Boolean);
+  let hit=0;
+  for(const [id,labels] of FIELDS){
+    if($(id).value) { continue; }
+    let got=null;
+    outer:
+    for(let i=0;i<lines.length;i++){
+      for(const lab of labels){
+        if(lines[i].toLowerCase().indexOf(lab.toLowerCase())!==0) continue;
+        let rest=lines[i].slice(lab.length).replace(/^[\s:\-·]+/,"").trim();
+        if(!rest){
+          let j=i+1;
+          while(j<lines.length && (!lines[j] || SKIP.test(lines[j]))) j++;
+          rest=(lines[j]||"").trim();
+        }
+        if(rest && rest.length<=200 && !SKIP.test(rest)){ got=rest; break outer; }
+      }
+    }
+    if(got){ $(id).value=got; hit++; }
+  }
+  if(!$("b_name").value){
+    const cand=lines.slice(0,25).filter(l=>/[가-힣]/.test(l)&&l.length>=6&&l.length<=60
+      &&!/원산지|가공|품종|고도|커핑|배송|판매가|장바구니|로그인|구매/.test(l));
+    if(cand.length) $("b_name").value=cand.sort((a,b)=>b.length-a.length)[0]
+      .replace(/^\[[^\]]*\]\s*/,"").trim();
+  }
+  if(!$("b_raw").value) $("b_raw").value=txt.slice(0,4000);
+  return hit;
+}
+$("parse").onclick=()=>{
+  const t=$("paste").value.trim();
+  if(!t){ $("parsemsg").textContent="붙여넣은 내용이 없습니다."; return; }
+  const n=parseText(t);
+  $("parsemsg").textContent=n?`${n}개 항목을 채웠습니다. 아래에서 확인하세요.`:"인식된 항목이 없습니다. 직접 입력하세요.";
+};
+
+/* ---------- 이미지 ---------- */
+function shrink(file,cb){
+  const r=new FileReader();
+  r.onload=()=>{
+    const im=new Image();
+    im.onload=()=>{
+      const max=1400, sc=Math.min(1,max/Math.max(im.width,im.height));
+      const c=document.createElement("canvas");
+      c.width=Math.round(im.width*sc); c.height=Math.round(im.height*sc);
+      c.getContext("2d").drawImage(im,0,0,c.width,c.height);
+      cb(c.toDataURL("image/jpeg",0.82));
+    };
+    im.src=r.result;
+  };
+  r.readAsDataURL(file);
+}
+function takeImage(file){
+  if(!file) return;
+  shrink(file,d=>{
+    pendingImg=d; $("thumb").src=d; $("thumb").hidden=false;
+    $("ocr").disabled=false; $("ocrmsg").textContent="사진이 기록에 담깁니다. 글자를 뽑으려면 OCR을 누르세요.";
+  });
+}
+$("drop").onclick=()=>$("imgfile").click();
+$("drop").onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();$("imgfile").click();}};
+$("imgfile").onchange=e=>takeImage(e.target.files[0]);
+$("cam").onclick=()=>$("camfile").click();
+$("camfile").onchange=e=>takeImage(e.target.files[0]);
+["dragenter","dragover"].forEach(k=>$("drop").addEventListener(k,e=>{e.preventDefault();$("drop").classList.add("over")}));
+["dragleave","drop"].forEach(k=>$("drop").addEventListener(k,e=>{e.preventDefault();$("drop").classList.remove("over")}));
+$("drop").addEventListener("drop",e=>takeImage(e.dataTransfer.files[0]));
+window.addEventListener("dragover",e=>e.preventDefault());
+window.addEventListener("drop",e=>e.preventDefault());
+
+/* ---------- OCR (선택) ---------- */
+let TESS=null;
+function loadTess(){
+  if(TESS) return TESS;
+  TESS=new Promise((res,rej)=>{
+    if(window.Tesseract) return res(window.Tesseract);
+    const s=document.createElement("script");
+    s.src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.0/tesseract.min.js";
+    s.onload=()=>res(window.Tesseract);
+    s.onerror=()=>rej(new Error("OCR 엔진을 받지 못했습니다 (오프라인이거나 차단됨)"));
+    document.head.appendChild(s);
+  });
+  return TESS;
+}
+$("ocr").onclick=async()=>{
+  if(!pendingImg) return;
+  $("ocr").disabled=true; $("ocrmsg").textContent="OCR 엔진 준비 중… 처음 한 번은 수십 MB를 내려받습니다.";
+  try{
+    const T=await loadTess();
+    $("ocrmsg").textContent="글자 읽는 중…";
+    const {data}=await T.recognize(pendingImg,"kor+eng");
+    const txt=(data&&data.text||"").trim();
+    if(!txt){ $("ocrmsg").textContent="글자를 찾지 못했습니다."; }
+    else{
+      $("paste").value=txt;
+      const n=parseText(txt);
+      $("ocrmsg").textContent=`추출 완료 — ${n}개 항목을 채웠습니다. 오인식이 있을 수 있으니 확인하세요.`;
+    }
+  }catch(err){
+    $("ocrmsg").textContent=err.message+" — 사진은 그대로 저장되니 나중에 다시 시도하거나 직접 입력하세요.";
+  }
+  $("ocr").disabled=false;
+};
+
+/* ---------- 생두 저장 ---------- */
+const BF=["b_name","b_proc","b_alt","b_var","b_screen","b_harvest","b_moist","b_dens",
+          "b_origin","b_region","b_farm","b_grade","b_seller","b_bought","b_notes","b_raw"];
+$("b_save").onclick=()=>{
+  if(!$("b_name").value.trim()){ $("b_msg").textContent="이름은 필요합니다."; return; }
+  const o={id:uid(),img:pendingImg||null};
+  BF.forEach(f=>o[f.slice(2)]=$(f).value.trim());
+  DB.beans.push(o); renderBeans(); clearBean();
+  $("b_msg").textContent="저장했습니다. 데이터 탭에서 파일로 내보내는 걸 잊지 마세요.";
+};
+function clearBean(){
+  BF.forEach(f=>$(f).value=""); $("paste").value="";
+  pendingImg=null; $("thumb").hidden=true; $("ocr").disabled=true;
+  $("parsemsg").textContent=""; $("ocrmsg").textContent="";
+}
+$("b_clear").onclick=()=>{clearBean();$("b_msg").textContent="";};
+
+function renderBeans(){
+  $("b_count").textContent=DB.beans.length+"종";
+  $("b_table").innerHTML=`<tr><th>이름</th><th>가공</th><th>고도</th><th>품종</th><th>수확</th><th>사진</th><th></th></tr>`+
+    (DB.beans.length?DB.beans.map((b,i)=>`<tr>
+      <td>${b.name||""}</td><td>${b.proc||""}</td><td>${b.alt||""}</td>
+      <td>${b.var||""}</td><td>${b.harvest||""}</td>
+      <td>${b.img?'<span class="pill ok">있음</span>':''}</td>
+      <td><button class="ghost sm" onclick="delBean(${i})">삭제</button></td></tr>`).join("")
+      :`<tr><td colspan="7" style="color:var(--muted)">아직 없습니다</td></tr>`);
+  const sel=$("r_bean");
+  sel.innerHTML=`<option value="">— 생두 선택 —</option>`+
+    DB.beans.map(b=>`<option value="${b.id}">${b.name}</option>`).join("");
+}
+window.delBean=i=>{ if(confirm("삭제할까요?")){ DB.beans.splice(i,1); renderBeans(); } };
+
+/* ---------- 로그 파싱 ---------- */
+function estimateCrack(pts){
+  const r=[];
+  for(let i=1;i<pts.length;i++){
+    const dt=pts[i].t-pts[i-1].t;
+    if(dt>0) r.push({t:pts[i].t,v:(pts[i].v-pts[i-1].v)/dt*60});
+  }
+  const sm=r.map((x,i)=>{const w=r.slice(Math.max(0,i-7),i+8);
+    return {t:x.t,v:w.reduce((a,b)=>a+b.v,0)/w.length};});
+  const end=pts[pts.length-1].t; let best=null;
+  for(let i=10;i<sm.length-10;i++){
+    if(sm[i].t<end*0.5||sm[i].t>end*0.95) continue;
+    const rise=sm[i+10].v-sm[i].v;
+    if(sm[i].v<sm[i-8].v&&rise>0.8&&(!best||rise>best.rise)) best={t:sm[i].t,rise};
+  }
+  return best;
+}
+function readLog(text,fname){
+  const lines=text.trim().split(/\r?\n/);
+  const h=lines[0].split(",").map(x=>x.trim());
+  const it=h.indexOf("time"), iv=h.indexOf("temp above"), is=h.indexOf("state");
+  if(it<0||iv<0) throw new Error("IKAWA 로그 형식이 아닙니다");
+  const pts=[], all=[];
+  for(let i=1;i<lines.length;i++){
+    const c=lines[i].split(","); if(c.length<3) continue;
+    all.push({t:+c[it],v:+c[iv]});
+    if(is<0||(c[is]||"").trim()==="ROASTING") pts.push({t:+c[it],v:+c[iv]});
+  }
+  if(pts.length<10) throw new Error("로스팅 구간이 없습니다");
+  const end=pts[pts.length-1];
+  let tp=pts[0]; for(const p of pts){ if(p.v<tp.v) tp=p; else if(p.t>60) break; }
+  const q4=pts.filter(p=>p.t>=end.t*0.75);
+  const ror=q4.length>1?(q4[q4.length-1].v-q4[0].v)/((q4[q4.length-1].t-q4[0].t)/60):null;
+  const c=estimateCrack(pts);
+  return { prof:fname.replace(/\.csv$/i,"").replace(/^Roast[_ ]?data[:_ ]*/i,"")
+             .replace(/^Roasted[_ ]?with[_ ]*/i,"").replace(/_/g," ").trim(),
+           pre:all[0].v, drop:end.v, dur:end.t, tp:tp.t, tpv:tp.v,
+           crack:c?Math.round(c.t):null, ror };
+}
+function applyLog(L){
+  pendingLog=L;
+  $("r_prof").value=L.prof; $("r_pre").value=L.pre.toFixed(1);
+  $("r_drop").value=L.drop.toFixed(1); $("r_dur").value=L.dur.toFixed(1);
+  $("r_crack").value=L.crack??""; $("r_ror").value=L.ror!==null?L.ror.toFixed(1):"";
+  if(!$("r_date").value) $("r_date").value=new Date().toISOString().slice(0,10);
+  recalc();
+  $("logmsg").innerHTML=`<b>${L.prof}</b> — ${fmt(L.dur)} · 예열 ${L.pre.toFixed(1)}℃ · 배출 ${L.drop.toFixed(1)}℃ · 터닝포인트 ${fmt(L.tp)}`+
+    (L.crack?` · 크랙 추정 ${fmt(L.crack)}`:` · <span class="pill warn">크랙 추정 실패 — 직접 넣으세요</span>`);
+}
+async function ingestLog(files){
+  for(const f of files){
+    try{ applyLog(readLog(await f.text(),f.name)); }
+    catch(e){ $("logmsg").textContent=f.name+": "+e.message; }
+  }
+}
+$("logdrop").onclick=()=>$("logfile").click();
+$("logdrop").onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();$("logfile").click();}};
+$("logfile").onchange=e=>ingestLog(e.target.files);
+["dragenter","dragover"].forEach(k=>$("logdrop").addEventListener(k,e=>{e.preventDefault();$("logdrop").classList.add("over")}));
+["dragleave","drop"].forEach(k=>$("logdrop").addEventListener(k,e=>{e.preventDefault();$("logdrop").classList.remove("over")}));
+$("logdrop").addEventListener("drop",e=>ingestLog(e.dataTransfer.files));
+
+/* ---------- 계산 ---------- */
+function recalc(){
+  const i=parseFloat($("r_in").value), o=parseFloat($("r_out").value);
+  $("r_loss").value=(i>0&&o>0)?((1-o/i)*100).toFixed(2):"";
+  const d=parseFloat($("r_dur").value), c=parseFloat($("r_crack").value);
+  $("r_dtr").value=(d>0&&c>0&&c<d)?((d-c)/d*100).toFixed(1):"";
+}
+["r_in","r_out","r_dur","r_crack"].forEach(id=>$(id).addEventListener("input",recalc));
+
+/* ---------- 컵 평가 ---------- */
+const CUP=[["acid","산미"],["sweet","단맛"],["body","바디"],["aroma","향"],["balance","밸런스"]];
+$("cupsl").innerHTML=CUP.map(([k,n])=>
+  `<div class="sl"><label for="c_${k}">${n}</label>
+   <input type="range" id="c_${k}" min="0" max="5" step="1" value="0">
+   <output id="o_${k}">–</output></div>`).join("");
+CUP.forEach(([k])=>$("c_"+k).addEventListener("input",e=>
+  $("o_"+k).textContent=e.target.value==="0"?"–":e.target.value));
+
+/* ---------- 로스팅 저장 ---------- */
+$("r_save").onclick=()=>{
+  if(!$("r_bean").value){ $("r_msg").textContent="생두를 선택하세요."; return; }
+  const cup={};
+  CUP.forEach(([k])=>{ const v=+$("c_"+k).value; if(v>0) cup[k]=v; });
+  if($("c_total").value) cup.total=+$("c_total").value;
+  if($("c_note").value.trim()) cup.note=$("c_note").value.trim();
+  if($("c_date").value) cup.date=$("c_date").value;
+  DB.roasts.push({
+    id:uid(), beanId:$("r_bean").value, prof:$("r_prof").value.trim(), date:$("r_date").value,
+    inG:+$("r_in").value||null, outG:+$("r_out").value||null,
+    loss:parseFloat($("r_loss").value)||null,
+    pre:+$("r_pre").value||null, drop:+$("r_drop").value||null, dur:+$("r_dur").value||null,
+    crack:+$("r_crack").value||null, dtr:parseFloat($("r_dtr").value)||null,
+    ror:parseFloat($("r_ror").value)||null,
+    cup:Object.keys(cup).length?cup:null
+  });
+  renderRoasts(); clearRoast();
+  $("r_msg").textContent="저장했습니다.";
+};
+function clearRoast(){
+  ["r_prof","r_in","r_out","r_loss","r_pre","r_drop","r_dur","r_crack","r_dtr","r_ror",
+   "c_total","c_note"].forEach(id=>$(id).value="");
+  CUP.forEach(([k])=>{$("c_"+k).value=0;$("o_"+k).textContent="–";});
+  $("r_bean").value=""; pendingLog=null; $("logmsg").textContent="";
+}
+$("r_clear").onclick=()=>{clearRoast();$("r_msg").textContent="";};
+
+function beanName(id){ const b=DB.beans.find(x=>x.id===id); return b?b.name:"(삭제됨)"; }
+function renderRoasts(){
+  $("r_count").textContent=DB.roasts.length+"건";
+  $("r_table").innerHTML=`<tr><th>날짜</th><th>생두</th><th>프로파일</th><th class="num">배출℃</th>
+    <th class="num">시간</th><th class="num">DTR</th><th class="num">감량</th><th>컵</th><th></th></tr>`+
+    (DB.roasts.length?DB.roasts.slice().reverse().map(r=>{
+      const i=DB.roasts.indexOf(r);
+      const cup=r.cup?(r.cup.total?r.cup.total+"점":(r.cup.note?"메모":"점수")):"";
+      return `<tr><td>${r.date||""}</td><td>${beanName(r.beanId)}</td><td>${r.prof||""}</td>
+        <td class="num">${r.drop?.toFixed(1)??""}</td><td class="num">${r.dur?fmt(r.dur):""}</td>
+        <td class="num">${r.dtr?.toFixed(1)??""}</td><td class="num">${r.loss?.toFixed(1)??""}</td>
+        <td>${cup}</td><td><button class="ghost sm" onclick="delRoast(${i})">삭제</button></td></tr>`;
+    }).join(""):`<tr><td colspan="9" style="color:var(--muted)">아직 없습니다</td></tr>`);
+}
+window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); renderRoasts(); } };
+
+/* ---------- 데이터 ---------- */
+$("d_save").onclick=()=>{
+  const b=new Blob([JSON.stringify({v:"1.1",saved:new Date().toISOString(),...DB},null,1)],
+    {type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(b);
+  a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
+  URL.revokeObjectURL(a.href);
+  $("d_msg").textContent="내보냈습니다.";
+};
+$("d_load").onclick=()=>$("d_file").click();
+$("d_file").onchange=async e=>{
+  try{
+    const d=JSON.parse(await e.target.files[0].text());
+    const have=new Set(DB.beans.map(x=>x.id));
+    (d.beans||[]).forEach(x=>{if(!have.has(x.id))DB.beans.push(x)});
+    const hr=new Set(DB.roasts.map(x=>x.id));
+    (d.roasts||[]).forEach(x=>{if(!hr.has(x.id))DB.roasts.push(x)});
+    renderBeans(); renderRoasts(); stats();
+    $("d_msg").textContent=`불러왔습니다 — 생두 ${DB.beans.length}종 · 로스팅 ${DB.roasts.length}건`;
+  }catch{ $("d_msg").textContent="읽지 못했습니다."; }
+};
+$("d_csv").onclick=()=>{
+  if(!DB.roasts.length){ $("d_msg").textContent="기록이 없습니다."; return; }
+  const cols=["date","bean","proc","alt","var","harvest","prof","pre","drop","dur","crack","dtr","inG","outG","loss","acid","sweet","body","aroma","balance","total","note"];
+  const rows=[cols.join(",")];
+  DB.roasts.forEach(r=>{
+    const b=DB.beans.find(x=>x.id===r.beanId)||{}, c=r.cup||{};
+    const v={date:r.date,bean:b.name,proc:b.proc,alt:b.alt,var:b.var,harvest:b.harvest,
+      prof:r.prof,pre:r.pre,drop:r.drop,dur:r.dur,crack:r.crack,dtr:r.dtr,
+      inG:r.inG,outG:r.outG,loss:r.loss,...c};
+    rows.push(cols.map(k=>{
+      const s=v[k]===undefined||v[k]===null?"":String(v[k]);
+      return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+    }).join(","));
+  });
+  const b=new Blob(["\ufeff"+rows.join("\n")],{type:"text/csv"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(b);
+  a.download="roasts.csv"; a.click(); URL.revokeObjectURL(a.href);
+};
+function stats(){
+  const R=DB.roasts, withCup=R.filter(r=>r.cup), withW=R.filter(r=>r.loss);
+  const avg=a=>a.length?(a.reduce((x,y)=>x+y,0)/a.length).toFixed(1):"–";
+  $("d_stats").innerHTML=`<table>
+    <tr><th>항목</th><th class="num">값</th></tr>
+    <tr><td>생두</td><td class="num">${DB.beans.length}종</td></tr>
+    <tr><td>로스팅</td><td class="num">${R.length}건</td></tr>
+    <tr><td>중량 기록된 배치</td><td class="num">${withW.length}</td></tr>
+    <tr><td>컵 평가된 배치</td><td class="num">${withCup.length}</td></tr>
+    <tr><td>평균 감량률</td><td class="num">${avg(withW.map(r=>r.loss))}%</td></tr>
+    <tr><td>평균 DTR</td><td class="num">${avg(R.filter(r=>r.dtr).map(r=>r.dtr))}%</td></tr>
+    <tr><td>평균 배출온도</td><td class="num">${avg(R.filter(r=>r.drop).map(r=>r.drop))}℃</td></tr>
+  </table>
+  <p class="note">추천 로직에 쓸 만한 데이터가 되려면 <b>중량과 컵 평가가 함께 있는 배치가 20건 이상</b> 필요합니다. 지금 ${R.filter(r=>r.loss&&r.cup).length}건입니다.</p>`;
+}
+
+/* ---------- 서비스워커 · 공유 수신 ---------- */
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+async function pickupShared(){
+  if(!new URLSearchParams(location.search).has("shared")) return;
+  try{
+    const key=new URL("__shared__",location.href.replace(/[^/]*$/,"")).href;
+    const c=await caches.open("roast-shared");
+    const res=await c.match(key);
+    if(res){
+      const files=await res.json();
+      await c.delete(key);
+      let done=0;
+      for(const f of files){
+        try{ applyLog(readLog(f.text,f.name)); done++; }
+        catch(err){ $("logmsg").textContent=f.name+": "+err.message; }
+      }
+      if(done){
+        document.querySelector('nav button[data-p="roasts"]').click();
+        $("r_msg").textContent="공유로 받은 로그를 불러왔습니다. 생두와 중량만 넣으면 됩니다.";
+      }
+    }
+  }catch(err){}
+  history.replaceState(null,"",location.pathname);
+}
+pickupShared();
+
+/* 설치 안내 */
+(function(){
+  const standalone=window.matchMedia("(display-mode: standalone)").matches
+    || window.navigator.standalone===true;
+  const android=/Android/i.test(navigator.userAgent);
+  const ios=/iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const h=$("pwahint");
+  if(standalone){
+    h.hidden=false;
+    h.innerHTML="IKAWA 앱에서 <b>공유 → 로스팅기록</b>을 고르면 이 화면으로 바로 들어옵니다.";
+  }else if(android){
+    h.hidden=false;
+    h.innerHTML="브라우저 메뉴에서 <b>홈 화면에 추가</b>를 하면, 이후 IKAWA 앱의 <b>공유</b> 목록에 이 앱이 뜹니다.";
+  }else if(ios){
+    h.hidden=false;
+    h.innerHTML="iOS는 앱 간 공유 대상 등록을 지원하지 않습니다. IKAWA에서 <b>파일에 저장</b> 후 아래에서 고르세요.";
+  }
+})();
+
+renderBeans(); renderRoasts(); stats();
+</script>
+</body>
+</html>
