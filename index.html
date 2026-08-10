@@ -82,7 +82,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v5.8</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v6.0</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="plan">로스팅 계획</button>
@@ -290,6 +290,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
         <div><label>예열 ℃</label><input type="number" step="0.1" id="r_pre"></div>
         <div><label>배출 ℃</label><input type="number" step="0.1" id="r_drop"></div>
         <div><label>총시간 초</label><input type="number" step="0.1" id="r_dur"></div>
+        <div><label>컬러 변환 초 — 앱의 CC 마커</label><input type="number" step="1" id="r_cc" placeholder="예: 200"></div>
         <div><label>1차 크랙 초</label><input type="number" step="1" id="r_crack"></div>
         <div><label>DTR %</label><input type="text" id="r_dtr" readonly></div>
         <div><label>후반 승온 ℃/분</label><input type="text" id="r_ror" readonly></div>
@@ -1086,7 +1087,7 @@ async function ghUp(quiet){
   try{
     const cur=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
     const body={message:`로스트포인트 ${new Date().toISOString().slice(0,16)} — 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`,
-      content:b64enc(JSON.stringify({v:"5.8",at:Date.now(),...dbForExport()}))};
+      content:b64enc(JSON.stringify({v:"6.0",at:Date.now(),...dbForExport()}))};
     if(cur&&cur.sha) body.sha=cur.sha;
     await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`,
       {method:"PUT",body:JSON.stringify(body)});
@@ -1138,7 +1139,7 @@ async function syncUp(quiet){
   try{
     const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
       method:"PUT",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({v:"5.8",at:Date.now(),...dbForExport()})});
+      body:JSON.stringify({v:"6.0",at:Date.now(),...dbForExport()})});
     const j=await r.json();
     if(!r.ok) throw new Error(j.error||"실패");
     if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
@@ -1487,6 +1488,10 @@ function readLog(text,fname){
   let tp=pts[0]; for(const p of pts){ if(p.v<tp.v) tp=p; else if(p.t>60) break; }
   const q4=pts.filter(p=>p.t>=end.t*0.75);
   const ror=q4.length>1?(q4[q4.length-1].v-q4[0].v)/((q4[q4.length-1].t-q4[0].t)/60):null;
+  let t150=null;                                  // 건조 구간 — 150℃ 통과 시각
+  for(let i=1;i<pts.length;i++){
+    if(pts[i-1].v<150&&pts[i].v>=150){
+      t150=pts[i-1].t+(pts[i].t-pts[i-1].t)*(150-pts[i-1].v)/(pts[i].v-pts[i-1].v); break; } }
   const c=estimateCrack(pts);
   return { prof:fname.replace(/\.csv$/i,"").replace(/^Roast[_ ]?data[:_ ]*/i,"")
              .replace(/^Roasted[_ ]?with[_ ]*/i,"").replace(/_/g," ").trim(),
@@ -1502,7 +1507,6 @@ function applyLog(L){
   $("r_drop").value=L.drop.toFixed(1); $("r_dur").value=L.dur.toFixed(1);
   $("r_crack").value=L.crack??""; $("r_ror").value=L.ror!==null?L.ror.toFixed(1):"";
   if(!$("r_date").value) $("r_date").value=new Date().toISOString().slice(0,10);
-  window.__lastDry=L.dryPct;
   prefillFromSettings(); recalc();
   $("logmsg").innerHTML=`<b>${L.prof}</b> — ${fmt(L.dur)} · 예열 ${L.pre.toFixed(1)}℃ · 배출 ${L.drop.toFixed(1)}℃ · 터닝포인트 ${fmt(L.tp)}`+
     (L.crack?` · 크랙 추정 ${fmt(L.crack)}`:` · <span class="pill warn">크랙 추정 실패 — 직접 넣으세요</span>`);
@@ -2121,8 +2125,10 @@ function renderWaiting(){
 /* ---------- 1층 대조 — 볶은 뒤에만 확인할 수 있는 값들 ---------- */
 function renderCanon(){
   const lv=$("r_level")?$("r_level").value:"mlight", cn=CANON.level[lv];
-  const L=parseFloat($("r_loss").value), D=parseFloat($("r_dtr").value),
-        dry=window.__lastDry, ror=parseFloat($("r_ror").value);
+  const L=parseFloat($("r_loss").value), D=parseFloat($("r_dtr").value);
+  const cc=parseFloat($("r_cc").value), dur=parseFloat($("r_dur").value);
+  const dry=(cc>0&&dur>0&&cc<dur)?cc/dur*100:null;
+  const ror=parseFloat($("r_ror").value);
   const rows=[];
   const band=(label,v,lo,hi,unit,note)=>{
     if(v==null||isNaN(v)) return rows.push([label,"—","",""]);
@@ -2133,8 +2139,10 @@ function renderCanon(){
   };
   band("감량률",L,cn.loss[0],cn.loss[1],"%",L<cn.loss[0]?"덜 익었을 수 있습니다":"예상보다 깊습니다");
   band("DTR",D,cn.dtr[0],cn.dtr[1],"%",D<cn.dtr[0]?"발달이 짧습니다":"발달이 깁니다");
-  band("건조 구간 비율",dry,CANON.phase.dry-10,CANON.phase.dry+10,"%",
+  if(dry!=null) band("건조 구간 비율",dry,CANON.phase.dry-10,CANON.phase.dry+10,"%",
        dry<CANON.phase.dry-10?"건조가 빨랐습니다":"건조가 길었습니다");
+  else rows.push(["건조 구간 비율","—",`${CANON.phase.dry-10}~${CANON.phase.dry+10}%`,
+       '<span class="pill">앱의 <b>CC</b> 마커 시각을 넣으면 계산됩니다</span>']);
   const AG={light:[65,75],mlight:[60,70],medium:[55,65],mdark:[48,58]}[lv]||[55,65];
   const ag=parseFloat($("r_agt").value);
   if(!isNaN(ag)) band("색도 Agtron",ag,AG[0],AG[1],"",ag<AG[0]?"어둡습니다":"밝습니다");
@@ -2146,9 +2154,10 @@ function renderCanon(){
     rows.map(r=>`<tr><td>${r[0]}</td><td class="num">${r[1]}</td>
       <td class="num">${r[2]}</td><td>${r[3]}</td></tr>`).join("")+`</table>
     <p class="note">이 값들은 <b>볶아야 나옵니다.</b> 계획 탭의 1층은 목표고, 여기가 결과입니다.
-    건조 구간은 원두가 150℃를 지나는 시각으로 잽니다 — 컬러 변환 마커를 누르면 더 정확해집니다.</p>`;
+    <b>건조 구간은 로그에 안 들어옵니다.</b> IKAWA는 배기 온도를 재기 때문에 온도로 추정할 수 없습니다 —
+    로스팅 중 앱에서 <b>CC</b>를 누르고, 로스트 로그 화면에 표시된 시각을 위 칸에 적어주세요.</p>`;
 }
-["r_in","r_out","r_dur","r_crack","r_level","r_agt"].forEach(id=>{
+["r_in","r_out","r_dur","r_crack","r_cc","r_level","r_agt"].forEach(id=>{
   const e=$(id); if(e) e.addEventListener("input",renderCanon);
 });
 if($("r_level")) $("r_level").addEventListener("change",renderCanon);
@@ -2289,8 +2298,8 @@ $("r_save").onclick=()=>{
     loss:parseFloat($("r_loss").value)||null,
     pre:+$("r_pre").value||null, drop:+$("r_drop").value||null, dur:+$("r_dur").value||null,
     crack:+$("r_crack").value||null, dtr:parseFloat($("r_dtr").value)||null,
-    ror:parseFloat($("r_ror").value)||null, dry:window.__lastDry||null,
-    agt:+$("r_agt").value||null, agtg:+$("r_agtg").value||null,
+    ror:parseFloat($("r_ror").value)||null,
+    cc:+$("r_cc").value||null, agt:+$("r_agt").value||null, agtg:+$("r_agtg").value||null,
     note:$("r_note").value.trim()||null,
     cup:Object.keys(cup).length?cup:null,
     cost:(()=>{ const b=DB.beans.find(x=>x.id===$("r_bean").value);
@@ -2309,7 +2318,7 @@ $("r_save").onclick=()=>{
 };
 function clearRoast(){
   ["r_prof","r_in","r_out","r_loss","r_pre","r_drop","r_dur","r_crack","r_dtr","r_ror",
-   "c_total","c_note","r_machine","r_agt","r_agtg","r_note"].forEach(id=>$(id).value="");
+   "c_total","c_note","r_machine","r_agt","r_agtg","r_note","r_cc"].forEach(id=>$(id).value="");
   CUP.forEach(([k])=>{$("c_"+k).value=0;$("o_"+k).value="";});
   CATA.forEach(([k])=>$("f_"+k).checked=false);
   $("c_sum").value=""; $("c_rest").value=""; $("c_autohint").textContent="";
@@ -2339,7 +2348,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"5.8",saved:new Date().toISOString(),...dbForExport()},null,1)],
+  const b=new Blob([JSON.stringify({v:"6.0",saved:new Date().toISOString(),...dbForExport()},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
@@ -2366,12 +2375,12 @@ $("d_file").onchange=async e=>{
 };
 $("d_csv").onclick=()=>{
   if(!DB.roasts.length){ $("d_msg").textContent="기록이 없습니다."; return; }
-  const cols=["date","machine","bean","cost","agt","agtg","note","proc","alt","var","harvest","prof","pre","drop","dur","crack","dtr","inG","outG","loss","frag","aroma","flavor","after","acid","sweet","mouth","overall","sum","total","flavors","note"];
+  const cols=["date","machine","bean","cost","cc","agt","agtg","note","proc","alt","var","harvest","prof","pre","drop","dur","crack","dtr","inG","outG","loss","frag","aroma","flavor","after","acid","sweet","mouth","overall","sum","total","flavors","note"];
   const rows=[cols.join(",")];
   DB.roasts.forEach(r=>{
     const b=DB.beans.find(x=>x.id===r.beanId)||{}, c=r.cup||{};
     const v={date:r.date,machine:r.machine,bean:b.name,cost:r.cost,
-      agt:r.agt,agtg:r.agtg,note:r.note,proc:b.proc,alt:b.alt,var:b.var,harvest:b.harvest,
+      cc:r.cc,agt:r.agt,agtg:r.agtg,note:r.note,proc:b.proc,alt:b.alt,var:b.var,harvest:b.harvest,
       prof:r.prof,pre:r.pre,drop:r.drop,dur:r.dur,crack:r.crack,dtr:r.dtr,
       inG:r.inG,outG:r.outG,loss:r.loss,...c,
       flavors:(c.flavors||[]).map(k=>(CATA.find(x=>x[0]===k)||[,k])[1]).join(" ")};
