@@ -80,7 +80,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v5.2</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v5.3</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="plan">로스팅 계획</button>
@@ -208,7 +208,8 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <div class="extra" id="recbox" hidden>
       <div id="rec_out"></div>
       <div class="row" style="margin-top:10px">
-        <button id="p_send" disabled>고른 프로파일을 스튜디오로 보내기 →</button>
+        <button id="p_direct" disabled>바로 앱으로 보내기</button>
+        <button class="ghost" id="p_send" disabled>스튜디오에서 고치고 보내기 →</button>
         <a href="studio.html" style="font-size:13px;color:var(--setpoint)">빈 스튜디오 열기</a>
       </div>
       <p class="note" id="p_pick">위 표에서 <b>고르기</b>를 누르면 여기에 표시됩니다.
@@ -264,8 +265,13 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
       <div class="grid g5">
         <div><label>투입량 g</label><input type="number" step="0.1" id="r_in"></div>
         <div><label>배출량 g</label><input type="number" step="0.1" id="r_out"></div>
-        <div><label>감량률 % — 교과서 밴드와 대조됩니다</label><input type="text" id="r_loss" readonly></div>
+        <div><label>감량률 %</label><input type="text" id="r_loss" readonly></div>
       </div>
+    </div>
+
+    <div class="extra" id="canonbox" style="margin-top:9px">
+      <p class="tagline">교과서 대조 — 1층 기준에 들어왔는지</p>
+      <div id="canon_out"><p class="note">로그와 중량이 들어오면 대조합니다.</p></div>
     </div>
 
     <div class="extra" style="margin-top:9px">
@@ -992,13 +998,17 @@ function parseWithMap(lines,h,map,fname){
   if(pts.length<10) throw new Error("데이터가 너무 적습니다");
   const end=pts[pts.length-1];
   let tp=pts[0]; for(const q of pts){ if(q.v<tp.v) tp=q; else if(q.t>60) break; }
+  let t150=null;
+  for(let i=1;i<pts.length;i++){ if(pts[i-1].v<150&&pts[i].v>=150){
+    t150=pts[i-1].t+(pts[i].t-pts[i-1].t)*(150-pts[i-1].v)/(pts[i].v-pts[i-1].v); break; } }
   const q4=pts.filter(q=>q.t>=end.t*0.75);
   const ror=q4.length>1?(q4[q4.length-1].v-q4[0].v)/((q4[q4.length-1].t-q4[0].t)/60):null;
   const c=estimateCrack(pts);
   return { prof:fname.replace(/\.csv$/i,"").replace(/^Roast[_ ]?data[:_ ]*/i,"")
              .replace(/^Roasted[_ ]?with[_ ]*/i,"").replace(/_/g," ").trim(),
            pre:all[0].v, drop:end.v, dur:end.t, tp:tp.t, tpv:tp.v,
-           crack:c?Math.round(c.t):null, ror, sp:spThin };
+           crack:c?Math.round(c.t):null, ror, sp:spThin,
+           dryPct:(t150!=null&&end.t)?t150/end.t*100:null };
 }
 
 
@@ -1068,7 +1078,7 @@ async function ghUp(quiet){
   try{
     const cur=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
     const body={message:`로스트포인트 ${new Date().toISOString().slice(0,16)} — 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`,
-      content:b64enc(JSON.stringify({v:"5.2",at:Date.now(),...dbForExport()}))};
+      content:b64enc(JSON.stringify({v:"5.3",at:Date.now(),...dbForExport()}))};
     if(cur&&cur.sha) body.sha=cur.sha;
     await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`,
       {method:"PUT",body:JSON.stringify(body)});
@@ -1120,7 +1130,7 @@ async function syncUp(quiet){
   try{
     const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
       method:"PUT",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({v:"5.2",at:Date.now(),...dbForExport()})});
+      body:JSON.stringify({v:"5.3",at:Date.now(),...dbForExport()})});
     const j=await r.json();
     if(!r.ok) throw new Error(j.error||"실패");
     if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
@@ -1473,7 +1483,8 @@ function readLog(text,fname){
   return { prof:fname.replace(/\.csv$/i,"").replace(/^Roast[_ ]?data[:_ ]*/i,"")
              .replace(/^Roasted[_ ]?with[_ ]*/i,"").replace(/_/g," ").trim(),
            pre:all[0].v, drop:end.v, dur:end.t, tp:tp.t, tpv:tp.v,
-           crack:c?Math.round(c.t):null, ror, sp:spThin };
+           crack:c?Math.round(c.t):null, ror, sp:spThin,
+           dryPct:(t150!=null&&end.t)?t150/end.t*100:null };
 }
 let pendingProfileId=null;
 function applyLog(L){
@@ -1483,6 +1494,7 @@ function applyLog(L){
   $("r_drop").value=L.drop.toFixed(1); $("r_dur").value=L.dur.toFixed(1);
   $("r_crack").value=L.crack??""; $("r_ror").value=L.ror!==null?L.ror.toFixed(1):"";
   if(!$("r_date").value) $("r_date").value=new Date().toISOString().slice(0,10);
+  window.__lastDry=L.dryPct;
   prefillFromSettings(); recalc();
   $("logmsg").innerHTML=`<b>${L.prof}</b> — ${fmt(L.dur)} · 예열 ${L.pre.toFixed(1)}℃ · 배출 ${L.drop.toFixed(1)}℃ · 터닝포인트 ${fmt(L.tp)}`+
     (L.crack?` · 크랙 추정 ${fmt(L.crack)}`:` · <span class="pill warn">크랙 추정 실패 — 직접 넣으세요</span>`);
@@ -1602,6 +1614,7 @@ function recalc(){
   }else if($("r_loss").style){ $("r_loss").style.color=""; }
   const d=parseFloat($("r_dur").value), c=parseFloat($("r_crack").value);
   $("r_dtr").value=(d>0&&c>0&&c<d)?((d-c)/d*100).toFixed(1):"";
+  if(typeof renderCanon==="function") renderCanon();
 }
 ["r_in","r_out","r_dur","r_crack"].forEach(id=>$(id).addEventListener("input",recalc));
 
@@ -1994,16 +2007,52 @@ $("r_bean").addEventListener("change",showRec);
 ["r_use","r_level"].forEach(id=>{ const e=$(id); if(e) e.addEventListener("change",showRec); });
 
 
+
+/* ---------- IKAWA 공유 링크 만들기 (스튜디오와 같은 방식) ---------- */
+function viEnc(n){ const o=[]; n=Math.max(0,Math.round(n));
+  while(true){ let b=n&0x7f; n=Math.floor(n/128); o.push(b|(n?0x80:0)); if(!n) return o; } }
+function pbMsgEnc(f,p){ return [...viEnc((f<<3)|2),...viEnc(p.length),...p]; }
+function pbPtEnc(t,v){ return [...viEnc(8),...viEnc(t),...viEnc(16),...viEnc(v)]; }
+function makeIkawaLink(name,temps,fans,cool){
+  const id=new Uint8Array(16); crypto.getRandomValues(id);
+  let o=[...viEnc(8),...viEnc(1)];
+  o=o.concat(pbMsgEnc(2,[...id]));
+  o=o.concat(pbMsgEnc(3,[...new TextEncoder().encode(name)]));
+  temps.forEach(([t,v])=>o=o.concat(pbMsgEnc(4,pbPtEnc(Math.round(t*10),Math.round(v*10)))));
+  (fans||[]).forEach(([t,v])=>o=o.concat(pbMsgEnc(5,pbPtEnc(Math.round(t*10),Math.round(v/100*255)))));
+  o=o.concat([...viEnc(48),...viEnc(0)]);
+  (cool||[]).forEach(([t,v])=>o=o.concat(pbMsgEnc(7,pbPtEnc(Math.round(t*10),Math.round(v*10)))));
+  let bin=""; o.forEach(b=>bin+=String.fromCharCode(b));
+  return "https://share.ikawa.support/profile/?"+btoa(bin);
+}
+$("p_direct").onclick=()=>{
+  if(!picked) return;
+  const T=picked.pts.map(p=>[p[0],p[1]]);
+  const end=T[T.length-1][0];
+  const url=makeIkawaLink(picked.name,T,[[0,80],[end*0.5,70],[end,64]],[[end+130,21]]);
+  const phone=/Android|iPhone|iPad/i.test(navigator.userAgent);
+  $("p_pick").innerHTML=`<b>${picked.name}</b> 링크를 만들었습니다.<br>
+    ${phone?`<a href="${url}" style="font-size:15px;color:var(--setpoint)">→ IKAWA 앱에서 열기</a>`
+           :`<span class="mono" style="font-size:11px;word-break:break-all">${url}</span><br>
+             <span class="note">PC입니다 — 폰으로 보내려면 스튜디오에서 QR을 만드세요.</span>`}
+    <br><span class="note">팬 곡선은 기본값(80→64%)입니다. 세밀하게 잡으려면 스튜디오를 거치세요.</span>`;
+};
+
 /* ---------- 고른 프로파일을 스튜디오로 ----------
    같은 주소이므로 저장 영역을 공유한다. 링크로 넘기면 주소가 너무 길어진다. */
 let picked=null;
 window.pickProfile=i=>{
   const r=(window.__ranked||[])[i]; if(!r) return;
   picked={ name:r.p.name, pts:r.p.pts, target:window.__target||null };
-  $("p_send").disabled=false;
+  $("p_send").disabled=false; $("p_direct").disabled=false;
+  const gaps=r.parts.filter(x=>x.pts<x.max*0.75).map(x=>x.label);
+  const close=gaps.length===0;
   $("p_pick").innerHTML=`고름: <b>${r.p.name}</b> — 배출 ${r.ch.drop.toFixed(1)}℃ ·
-    총 ${fmt(r.ch.dur)} · 점수 ${r.score.toFixed(0)}<br>
-    <span class="pill ok">스튜디오로 보내기</span>를 누르면 곡선이 편집기에 열립니다.`;
+    총 ${fmt(r.ch.dur)} · 점수 ${r.score.toFixed(0)}<br>`+
+    (close
+      ? `<span class="pill ok">목표에 거의 맞습니다</span> 그대로 <b>바로 앱으로 보내기</b>를 눌러도 됩니다.`
+      : `<span class="pill warn">차이 있음</span> ${gaps.join(" · ")}이(가) 목표와 벌어져 있습니다 —
+         <b>스튜디오에서 고치고 보내기</b>를 권합니다.`);
 };
 $("p_send").onclick=async()=>{
   if(!picked) return;
@@ -2035,6 +2084,39 @@ function renderWaiting(){
     }).join(""):`<tr><td colspan="7" style="color:var(--muted)">평가할 배치가 없습니다</td></tr>`);
 }
 
+
+
+/* ---------- 1층 대조 — 볶은 뒤에만 확인할 수 있는 값들 ---------- */
+function renderCanon(){
+  const lv=$("r_level")?$("r_level").value:"mlight", cn=CANON.level[lv];
+  const L=parseFloat($("r_loss").value), D=parseFloat($("r_dtr").value),
+        dry=window.__lastDry, ror=parseFloat($("r_ror").value);
+  const rows=[];
+  const band=(label,v,lo,hi,unit,note)=>{
+    if(v==null||isNaN(v)) return rows.push([label,"—","",""]);
+    const ok=v>=lo&&v<=hi;
+    rows.push([label,`${v.toFixed(unit==="%"?1:0)}${unit}`,`${lo}~${hi}${unit}`,
+      ok?'<span class="pill ok">밴드 안</span>'
+        :`<span class="pill warn">${v<lo?"낮음":"높음"}</span> ${note||""}`]);
+  };
+  band("감량률",L,cn.loss[0],cn.loss[1],"%",L<cn.loss[0]?"덜 익었을 수 있습니다":"예상보다 깊습니다");
+  band("DTR",D,cn.dtr[0],cn.dtr[1],"%",D<cn.dtr[0]?"발달이 짧습니다":"발달이 깁니다");
+  band("건조 구간 비율",dry,CANON.phase.dry-10,CANON.phase.dry+10,"%",
+       dry<CANON.phase.dry-10?"건조가 빨랐습니다":"건조가 길었습니다");
+  if(!isNaN(ror)) rows.push(["후반 승온",ror.toFixed(1)+"℃/분","1.0 이상",
+    ror<1?'<span class="pill warn">베이킹 위험</span>':'<span class="pill ok">정상</span>']);
+
+  $("canon_out").innerHTML=`<table><tr><th>항목</th><th class="num">실측</th>
+    <th class="num">${cn.name} 기준</th><th>판정</th></tr>`+
+    rows.map(r=>`<tr><td>${r[0]}</td><td class="num">${r[1]}</td>
+      <td class="num">${r[2]}</td><td>${r[3]}</td></tr>`).join("")+`</table>
+    <p class="note">이 값들은 <b>볶아야 나옵니다.</b> 계획 탭의 1층은 목표고, 여기가 결과입니다.
+    건조 구간은 원두가 150℃를 지나는 시각으로 잽니다 — 컬러 변환 마커를 누르면 더 정확해집니다.</p>`;
+}
+["r_in","r_out","r_dur","r_crack","r_level"].forEach(id=>{
+  const e=$(id); if(e) e.addEventListener("input",renderCanon);
+});
+if($("r_level")) $("r_level").addEventListener("change",renderCanon);
 
 /* ---------- 나란히 비교 커핑 ----------
    같은 생두의 배치를 한 표에 놓고 항목별로 견준다.
@@ -2171,7 +2253,7 @@ $("r_save").onclick=()=>{
     loss:parseFloat($("r_loss").value)||null,
     pre:+$("r_pre").value||null, drop:+$("r_drop").value||null, dur:+$("r_dur").value||null,
     crack:+$("r_crack").value||null, dtr:parseFloat($("r_dtr").value)||null,
-    ror:parseFloat($("r_ror").value)||null,
+    ror:parseFloat($("r_ror").value)||null, dry:window.__lastDry||null,
     cup:Object.keys(cup).length?cup:null,
     cost:(()=>{ const b=DB.beans.find(x=>x.id===$("r_bean").value);
       const up=b?unitPrice(b):null, g=+$("r_in").value;
@@ -2219,7 +2301,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"5.2",saved:new Date().toISOString(),...dbForExport()},null,1)],
+  const b=new Blob([JSON.stringify({v:"5.3",saved:new Date().toISOString(),...dbForExport()},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
