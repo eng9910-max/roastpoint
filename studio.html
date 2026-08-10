@@ -77,7 +77,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
 </head>
 <body>
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v1.8</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v1.9</span>
   <button class="ghost" id="undo" title="Ctrl+Z">되돌리기</button>
   <button class="ghost" id="redo" title="Ctrl+Shift+Z">다시</button>
   <a href="./" style="font-size:12.5px;color:var(--setpoint);margin-left:auto">← 기록장</a>
@@ -144,6 +144,10 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
     <div>
       <h2>프로파일 라이브러리 <span class="pill" id="libcount">0</span></h2>
       <textarea id="bulk" rows="2" placeholder="공유 링크를 여러 줄 붙여넣으세요 — 한 번에 다 들어갑니다"></textarea>
+      <div class="row" id="autofixrow" style="margin-top:6px" hidden>
+        <button id="autofix">목표에 맞춰 자동 보정</button>
+        <span class="hint" id="autofixmsg"></span>
+      </div>
       <div class="row" style="margin-top:6px">
         <button class="ghost" id="bulkadd">일괄 넣기</button>
         <button class="ghost" id="libcur">현재 곡선 넣기</button>
@@ -3304,7 +3308,7 @@ $("cplink").onclick=async()=>{
 
 /* ---------- 저장 / 불러오기 ---------- */
 $("save").onclick=()=>{
-  const d={v:"1.8",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
+  const d={v:"1.9",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
            coolT:+$("coolT").value,coolV:+$("coolV").value};
   const b=new Blob([JSON.stringify(d,null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
@@ -3337,6 +3341,61 @@ $("loadpreset").onclick=()=>{
 setFans(PRESETS["파카마라 워시드 v1.0 — 대립·고밀도"].fans);
 renderRefs(); libRender();
 
+
+/* ---------- 계획의 목표에 맞춰 곡선 자동 보정 ----------
+   시간을 목표 길이로 늘리거나 줄이고, 예열·배출을 목표에 맞춘 뒤,
+   초반(0~40%)과 발달(75~100%) 구간의 기울기를 목표에 맞도록 값을 다시 배치한다.
+   구간 안의 굴곡은 원래 비율을 그대로 유지한다 — 모양은 남기고 높이만 옮기는 방식. */
+let planTarget=null;
+function autoFit(pts,g){
+  const n=pts.length, curDur=pts[n-1][0]||1;
+  const k=(+g.dur)/curDur;
+  const T=pts.map(p=>[p[0]*k,p[1]]);              // 시간 축을 목표 길이로
+  const d=+g.dur;
+  const at=x=>{ for(let i=1;i<T.length;i++){ const a=T[i-1],b=T[i];
+    if(x<=b[0]) return b[0]===a[0]?b[1]:a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0]); } return T[T.length-1][1]; };
+  // 기준점 넷: 0 / 40% / 75% / 끝
+  const oldA=[T[0][1], at(d*0.40), at(d*0.75), T[n-1][1]];
+  const newA=[ +g.pre,
+               +g.pre + (+g.rEarly)*(d*0.40/60),
+               (+g.drop) - (+g.rDev)*(d*0.25/60),
+               +g.drop ];
+  const bounds=[0,d*0.40,d*0.75,d];
+  const map=(t,v)=>{
+    let s2=0; while(s2<2 && t>bounds[s2+1]) s2++;
+    const o0=oldA[s2],o1=oldA[s2+1],n0=newA[s2],n1=newA[s2+1];
+    const rel=(o1-o0)!==0 ? (v-o0)/(o1-o0) : (t-bounds[s2])/((bounds[s2+1]-bounds[s2])||1);
+    return n0+(n1-n0)*rel;
+  };
+  const out=T.map(([t,v])=>[Math.round(t), Math.round(map(t,v)*10)/10]);
+  // 목표 기울기를 정확히 맞추려면 기준점을 곡선에 직접 박아야 한다
+  [[Math.round(d*0.40),newA[1]],[Math.round(d*0.75),newA[2]]].forEach(([t,v])=>{
+    const near=out.findIndex(p=>Math.abs(p[0]-t)<=6);
+    if(near>=0) out[near]=[t,Math.round(v*10)/10];
+    else out.push([t,Math.round(v*10)/10]);
+  });
+  out[0]=[0,Math.round(newA[0]*10)/10];
+  out.sort((a,b)=>a[0]-b[0]);
+  out[out.length-1]=[Math.round(d),Math.round(newA[3]*10)/10];
+  return out.filter((p,i)=>i===0||p[0]>out[i-1][0]).slice(0,20);
+}
+$("autofix").onclick=()=>{
+  if(!planTarget) return;
+  pushHist();
+  S.temps=autoFit(S.temps,planTarget);
+  $("pver").value="v1.1"; syncName(); draw();
+  const c=(pts=>{const st=(function(p2){const n=p2.length,e=p2[n-1],du=e[0]||1;
+    const a=x=>{for(let i=1;i<n;i++){const q=p2[i-1],r=p2[i];
+      if(x<=r[0])return r[0]===q[0]?r[1]:q[1]+(r[1]-q[1])*(x-q[0])/(r[0]-q[0]);}return e[1];};
+    return {pre:p2[0][1],drop:e[1],dur:du,
+      rEarly:(a(du*0.4)-p2[0][1])/((du*0.4)/60),
+      rDev:(e[1]-a(du*0.75))/((du*0.25)/60)};})(pts);
+    return st;})(S.temps);
+  $("autofixmsg").innerHTML=`보정 완료 — 예열 ${c.pre.toFixed(1)} · 배출 ${c.drop.toFixed(1)} ·
+    총 ${fmt(c.dur)} · 초반 ${c.rEarly.toFixed(1)} · 발달 ${c.rDev.toFixed(1)}
+    <span style="color:var(--ink-2)">(곡선 모양은 유지했습니다 — 마음에 안 들면 되돌리기)</span>`;
+};
+
 /* 로스팅 계획에서 넘어온 프로파일을 받는다 (같은 주소라 저장 영역을 공유) */
 (function(){
   if(!/from=plan/.test(location.hash)) return;
@@ -3362,6 +3421,7 @@ renderRefs(); libRender();
           $("fromplan").className="pill ok";
           $("fromplan").innerHTML=`계획에서 받음${h.bean?" · "+h.bean:""}`;
           if(g){
+            planTarget=g; $("autofixrow").hidden=false;
             $("libmsg").innerHTML=`<b>계획의 목표</b> — 배출 ${(+g.drop).toFixed(1)}℃ ·
               총 ${fmt(g.dur)} · 초반 ${(+g.rEarly).toFixed(1)}℃/분 ·
               발달 ${(+g.rDev).toFixed(1)}℃/분 · 예열 ${(+g.pre).toFixed(0)}℃<br>
