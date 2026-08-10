@@ -80,7 +80,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v5.3</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v5.4</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="plan">로스팅 계획</button>
@@ -1078,7 +1078,7 @@ async function ghUp(quiet){
   try{
     const cur=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
     const body={message:`로스트포인트 ${new Date().toISOString().slice(0,16)} — 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`,
-      content:b64enc(JSON.stringify({v:"5.3",at:Date.now(),...dbForExport()}))};
+      content:b64enc(JSON.stringify({v:"5.4",at:Date.now(),...dbForExport()}))};
     if(cur&&cur.sha) body.sha=cur.sha;
     await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`,
       {method:"PUT",body:JSON.stringify(body)});
@@ -1130,7 +1130,7 @@ async function syncUp(quiet){
   try{
     const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
       method:"PUT",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({v:"5.3",at:Date.now(),...dbForExport()})});
+      body:JSON.stringify({v:"5.4",at:Date.now(),...dbForExport()})});
     const j=await r.json();
     if(!r.ok) throw new Error(j.error||"실패");
     if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
@@ -2045,14 +2045,20 @@ window.pickProfile=i=>{
   const r=(window.__ranked||[])[i]; if(!r) return;
   picked={ name:r.p.name, pts:r.p.pts, target:window.__target||null };
   $("p_send").disabled=false; $("p_direct").disabled=false;
-  const gaps=r.parts.filter(x=>x.pts<x.max*0.75).map(x=>x.label);
+  /* 판단 기준: 항목 점수가 만점의 75% 아래로 떨어지면 '고쳐야 함'.
+     허용폭(tol)으로 환산하면 아래 숫자가 된다 — 화면에 그대로 보여준다. */
+  const CUT={drop:1.1,rDev:0.6,rEarly:1.6,dur:32,pre:7.5};
+  const gaps=r.parts.filter(x=>x.pts<x.max*0.75)
+    .map(x=>`${x.label} ${x.diff>0?"+":""}${x.diff.toFixed(x.k==="dur"?0:1)}${x.k==="dur"?"초":""} (허용 ±${CUT[x.k]}${x.k==="dur"?"초":""})`);
   const close=gaps.length===0;
   $("p_pick").innerHTML=`고름: <b>${r.p.name}</b> — 배출 ${r.ch.drop.toFixed(1)}℃ ·
     총 ${fmt(r.ch.dur)} · 점수 ${r.score.toFixed(0)}<br>`+
     (close
       ? `<span class="pill ok">목표에 거의 맞습니다</span> 그대로 <b>바로 앱으로 보내기</b>를 눌러도 됩니다.`
-      : `<span class="pill warn">차이 있음</span> ${gaps.join(" · ")}이(가) 목표와 벌어져 있습니다 —
-         <b>스튜디오에서 고치고 보내기</b>를 권합니다.`);
+      : `<span class="pill warn">차이 있음</span><br>${gaps.map(g=>"· "+g).join("<br>")}<br>
+         <b>스튜디오에서 고치고 보내기</b>를 권합니다.`)
+    +`<br><span class="note">판단 기준 — 배출 ±1.1℃ · 발달 기울기 ±0.6℃/분 · 초반 열량 ±1.6℃/분 ·
+      총시간 ±32초 · 예열 ±7.5℃ 안이면 그대로 씁니다. 하나라도 벗어나면 손보기를 권합니다.</span>`;
 };
 $("p_send").onclick=async()=>{
   if(!picked) return;
@@ -2301,7 +2307,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"5.3",saved:new Date().toISOString(),...dbForExport()},null,1)],
+  const b=new Blob([JSON.stringify({v:"5.4",saved:new Date().toISOString(),...dbForExport()},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
