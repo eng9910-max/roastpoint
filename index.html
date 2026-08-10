@@ -80,7 +80,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v4.9</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v5.0</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -201,12 +201,39 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
   </div>
 
   <div class="block">
-    <h2>① 로스트 로그 넣기 — 자동으로 채워집니다</h2>
+    <h2>① 볶기 전 — 무엇을 어떻게 볶을지 정합니다</h2>
+    <div class="core">
+      <div class="grid g5">
+        <div class="wide"><label>생두 *</label><select id="r_bean"></select></div>
+        <div><label>목표 배전도</label><select id="r_level">
+          <option value="light">라이트</option>
+          <option value="mlight" selected>미디엄 라이트</option>
+          <option value="medium">미디엄</option>
+          <option value="mdark">미디엄 다크</option></select></div>
+        <div><label>용도 — 배전도 고르는 데 참고만 합니다</label><select id="r_use">
+          <option value="filter">필터 · 드립</option>
+          <option value="espresso">에스프레소</option>
+          <option value="latte">라떼 · 밀크</option></select></div>
+      </div>
+    </div>
+
+    <div class="extra" id="recbox" hidden>
+      <div id="rec_out"></div>
+      <div class="row" style="margin-top:10px">
+        <a href="studio.html" style="font-size:14px;color:var(--setpoint)">스튜디오에서 곡선 고치고 링크·QR 만들기 →</a>
+      </div>
+      <p class="note">고른 프로파일을 스튜디오에서 열어 목표에 맞게 손본 뒤,
+      링크나 QR로 IKAWA 앱에 보내 로스팅하세요.</p>
+    </div>
+  </div>
+
+  <div class="block">
+    <h2>② 볶은 뒤 — 결과를 담습니다</h2>
     <p class="note" id="pwahint" hidden></p>
     <div id="sharediag" class="extra" hidden style="margin-bottom:10px"></div>
     <div id="logdrop" tabindex="0" role="button">
       <b>로스트 로그 놓기 — CSV · Artisan .alog</b>
-      <span>예열 · 배출 · 시간 · 크랙 · DTR이 자동 계산됩니다. 아티산 파일은 중량과 노트까지 함께 들어옵니다</span>
+      <span>예열 · 배출 · 시간 · 크랙 · DTR이 자동 계산됩니다. IKAWA 앱에서 공유해도 여기로 들어옵니다</span>
     </div>
     <input type="file" id="logfile" accept=".csv,.alog,text/csv,text/plain" multiple>
     <p class="note" id="logmsg"></p>
@@ -223,39 +250,17 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
       </div>
       <div class="row" style="margin-top:9px"><button id="m_apply">이 설정으로 읽기</button></div>
     </div>
-  </div>
 
-  <div class="block">
-    <h2>② 손으로 넣을 것 — 셋뿐입니다</h2>
-    <div class="core">
+    <div class="core" style="margin-top:11px">
+      <p class="tagline">저울로 잰 값 — 이것만 손으로 넣습니다</p>
       <div class="grid g5">
-        <div class="wide"><label>생두 *</label><select id="r_bean"></select></div>
-        <div><label>목표 배전도</label><select id="r_level">
-          <option value="light">라이트</option>
-          <option value="mlight" selected>미디엄 라이트</option>
-          <option value="medium">미디엄</option>
-          <option value="mdark">미디엄 다크</option></select></div>
-        <div><label>용도</label><select id="r_use">
-          <option value="filter">필터 · 드립</option>
-          <option value="espresso">에스프레소</option>
-          <option value="latte">라떼 · 밀크</option></select></div>
         <div><label>투입량 g</label><input type="number" step="0.1" id="r_in"></div>
         <div><label>배출량 g</label><input type="number" step="0.1" id="r_out"></div>
-        <div><label>감량률 %</label><input type="text" id="r_loss" readonly></div>
+        <div><label>감량률 % — 교과서 밴드와 대조됩니다</label><input type="text" id="r_loss" readonly></div>
       </div>
     </div>
 
-    <div class="extra" id="recbox" hidden>
-      <p class="tagline">이 생두의 권장 목표</p>
-      <div id="rec_out"></div>
-      <div class="row" style="margin-top:8px">
-        <button class="ghost" id="rec_lib">프로파일 파일로 순위 매기기</button>
-        <input type="file" id="rec_file" accept=".json">
-        <a href="studio.html" style="font-size:13px;color:var(--setpoint)">스튜디오에서 만들기 →</a>
-      </div>
-    </div>
-
-    <div class="extra">
+    <div class="extra" style="margin-top:9px">
       <p class="tagline">로그에서 채워진 값 — 필요하면 고치세요</p>
       <div class="grid g5">
         <div><label>로스터 기종</label><input type="text" id="r_machine" list="machines" placeholder="IKAWA Pro V2">
@@ -277,9 +282,9 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
   </div>
 
   <div class="block">
-    <h2>③ 컵 평가</h2>
-    <p class="lead">SCA의 <b>Coffee Value Assessment</b> 정동 평가를 따랐습니다. 8개 항목을 0~9로 매기고,
-    향미는 아래에서 해당하는 것만 고르면 됩니다. 다 채울 필요 없습니다 — 빈 항목은 저장되지 않습니다.</p>
+    <h2>③ 며칠 뒤 — 컵 평가</h2>
+    <p class="lead">SCA의 <b>Coffee Value Assessment</b> 정동 평가입니다. 볶은 직후에는 비워두고,
+    마셔본 날 목록에서 「수정」으로 들어와 채우세요. 다 채울 필요 없습니다.</p>
     <div class="extra">
       <p class="tagline">정동 평가 (0~9) — 0은 미평가</p>
       <div class="sliders" id="cupsl"></div>
@@ -289,7 +294,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
         <div><label>마신 날</label><input type="date" id="c_date"></div>
         <div><label>로스팅 후 며칠</label><input type="text" id="c_rest" readonly></div>
       </div>
-      <p class="note">CVA 정동 평가의 합계는 최대 72점입니다. 100점 환산은 SCA가 제공하는 계산기를 쓰세요 —
+      <p class="note">합계는 최대 72점입니다. 100점 환산은 SCA 계산기를 쓰세요 —
       환산식이 개정될 수 있어 앱에서 임의로 계산하지 않습니다.</p>
     </div>
 
@@ -302,7 +307,6 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
       </div>
       <p class="note" id="c_autohint"></p>
     </div>
-  </div>
 
     <div class="row" style="margin-top:11px">
       <button id="r_save">로스팅 저장</button>
@@ -1032,7 +1036,7 @@ async function ghUp(quiet){
   try{
     const cur=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
     const body={message:`로스트포인트 ${new Date().toISOString().slice(0,16)} — 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`,
-      content:b64enc(JSON.stringify({v:"4.9",at:Date.now(),...dbForExport()}))};
+      content:b64enc(JSON.stringify({v:"5.0",at:Date.now(),...dbForExport()}))};
     if(cur&&cur.sha) body.sha=cur.sha;
     await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`,
       {method:"PUT",body:JSON.stringify(body)});
@@ -1084,7 +1088,7 @@ async function syncUp(quiet){
   try{
     const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
       method:"PUT",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({v:"4.9",at:Date.now(),...dbForExport()})});
+      body:JSON.stringify({v:"5.0",at:Date.now(),...dbForExport()})});
     const j=await r.json();
     if(!r.ok) throw new Error(j.error||"실패");
     if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
@@ -1883,7 +1887,7 @@ function matchScore(ch,t,prof,bean){
   }
   return {score:Math.max(0,Math.min(100,score)),parts,notes};
 }
-let RECLIB=[];
+const RECLIB=[];   // 예전 파일 불러오기 잔재 — 이제 프로파일 탭이 후보를 제공한다
 function showRec(){
   const b=DB.beans.find(x=>x.id===$("r_bean").value);
   if(!b){ $("recbox").hidden=true; return; }
@@ -1954,13 +1958,6 @@ function showRec(){
 window.fixLevel=lv=>{ $("r_level").value=lv; showRec(); };
 $("r_bean").addEventListener("change",showRec);
 ["r_use","r_level"].forEach(id=>{ const e=$(id); if(e) e.addEventListener("change",showRec); });
-$("rec_lib").onclick=()=>$("rec_file").click();
-$("rec_file").onchange=async e=>{
-  try{ const d=JSON.parse(await e.target.files[0].text());
-    RECLIB=(d.lib||[]).filter(x=>x.pts&&x.pts.length>1);
-    showRec();
-  }catch{ $("rec_out").innerHTML="<p class='note'>읽지 못했습니다.</p>"; }
-};
 
 /* ---------- 로스팅 저장 ---------- */
 window.editRoast=i=>{
@@ -2049,7 +2046,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"4.9",saved:new Date().toISOString(),...dbForExport()},null,1)],
+  const b=new Blob([JSON.stringify({v:"5.0",saved:new Date().toISOString(),...dbForExport()},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
