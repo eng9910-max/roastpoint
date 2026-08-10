@@ -65,10 +65,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 .pill.ok{border-color:var(--ok);color:var(--ok)}
 .pill.warn{border-color:var(--actual);color:var(--actual)}
 .thumb{max-width:100%;max-height:170px;border:1px solid var(--rule);display:block;margin-top:8px}
-.sliders{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:9px 16px}
+.sliders{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:11px 18px}
 .sl{display:flex;align-items:center;gap:9px;font-size:13.5px}
 .sl label{margin:0;width:46px;flex:none;font-size:13px;color:var(--ink)}
-.sl input[type=range]{flex:1}
+.sl input[type=range]{flex:1;min-width:80px;height:26px}
 .sl output{width:20px;text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:13.5px}
 .note{font-size:12.5px;color:var(--muted);margin-top:6px}
 .bar{display:flex;gap:7px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--rule);margin-top:22px}
@@ -79,7 +79,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v3.8</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v4.1</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -298,6 +298,8 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
       <button id="r_save">로스팅 저장</button>
       <button class="ghost" id="r_clear">비우기</button>
       <span class="note" id="r_msg"></span>
+      <p class="note wide">프로파일은 공유되는 순간 자동 저장되지만,
+      <b>로스팅 기록과 컵 평가는 이 버튼을 눌러야 저장됩니다.</b></p>
     </div>
   </div>
 
@@ -309,11 +311,27 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <!-- ================= 프로파일 ================= -->
 <section class="pane" id="p-profiles">
+  <div class="block" id="pf_msgbox" hidden>
+    <div class="extra" id="pf_msg"></div>
+  </div>
+
   <div class="block">
     <h2>프로파일 <span id="pf_count" class="pill"></span></h2>
     <p class="lead">로스트 로그를 넣거나 IKAWA 프로파일 링크를 공유하면 <b>여기에 자동으로 쌓입니다.</b>
     생두와 마찬가지로 하나의 대상이고, 로스팅 기록이 이걸 가리킵니다.
     같은 프로파일로 여러 번 볶으면 <b>평균 결과</b>가 모여 어떤 프로파일이 잘 나왔는지 보입니다.</p>
+    <div class="row" style="margin-bottom:8px">
+      <label style="margin:0">정렬</label>
+      <select id="pf_sort" style="width:auto">
+        <option value="recent">최근 추가</option>
+        <option value="used">많이 쓴 순</option>
+        <option value="cup">컵 점수 순</option>
+        <option value="name">이름</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:13px;color:var(--ink)">
+        <input type="checkbox" id="pf_arch" style="width:auto"> 보관함 포함
+      </label>
+    </div>
     <table id="pf_table"></table>
   </div>
 </section>
@@ -953,7 +971,7 @@ async function ghUp(quiet){
   try{
     const cur=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
     const body={message:`로스트포인트 ${new Date().toISOString().slice(0,16)} — 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`,
-      content:b64enc(JSON.stringify({v:"3.8",at:Date.now(),...DB}))};
+      content:b64enc(JSON.stringify({v:"4.1",at:Date.now(),...DB}))};
     if(cur&&cur.sha) body.sha=cur.sha;
     await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`,
       {method:"PUT",body:JSON.stringify(body)});
@@ -990,7 +1008,7 @@ async function syncUp(quiet){
   try{
     const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
       method:"PUT",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({v:"3.8",at:Date.now(),...DB})});
+      body:JSON.stringify({v:"4.1",at:Date.now(),...DB})});
     const j=await r.json();
     if(!r.ok) throw new Error(j.error||"실패");
     if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
@@ -1100,12 +1118,19 @@ async function restore(){
 function profKey(pts){
   return pts.map(p=>Math.round(p[0])+":"+Math.round(p[1]*10)).join(",");
 }
+function profClose(a,b){                 // 사실상 같은 곡선인지
+  const sa=profStat(a), sb=profStat(b);
+  return Math.abs(sa.pre-sb.pre)<=0.6 && Math.abs(sa.drop-sb.drop)<=0.6
+      && Math.abs(sa.dur-sb.dur)<=3;
+}
 function addProfile(name,pts,src){
   if(!pts||pts.length<2) return null;
+  name=cleanLogName(name);
   const key=profKey(pts);
-  const hit=DB.profiles.find(x=>x.key===key);
-  if(hit){ if(!hit.name&&name) hit.name=name; return hit.id; }
-  const p=stamp({id:uid(),key,name:name||"이름 없음",src:src||"",pts:pts.map(q=>[q[0],q[1]])});
+  let hit=DB.profiles.find(x=>x.key===key) || DB.profiles.find(x=>profClose(x.pts,pts));
+  if(hit){ if((!hit.name||hit.name==="이름 없음")&&name) hit.name=name; return hit.id; }
+  const p=stamp({id:uid(),key,name:name||"이름 없음",src:src||"",archived:false,
+                 pts:pts.map(q=>[q[0],q[1]])});
   DB.profiles.push(p); renderProfiles(); persist();
   return p.id;
 }
@@ -1115,28 +1140,98 @@ function profStat(pts){
     if(x<=b[0]) return b[0]===a[0]?b[1]:a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0]); } return end[1]; };
   return {pre:pts[0][1],drop:end[1],dur,ror4:(end[1]-at(dur*0.75))/((dur*0.25)/60)};
 }
-function renderProfiles(){
-  $("pf_count").textContent=DB.profiles.length+"개";
+function profRoot(name){
+  // "Caravela > Pacamara v1.2" → 계보는 "Caravela > Pacamara"
+  return String(name||"").replace(/\s+v\d+\.\d+\s*$/i,"").trim()||"이름 없음";
+}
+function profVer(name){
+  const m=String(name||"").match(/\s+(v\d+\.\d+)\s*$/i);
+  return m?m[1]:"";
+}
+function cleanLogName(n){
+  return String(n||"").replace(/^Roast[ _]?data[: _]*/i,"")
+    .replace(/^Roasted[ _]?with[ _]*/i,"").replace(/[_]+/g," ").trim();
+}
+function profAgg(p){
+  const used=DB.roasts.filter(r=>r.profileId===p.id);
   const avg=a=>a.length?(a.reduce((x,y)=>x+y,0)/a.length):null;
-  $("pf_table").innerHTML=`<tr><th>이름</th><th>출처</th><th class="num">예열</th><th class="num">배출</th>
+  return { used:used.length,
+    loss:avg(used.filter(r=>r.loss).map(r=>r.loss)),
+    dtr:avg(used.filter(r=>r.dtr).map(r=>r.dtr)),
+    cup:avg(used.filter(r=>r.cup&&r.cup.sum).map(r=>r.cup.sum)) };
+}
+function renderProfiles(){
+  const showArch=$("pf_arch")&&$("pf_arch").checked;
+  const list=DB.profiles.filter(p=>showArch||!p.archived);
+  $("pf_count").textContent=`${list.length}개${DB.profiles.length!==list.length?` (보관 ${DB.profiles.length-list.length})`:""}`;
+
+  // 계보로 묶는다
+  const groups=new Map();
+  list.forEach((p,i)=>{
+    const root=profRoot(p.name);
+    if(!groups.has(root)) groups.set(root,[]);
+    groups.get(root).push(p);
+  });
+  const rows=[...groups.entries()].map(([root,ps])=>{
+    ps.sort((a,b)=>(b.mt||0)-(a.mt||0));
+    const agg=ps.map(profAgg);
+    return { root, ps, agg,
+      used:agg.reduce((a,x)=>a+x.used,0),
+      cup:Math.max(...agg.map(x=>x.cup||0)),
+      mt:Math.max(...ps.map(p=>p.mt||0)) };
+  });
+  const sort=($("pf_sort")&&$("pf_sort").value)||"recent";
+  rows.sort((a,b)=>
+    sort==="used"?b.used-a.used :
+    sort==="cup" ?b.cup-a.cup :
+    sort==="name"?a.root.localeCompare(b.root) : b.mt-a.mt);
+
+  $("pf_table").innerHTML=`<tr><th>계보 · 버전</th><th>출처</th><th class="num">예열</th><th class="num">배출</th>
     <th class="num">시간</th><th class="num">쓴 횟수</th><th class="num">평균 감량</th>
     <th class="num">평균 DTR</th><th class="num">평균 컵</th><th></th></tr>`+
-    (DB.profiles.length?DB.profiles.map((p,i)=>{
-      const st=profStat(p.pts);
-      const used=DB.roasts.filter(r=>r.profileId===p.id);
-      const L=avg(used.filter(r=>r.loss).map(r=>r.loss));
-      const D=avg(used.filter(r=>r.dtr).map(r=>r.dtr));
-      const C=avg(used.filter(r=>r.cup&&r.cup.sum).map(r=>r.cup.sum));
-      return `<tr><td>${p.name}</td><td><span class="pill">${p.src||"—"}</span></td>
+    (rows.length?rows.map(g=>{
+      const head=g.ps[0], st=profStat(head.pts), a=profAgg(head);
+      const i0=DB.profiles.indexOf(head);
+      const more=g.ps.length>1
+        ? ` <button class="ghost sm" onclick="toggleGroup(this)">버전 ${g.ps.length}개 ▾</button>` : "";
+      let out=`<tr><td><b>${g.root}</b> <span class="pill">${profVer(head.name)||"최신"}</span>${more}</td>
+        <td><span class="pill">${head.src||"—"}</span></td>
         <td class="num">${st.pre.toFixed(1)}</td><td class="num">${st.drop.toFixed(1)}</td>
-        <td class="num">${fmt(st.dur)}</td><td class="num">${used.length||""}</td>
-        <td class="num">${L!=null?L.toFixed(1)+"%":""}</td>
-        <td class="num">${D!=null?D.toFixed(0)+"%":""}</td>
-        <td class="num">${C!=null?C.toFixed(0)+"/72":""}</td>
-        <td><button class="ghost sm" onclick="delProfile(${i})">삭제</button></td></tr>`;
+        <td class="num">${fmt(st.dur)}</td><td class="num">${a.used||""}</td>
+        <td class="num">${a.loss!=null?a.loss.toFixed(1)+"%":""}</td>
+        <td class="num">${a.dtr!=null?a.dtr.toFixed(0)+"%":""}</td>
+        <td class="num">${a.cup!=null?a.cup.toFixed(0)+"/72":""}</td>
+        <td><button class="ghost sm" onclick="archProfile(${i0})">${head.archived?"복원":"보관"}</button>
+            <button class="ghost sm" onclick="delProfile(${i0})">삭제</button></td></tr>`;
+      g.ps.slice(1).forEach(p=>{
+        const s2=profStat(p.pts), a2=profAgg(p), ix=DB.profiles.indexOf(p);
+        out+=`<tr class="ver-row" hidden style="background:var(--paper-2)">
+          <td style="padding-left:22px">↳ ${profVer(p.name)||p.name}${p.archived?' <span class="pill">보관</span>':''}</td>
+          <td><span class="pill">${p.src||"—"}</span></td>
+          <td class="num">${s2.pre.toFixed(1)}</td><td class="num">${s2.drop.toFixed(1)}</td>
+          <td class="num">${fmt(s2.dur)}</td><td class="num">${a2.used||""}</td>
+          <td class="num">${a2.loss!=null?a2.loss.toFixed(1)+"%":""}</td>
+          <td class="num">${a2.dtr!=null?a2.dtr.toFixed(0)+"%":""}</td>
+          <td class="num">${a2.cup!=null?a2.cup.toFixed(0)+"/72":""}</td>
+          <td><button class="ghost sm" onclick="archProfile(${ix})">${p.archived?"복원":"보관"}</button>
+              <button class="ghost sm" onclick="delProfile(${ix})">삭제</button></td></tr>`;
+      });
+      return out;
     }).join(""):`<tr><td colspan="10" style="color:var(--muted)">아직 없습니다</td></tr>`);
 }
+window.toggleGroup=btn=>{
+  let tr=btn.closest("tr").nextElementSibling;
+  const open=btn.textContent.includes("▾");
+  while(tr&&tr.classList.contains("ver-row")){ tr.hidden=!open; tr=tr.nextElementSibling; }
+  btn.textContent=btn.textContent.replace(open?"▾":"▴",open?"▴":"▾");
+};
+window.archProfile=i=>{
+  const p=DB.profiles[i]; if(!p) return;
+  p.archived=!p.archived; p.mt=Date.now(); renderProfiles(); persist();
+};
 window.delProfile=i=>{ if(confirm("삭제할까요? 기록은 남습니다.")){ DB.profiles.splice(i,1); renderProfiles(); persist(); } };
+
+["pf_sort","pf_arch"].forEach(id=>{ const e=$(id); if(e) e.addEventListener("change",renderProfiles); });
 
 /* ---------- 장비 설정 ---------- */
 const SF=["s_machine","s_model","s_serial","s_batch"];
@@ -1379,15 +1474,22 @@ const CUP=[["frag","프래그런스"],["aroma","아로마"],["flavor","플레이
 $("cupsl").innerHTML=CUP.map(([k,n])=>
   `<div class="sl"><label for="c_${k}">${n}</label>
    <input type="range" id="c_${k}" min="0" max="9" step="1" value="0">
-   <output id="o_${k}">–</output></div>`).join("");
+   <input type="number" id="o_${k}" min="0" max="9" step="1" placeholder="–"
+     style="width:52px;flex:none;text-align:center;padding:4px"></div>`).join("");
 function cupSum(){
   let t=0,any=false;
   CUP.forEach(([k])=>{ const v=+$("c_"+k).value; if(v>0){ t+=v; any=true; } });
   $("c_sum").value=any?`${t} / 72`:"";
 }
-CUP.forEach(([k])=>$("c_"+k).addEventListener("input",e=>{
-  $("o_"+k).textContent=e.target.value==="0"?"–":e.target.value; cupSum();
-}));
+CUP.forEach(([k])=>{
+  $("c_"+k).addEventListener("input",e=>{
+    $("o_"+k).value=e.target.value==="0"?"":e.target.value; cupSum();
+  });
+  $("o_"+k).addEventListener("input",e=>{
+    let v=parseInt(e.target.value); if(isNaN(v)) v=0;
+    v=Math.max(0,Math.min(9,v)); $("c_"+k).value=v; cupSum();
+  });
+});
 
 /* ---------- 향미 분류표 (SCA 플레이버 휠 대분류) ---------- */
 const CATA=[
@@ -1575,7 +1677,7 @@ function showRec(){
   html+=`<p class="lead" style="margin:0">예열 <b>${t.pre.toFixed(0)}℃</b> ·
     배출 <b>${t.drop.toFixed(1)}℃</b> · 총 <b>${fmt(t.dur)}</b> · 후반 <b>${t.ror4.toFixed(1)}℃/분</b></p>
     <p class="note">${why.map(w=>"· "+w).join("<br>")}</p>`;
-  const POOL=BUILTIN.concat(DB.profiles.map(p=>({name:p.name,src:p.src||"내 기록",pts:p.pts}))).concat(RECLIB);
+  const POOL=BUILTIN.concat(DB.profiles.filter(p=>!p.archived).map(p=>({name:p.name,src:p.src||"내 기록",pts:p.pts}))).concat(RECLIB);
   if(POOL.length){
     const stat=pts=>{ const n=pts.length,end=pts[n-1],dur=end[0]||1;
       const at=x=>{ for(let i=1;i<n;i++){ const p=pts[i-1],q=pts[i];
@@ -1622,7 +1724,7 @@ window.editRoast=i=>{
   $("r_dur").value=r.dur??""; $("r_crack").value=r.crack??"";
   $("r_ror").value=r.ror??"";
   const c=r.cup||{};
-  CUP.forEach(([k])=>{ const v=c[k]||0; $("c_"+k).value=v; $("o_"+k).textContent=v?v:"–"; });
+  CUP.forEach(([k])=>{ const v=c[k]||0; $("c_"+k).value=v; $("o_"+k).value=v?v:""; });
   CATA.forEach(([k])=>$("f_"+k).checked=!!(c.flavors&&c.flavors.includes(k)));
   cupSum(); $("c_autohint").innerHTML=compareSeller();
   $("c_total").value=c.total??""; $("c_note").value=c.note||""; $("c_date").value=c.date||"";
@@ -1669,7 +1771,7 @@ $("r_save").onclick=()=>{
 function clearRoast(){
   ["r_prof","r_in","r_out","r_loss","r_pre","r_drop","r_dur","r_crack","r_dtr","r_ror",
    "c_total","c_note","r_machine"].forEach(id=>$(id).value="");
-  CUP.forEach(([k])=>{$("c_"+k).value=0;$("o_"+k).textContent="–";});
+  CUP.forEach(([k])=>{$("c_"+k).value=0;$("o_"+k).value="";});
   CATA.forEach(([k])=>$("f_"+k).checked=false);
   $("c_sum").value=""; $("c_rest").value=""; $("c_autohint").textContent="";
   $("r_bean").value=""; $("recbox").hidden=true; pendingLog=null; pendingProfileId=null; $("logmsg").textContent="";
@@ -1698,7 +1800,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"3.8",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"4.1",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
@@ -1793,12 +1895,33 @@ async function pickupShared(){
     const prof=decodeIkawaLink(sharedText)||decodeIkawaLink((files[0]||{}).text||"");
     if(prof){
       $("r_prof").value=prof.name;
+      $("r_pre").value=prof.pre.toFixed(1);
+      $("r_drop").value=prof.drop.toFixed(1);
+      $("r_dur").value=Math.round(prof.dur);
+      if(!$("r_date").value) $("r_date").value=new Date().toISOString().slice(0,10);
+      prefillFromSettings(); recalc();
       pendingProfileId=addProfile(prof.name,prof.pts,"링크");
       const enc=encodeURIComponent(prof.link);
+      box.hidden=true;                                  // 로스팅 탭 진단상자는 접는다
+      $("pf_msgbox").hidden=false;
+      $("pf_msg").innerHTML=`<p class="tagline">방금 받은 프로파일</p>
+        <p class="lead" style="color:var(--ok);margin:0"><b>${prof.name}</b><br>
+        예열 ${prof.pre.toFixed(1)}℃ · 배출 ${prof.drop.toFixed(1)}℃ · 총 ${fmt(prof.dur)} · 제어점 ${prof.pts.length}개</p>
+        <p class="note">아래 목록에 담았습니다. 로스팅 탭의 프로파일 이름과 계획값도 미리 채워뒀습니다 —
+        볶은 뒤 <b>로스트 로그</b>를 공유하면 실측값으로 덮어씁니다.</p>
+        <p style="margin-top:8px"><a href="studio.html#link=${enc}"
+           style="color:var(--setpoint);font-size:14px">스튜디오에서 열어 고치기 →</a></p>`;
+      renderProfiles();
+      document.querySelector('nav button[data-p="profiles"]').click();
+      history.replaceState(null,"",location.pathname);
+      return;
+      /* 아래는 쓰이지 않음 */
       html+=`<p class="lead" style="color:var(--ok);margin-top:8px">
         <b>로스팅 전 프로파일</b>을 받았습니다 — ${prof.name}<br>
         예열 ${prof.pre.toFixed(1)}℃ · 배출 ${prof.drop.toFixed(1)}℃ · 총 ${fmt(prof.dur)} · 제어점 ${prof.pts.length}개</p>
-        <p class="note">여기에는 <b>계획 곡선만</b> 들어 있습니다. 볶은 결과(배출·크랙·감량)는 로스팅이 끝난 뒤
+        <p class="note"><b>프로파일 탭에 저장했습니다.</b> 예열·배출·총시간은 <b>계획값</b>으로 채워뒀습니다 —
+        볶은 뒤 로그를 공유하면 실측값으로 덮어씁니다.<br>
+        1차 크랙·DTR·후반 승온은 실제로 볶아야 나오는 값이라 비어 있습니다. 볶은 결과(배출·크랙·감량)는 로스팅이 끝난 뒤
         <b>로스트 로그</b>를 공유해야 들어옵니다. 프로파일 이름은 미리 채워뒀습니다.</p>
         <p style="margin-top:8px"><a href="studio.html#link=${enc}"
            style="color:var(--setpoint);font-size:14px">스튜디오에서 열어 고치기 →</a></p>`;
