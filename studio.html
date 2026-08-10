@@ -77,10 +77,11 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
 </head>
 <body>
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v1.7</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v1.8</span>
   <button class="ghost" id="undo" title="Ctrl+Z">되돌리기</button>
   <button class="ghost" id="redo" title="Ctrl+Shift+Z">다시</button>
   <a href="./" style="font-size:12.5px;color:var(--setpoint);margin-left:auto">← 기록장</a>
+  <span id="fromplan" class="pill" hidden style="margin-left:10px"></span>
   <span class="eyebrow" id="ptcount" style="margin-left:14px"></span>
 </header>
 
@@ -3303,7 +3304,7 @@ $("cplink").onclick=async()=>{
 
 /* ---------- 저장 / 불러오기 ---------- */
 $("save").onclick=()=>{
-  const d={v:"1.7",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
+  const d={v:"1.8",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
            coolT:+$("coolT").value,coolV:+$("coolV").value};
   const b=new Blob([JSON.stringify(d,null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
@@ -3335,6 +3336,45 @@ $("loadpreset").onclick=()=>{
 
 setFans(PRESETS["파카마라 워시드 v1.0 — 대립·고밀도"].fans);
 renderRefs(); libRender();
+
+/* 로스팅 계획에서 넘어온 프로파일을 받는다 (같은 주소라 저장 영역을 공유) */
+(function(){
+  if(!/from=plan/.test(location.hash)) return;
+  const q=indexedDB.open("roastpoint",1);
+  q.onsuccess=()=>{
+    try{
+      const db=q.result;
+      const t=db.transaction("kv","readwrite");
+      const st=t.objectStore("kv");
+      const r=st.get("handoff");
+      r.onsuccess=()=>{
+        const h=r.result;
+        if(h&&h.pts&&h.pts.length>1){
+          pushHist();
+          S.temps=h.pts.map(p=>[p[0],p[1]]);
+          const nm=String(h.name||"프로파일");
+          const vm=nm.match(/\s(v\d+\.\d+)$/i);
+          $("pbase").value=vm?nm.slice(0,-vm[0].length).trim():nm;
+          $("pname").value="수정본"; $("pver").value="v1.0"; syncName();
+          libAdd(nm,S.temps); libRender(); draw();
+          const g=h.target;
+          $("fromplan").hidden=false;
+          $("fromplan").className="pill ok";
+          $("fromplan").innerHTML=`계획에서 받음${h.bean?" · "+h.bean:""}`;
+          if(g){
+            $("libmsg").innerHTML=`<b>계획의 목표</b> — 배출 ${(+g.drop).toFixed(1)}℃ ·
+              총 ${fmt(g.dur)} · 초반 ${(+g.rEarly).toFixed(1)}℃/분 ·
+              발달 ${(+g.rDev).toFixed(1)}℃/분 · 예열 ${(+g.pre).toFixed(0)}℃<br>
+              이 값에 맞춰 곡선을 손본 뒤 링크·QR을 만들어 IKAWA 앱으로 보내세요.`;
+          }
+        }
+        st.delete("handoff");
+      };
+    }catch(e){}
+    history.replaceState(null,"",location.pathname);
+  };
+})();
+
 /* 기록장에서 넘어온 프로파일 링크 자동 적재 */
 (function(){
   const m=location.hash.match(/link=([^&]+)/);
