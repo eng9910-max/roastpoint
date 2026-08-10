@@ -88,7 +88,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v6.4</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v6.5</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="plan">로스팅 계획</button>
@@ -270,8 +270,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     </div>
 
     <div class="core" style="margin-top:11px">
-      <p class="tagline">저울로 잰 값 — 이것만 손으로 넣습니다</p>
+      <p class="tagline">이 로스팅의 생두와 중량</p>
       <div class="grid g5">
+        <div class="wide"><label>생두 * — 계획에서 골랐다면 자동으로 들어옵니다</label>
+          <select id="r_bean2"></select></div>
         <div><label>투입량 g</label><input type="number" step="0.1" id="r_in"></div>
         <div><label>배출량 g</label><input type="number" step="0.1" id="r_out"></div>
         <div><label>감량률 %</label><input type="text" id="r_loss" readonly></div>
@@ -976,9 +978,12 @@ function renderBeans(){
       <td><button class="ghost sm" onclick="delBean(${i})">삭제</button></td></tr>`;
     }).join("")
       :`<tr><td colspan="8" style="color:var(--muted)">아직 없습니다</td></tr>`);
-  const sel=$("r_bean");
-  sel.innerHTML=`<option value="">— 생두 선택 —</option>`+
+  const opts=`<option value="">— 생두 선택 —</option>`+
     DB.beans.map(b=>`<option value="${b.id}">${b.name}</option>`).join("");
+  ["r_bean","r_bean2"].forEach(id=>{
+    const e=$(id); if(!e) return;
+    const keep=e.value; e.innerHTML=opts; if(keep) e.value=keep;
+  });
 }
 window.delBean=i=>{ if(confirm("삭제할까요?")){ DB.beans.splice(i,1); renderBeans(); persist(); } };
 
@@ -1109,7 +1114,7 @@ async function ghUp(quiet){
   try{
     const cur=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
     const body={message:`로스트포인트 ${new Date().toISOString().slice(0,16)} — 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`,
-      content:b64enc(JSON.stringify({v:"6.4",at:Date.now(),...dbForExport()}))};
+      content:b64enc(JSON.stringify({v:"6.5",at:Date.now(),...dbForExport()}))};
     if(cur&&cur.sha) body.sha=cur.sha;
     await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`,
       {method:"PUT",body:JSON.stringify(body)});
@@ -1161,7 +1166,7 @@ async function syncUp(quiet){
   try{
     const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
       method:"PUT",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({v:"6.4",at:Date.now(),...dbForExport()})});
+      body:JSON.stringify({v:"6.5",at:Date.now(),...dbForExport()})});
     const j=await r.json();
     if(!r.ok) throw new Error(j.error||"실패");
     if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
@@ -2053,7 +2058,13 @@ function showRec(){
   $("rec_out").innerHTML=html;
 }
 window.fixLevel=lv=>{ $("r_level").value=lv; showRec(); };
-$("r_bean").addEventListener("change",showRec);
+function syncBean(from){
+  const v=$(from).value;
+  ["r_bean","r_bean2"].forEach(id=>{ const e=$(id); if(e&&e.value!==v) e.value=v; });
+  showRec();
+}
+$("r_bean").addEventListener("change",()=>syncBean("r_bean"));
+if($("r_bean2")) $("r_bean2").addEventListener("change",()=>syncBean("r_bean2"));
 ["r_use","r_level"].forEach(id=>{ const e=$(id); if(e) e.addEventListener("change",showRec); });
 
 
@@ -2180,7 +2191,7 @@ async function applyContext(){
   if(Date.now()-(ctx.at||0)>1000*60*60*24*3) return;      // 사흘 지난 건 무시
   const b=DB.beans.find(x=>x.id===ctx.beanId);
   if(!b) return;
-  if(!$("r_bean").value){ $("r_bean").value=ctx.beanId; showRec(); }
+  if(!$("r_bean").value){ $("r_bean").value=ctx.beanId; syncBean("r_bean"); }
   if(ctx.level&&$("r_level")) $("r_level").value=ctx.level;
   if(ctx.use&&$("r_use")) $("r_use").value=ctx.use;
   if(ctx.name&&!$("r_prof").value) $("r_prof").value=ctx.name;
@@ -2354,7 +2365,7 @@ $("cmp_bean").addEventListener("change",cmpRender);
 window.editRoast=i=>{
   const r=DB.roasts[i]; if(!r) return;
   editingId=r.id; pendingProfileId=r.profileId||null;
-  $("r_bean").value=r.beanId||""; showRec(); $("r_machine").value=r.machine||"";
+  $("r_bean").value=r.beanId||""; syncBean("r_bean"); $("r_machine").value=r.machine||"";
   $("r_prof").value=r.prof||""; $("r_date").value=r.date||"";
   $("r_time").value=r.time||""; $("r_amb").value=r.amb??""; $("r_hum").value=r.hum??"";
   $("r_in").value=r.inG??""; $("r_out").value=r.outG??"";
@@ -2378,8 +2389,11 @@ $("r_clear2").onclick=()=>$("r_clear").click();
 function rmsg(html){ ["r_msg","r_msg2"].forEach(id=>{ const e=$(id); if(e) e.innerHTML=html; }); }
 $("r_save").onclick=()=>{
   if(!$("r_bean").value){
-    rmsg(`<span class="pill warn">생두 미선택</span> 로스팅 계획 탭에서 생두를 먼저 고르세요.
-      <button class="ghost sm" data-goplan="1">계획 탭으로</button>`);
+    rmsg(`<span class="pill warn">생두 미선택</span> 바로 위 <b>생두</b> 칸에서 고르시면 됩니다.`);
+    const e=$("r_bean2")||$("r_bean");
+    e.scrollIntoView({behavior:"smooth",block:"center"});
+    e.style.outline="2px solid var(--actual)";
+    setTimeout(()=>{ e.style.outline=""; },1800);
     return;
   }
   const cup={};
@@ -2423,7 +2437,8 @@ function clearRoast(){
   CUP.forEach(([k])=>{$("c_"+k).value=0;$("o_"+k).value="";});
   CATA.forEach(([k])=>$("f_"+k).checked=false);
   $("c_sum").value=""; $("c_rest").value=""; $("c_autohint").textContent="";
-  $("r_bean").value=""; $("recbox").hidden=true; pendingLog=null; pendingProfileId=null;
+  $("r_bean").value=""; if($("r_bean2")) $("r_bean2").value="";
+  $("recbox").hidden=true; pendingLog=null; pendingProfileId=null;
   crackEst=null; if($("crackhint")) $("crackhint").innerHTML="";
   if($("ctxmsg")) $("ctxmsg").hidden=true; $("logmsg").textContent="";
   editingId=null; $("r_save").textContent="로스팅 저장";
@@ -2451,7 +2466,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"6.4",saved:new Date().toISOString(),...dbForExport()},null,1)],
+  const b=new Blob([JSON.stringify({v:"6.5",saved:new Date().toISOString(),...dbForExport()},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
