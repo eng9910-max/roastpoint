@@ -13,6 +13,7 @@
   --mark:#C98A12; --ok:#3F7A5E;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--paper);color:var(--ink);
   font-family:system-ui,-apple-system,"Segoe UI","Noto Sans KR",sans-serif;font-size:16px;line-height:1.62}
 .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
@@ -79,7 +80,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v4.1</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v4.2</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -377,7 +378,9 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     </div>
 
     <div class="grid g5" id="y_kv">
-      <div class="wide"><label>동기화 키</label>
+      <div class="wide"><label>동기화 키 — Cloudflare 방식에서만 씁니다</label>
+        <p class="note" style="margin:0 0 5px">GitHub 방식을 고르셨다면 이 칸은 비워두세요.
+        키 하나로 묶는 간편한 방식이지만, Cloudflare에 저장소를 따로 연결해야 동작합니다.</p>
         <div class="row"><input type="text" id="y_key" style="flex:1" placeholder="비워두면 동기화하지 않습니다">
         <button class="ghost" id="y_gen">새로 만들기</button></div></div>
     </div>
@@ -962,8 +965,9 @@ async function ghDown(quiet){
     DB.profiles=mergeList(DB.profiles,d.profiles);
     DB.settings=Object.assign({},d.settings||{},DB.settings);
     applySettings(); renderBeans(); renderRoasts(); renderProfiles(); stats(); persist();
-    $("y_msg").textContent=`합쳤습니다 — 생두 ${nb}→${DB.beans.length} · 로스팅 ${nr}→${DB.roasts.length}`;
-  }catch(e){ $("y_msg").textContent="내려받기 실패: "+e.message; }
+    $("y_msg").innerHTML=`<span class="pill ok">완료</span> 합쳤습니다 —
+      생두 ${nb}→${DB.beans.length} · 로스팅 ${nr}→${DB.roasts.length} · 프로파일 ${DB.profiles.length}`;
+  }catch(e){ $("y_msg").innerHTML=`<span class="pill warn">실패</span> ${e.message}`; }
 }
 async function ghUp(quiet){
   const c=ghCfg();
@@ -971,12 +975,14 @@ async function ghUp(quiet){
   try{
     const cur=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
     const body={message:`로스트포인트 ${new Date().toISOString().slice(0,16)} — 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`,
-      content:b64enc(JSON.stringify({v:"4.1",at:Date.now(),...DB}))};
+      content:b64enc(JSON.stringify({v:"4.2",at:Date.now(),...DB}))};
     if(cur&&cur.sha) body.sha=cur.sha;
     await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`,
       {method:"PUT",body:JSON.stringify(body)});
-    if(!quiet) $("y_msg").textContent="올렸습니다. 저장소에 커밋이 남았습니다.";
-  }catch(e){ $("y_msg").textContent="올리기 실패: "+e.message; }
+    if(!quiet) $("y_msg").innerHTML=`<span class="pill ok">완료</span> 올렸습니다 —
+      생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length} · 프로파일 ${DB.profiles.length}.
+      저장소에 커밋이 남았습니다.`;
+  }catch(e){ $("y_msg").innerHTML=`<span class="pill warn">실패</span> ${e.message}`; }
 }
 function syncMode(){ return $("y_mode").value; }
 $("y_mode").addEventListener("change",()=>{
@@ -1008,7 +1014,7 @@ async function syncUp(quiet){
   try{
     const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
       method:"PUT",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({v:"4.1",at:Date.now(),...DB})});
+      body:JSON.stringify({v:"4.2",at:Date.now(),...DB})});
     const j=await r.json();
     if(!r.ok) throw new Error(j.error||"실패");
     if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
@@ -1038,8 +1044,16 @@ $("y_gen").onclick=()=>{
 };
 $("y_key").addEventListener("input",()=>{ DB.settings.syncKey=syncKey(); persist(); });
 $("y_auto").addEventListener("change",()=>{ DB.settings.syncAuto=$("y_auto").checked; persist(); });
-$("y_up").onclick=()=>syncMode()==="gh"?ghUp(false):syncUp(false);
-$("y_down").onclick=()=>syncMode()==="gh"?ghDown(false):syncDown(false);
+async function runSync(btn,label,fn){
+  const b=$(btn), old=b.textContent;
+  b.disabled=true; b.textContent=label+" 중…";
+  $("y_msg").innerHTML=`<span class="pill">${label} 중…</span> 잠시만요.`;
+  try{ await fn(false); }finally{ b.disabled=false; b.textContent=old; }
+}
+$("y_up").onclick=()=>runSync("y_up","올리기",
+  syncMode()==="gh"?ghUp:syncUp);
+$("y_down").onclick=()=>runSync("y_down","내려받기",
+  syncMode()==="gh"?ghDown:syncDown);
 
 /* ---------- 자동 저장 (IndexedDB) ----------
    파일을 새로 배포해도 데이터는 남는다. 저장 영역이 출처(origin) 단위이기 때문. */
@@ -1800,7 +1814,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"4.1",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"4.2",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
