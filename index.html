@@ -80,7 +80,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v4.7</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v4.9</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -101,7 +101,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     글자는 바로 읽어 아래 항목을 채우고, 그림이면 글자를 뽑을 방법을 안내합니다.
     라벨이 붙어 있지 않은 문장도 값만 보고 알아냅니다.</p>
 
-    <textarea id="paste" placeholder="여기에 붙여넣으세요 — 글자는 즉시 읽고, 이미지는 붙여넣거나 끌어다 놓으세요" style="min-height:96px"></textarea>
+    <textarea id="paste" placeholder="여기에 붙여넣으세요 — 글자는 즉시 읽고, 이미지는 붙여넣거나 끌어다 놓으세요" style="min-height:200px"></textarea>
     <div class="row" style="margin-top:6px">
       <button id="clip">클립보드에서 가져오기</button>
       <button id="lensbtn" hidden>이미지를 다른 앱으로 보내기</button>
@@ -116,7 +116,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
     <div style="margin-top:16px">
       <label>라벨 사진 (선택 — 기록으로만 보관됩니다)</label>
-      <div id="drop" tabindex="0" role="button">
+      <div id="drop" tabindex="0" role="button" style="padding:34px 16px">
         <b>사진 놓기 · 클릭해서 고르기 · 촬영</b>
         <span>글자 추출은 위 칸으로, 사진은 자료 보관용입니다</span>
       </div>
@@ -564,35 +564,62 @@ function scanValues(txt){
 }
 /* ---------- 생두 파서 ---------- */
 const FIELDS=[
-  ["b_origin",["원산지"]],
-  ["b_farm",["농장명/농장주명","농장/농장주명","농장명","농장주명","농장"]],
-  ["b_region",["생산지역","재배지역","지역"]],
-  ["b_alt",["재배고도","고도"]],
-  ["b_proc",["가공방식","가공 방식","프로세스","가공"]],
-  ["b_var",["품종"]],
-  ["b_harvest",["수확시기","수확 시기","수확기","크롭"]],
-  ["b_notes",["커핑노트","커핑 노트","컵노트","컵 노트","플레이버"]],
-  ["b_grade",["등급","그레이드"]],
-  ["b_screen",["스크린","screen"]]
+  ["b_origin",["원산지","생산국","국가","origin","country"]],
+  ["b_farm",["농장명/농장주명","농장/농장주명","농장주명","농장명","생산자","농장","farm","producer","estate"]],
+  ["b_region",["생산지역","재배지역","지역","region","area"]],
+  ["b_alt",["재배고도","고도","해발","altitude","elevation"]],
+  ["b_proc",["가공방식","가공 방식","프로세싱","프로세스","가공","process","processing"]],
+  ["b_var",["품종","변종","variety","varietal","cultivar"]],
+  ["b_harvest",["수확시기","수확 시기","수확기","수확년도","크롭","harvest","crop"]],
+  ["b_notes",["커핑노트","커핑 노트","컵노트","컵 노트","테이스팅노트","향미","플레이버","맛","cupping note","cupping notes","tasting note","tasting notes","flavor note","flavour note","flavor","cup profile"],true],
+  ["b_grade",["등급","그레이드","grade"]],
+  ["b_screen",["스크린","스크린사이즈","screen","screen size"]],
+  ["b_moist",["수분","수분함량","moisture"]],
+  ["b_dens",["밀도","density"]]
 ];
 const SKIP=/^(배송비|판매가|정가|상품재고|최소 구매수량|구매혜택|택배|장바구니|찜하기|바로 구매|로그인|회원가입)$/;
 function parseText(txt){
   const lines=txt.split(/\r?\n/).map(l=>l.replace(/\s+/g," ").trim()).filter(Boolean);
+  const bare=lines.map(l=>l.toLowerCase().replace(/[\s:·・.\-()]/g,""));
+  const allLabels=FIELDS.flatMap(f=>f[1].map(x=>x.toLowerCase().replace(/[\s:·・.\-()]/g,"")));
+  const isLabelLine=i=>allLabels.some(l=>bare[i]===l||bare[i].indexOf(l)===0)
+    || /^(로스팅추천포인트|로스팅포인트|최소구매수량|포장단위|판매가|배송비|상품재고)/.test(bare[i]);
   let hit=0;
-  for(const [id,labels] of FIELDS){
-    if($(id).value) { continue; }
+  for(const [id,labels,multi] of FIELDS){
+    if($(id).value) continue;
     let got=null;
     outer:
     for(let i=0;i<lines.length;i++){
-      for(const lab of labels){
-        if(lines[i].toLowerCase().indexOf(lab.toLowerCase())!==0) continue;
-        let rest=lines[i].slice(lab.length).replace(/^[\s:\-·]+/,"").trim();
-        if(!rest){
-          let j=i+1;
-          while(j<lines.length && (!lines[j] || SKIP.test(lines[j]))) j++;
-          rest=(lines[j]||"").trim();
+      for(const lab of labels.slice().sort((x,y)=>y.length-x.length)){
+        const key=lab.toLowerCase().replace(/[\s:·・.\-()]/g,"");
+        if(bare[i].indexOf(key)!==0) continue;              // 공백 있는 라벨도 잡는다
+        // 라벨 글자 수만큼 앞을 걷어내고 남은 것이 값 (공백·구두점은 건너뛴다)
+        const skip=" :·・.-()\t";
+        let need=key.length, k=0;
+        while(k<lines[i].length&&need>0){
+          const ch=lines[i][k];
+          if(skip.includes(ch)){ k++; continue; }
+          need--; k++;
         }
-        if(rest && rest.length<=200 && !SKIP.test(rest)){ got=rest; break outer; }
+        let rest=lines[i].slice(k).replace(/^[\s:·・.\-()]+/,"").trim();
+        if(!rest){
+          // 다음 줄부터 값 — 여러 줄이면 이어붙인다
+          const acc=[];
+          for(let j=i+1;j<lines.length&&acc.length<(multi?6:1);j++){
+            if(!lines[j]||SKIP.test(lines[j])||isLabelLine(j)) break;
+            acc.push(lines[j]);
+          }
+          rest=acc.join(", ");
+        }else if(multi){
+          const acc=[rest];
+          for(let j=i+1;j<lines.length&&acc.length<6;j++){
+            if(!lines[j]||SKIP.test(lines[j])||isLabelLine(j)) break;
+            if(lines[j].length>24) break;                   // 문장은 값이 아니다
+            acc.push(lines[j]);
+          }
+          rest=acc.join(", ");
+        }
+        if(rest && rest.length<=300 && !SKIP.test(rest)){ got=rest; break outer; }
       }
     }
     if(got){ $(id).value=got; hit++; }
@@ -1005,7 +1032,7 @@ async function ghUp(quiet){
   try{
     const cur=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
     const body={message:`로스트포인트 ${new Date().toISOString().slice(0,16)} — 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`,
-      content:b64enc(JSON.stringify({v:"4.7",at:Date.now(),...dbForExport()}))};
+      content:b64enc(JSON.stringify({v:"4.9",at:Date.now(),...dbForExport()}))};
     if(cur&&cur.sha) body.sha=cur.sha;
     await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`,
       {method:"PUT",body:JSON.stringify(body)});
@@ -1057,7 +1084,7 @@ async function syncUp(quiet){
   try{
     const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
       method:"PUT",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({v:"4.7",at:Date.now(),...dbForExport()})});
+      body:JSON.stringify({v:"4.9",at:Date.now(),...dbForExport()})});
     const j=await r.json();
     if(!r.ok) throw new Error(j.error||"실패");
     if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
@@ -1753,6 +1780,9 @@ function targetFor(b,use,level){
   const canon=CANON.level[level]||CANON.level.mlight;
   const t={ drop:(canon.dropHint[0]+canon.dropHint[1])/2,
             dur:400, rEarly:14.5, rDev:2.8, pre:143 };
+  const FIT={ filter:{best:["light","mlight"],ok:["medium"]},
+              espresso:{best:["medium","mdark"],ok:["mlight"]},
+              latte:{best:["medium","mdark"],ok:["mlight"]} };
   const canonWhy=[
     `목표 배전도 ${canon.name} — 감량률 ${canon.loss[0]}~${canon.loss[1]}%, DTR ${canon.dtr[0]}~${canon.dtr[1]}% (교과서 밴드)`,
     `구간 비율 건조 ${CANON.phase.dry}% · 메일라아드 ${CANON.phase.maillard}% · 발달 ${CANON.phase.dev}% (교과서)`,
@@ -1798,7 +1828,16 @@ function targetFor(b,use,level){
 
   // 배전도 밴드를 벗어나지 않게 잡아둔다 — 1층이 상한이다
   t.drop=Math.min(canon.dropHint[1]+1.5,Math.max(canon.dropHint[0]-1.5,t.drop));
-  return {t,canon,canonWhy,why,
+  const fit=FIT[use]||FIT.filter;
+  let advice=null;
+  if(!fit.best.includes(level)&&!fit.ok.includes(level)){
+    advice = use==="latte"  ? "라떼에 라이트 로스트는 우유에 묻히기 쉽습니다 — 미디엄 이상을 권합니다."
+           : use==="espresso"? "에스프레소에 라이트 로스트는 산미가 날카롭게 나옵니다 — 미디엄 이상을 권합니다."
+           : "필터에 다크 로스트는 쓴맛이 앞섭니다 — 미디엄 이하를 권합니다.";
+  }else if(!fit.best.includes(level)){
+    advice = "쓸 수는 있지만 흔한 조합은 아닙니다.";
+  }
+  return {t,canon,canonWhy,why,advice,fitBest:fit.best,
     phase:{ dry:Math.round(t.dur*CANON.phase.dry/100),
             mai:Math.round(t.dur*CANON.phase.maillard/100),
             dev:Math.round(t.dur*CANON.phase.dev/100) }};
@@ -1851,12 +1890,18 @@ function showRec(){
   $("recbox").hidden=false;
   const use=$("r_use")?$("r_use").value:"filter";
   const level=$("r_level")?$("r_level").value:"mlight";
-  const {t,canon,canonWhy,why,phase}=targetFor(b,use,level);
+  const {t,canon,canonWhy,why,phase,advice,fitBest}=targetFor(b,use,level);
   const H=historyFor(b.id);
 
   let html=`<p class="tagline">${H.length?"두 번째부터 — 지난 결과로 조정":"첫 배치 — 여기서 시작"}</p>`;
   html+=historyBlock(b.id);
+  const LV={light:"라이트",mlight:"미디엄 라이트",medium:"미디엄",mdark:"미디엄 다크"};
+  const USE={filter:"필터·드립",espresso:"에스프레소",latte:"라떼"};
   html+=`<p class="tagline" style="margin-top:12px">1층 · 교과서 기준 <span class="pill">고정</span></p>`;
+  html+=`<p class="note" style="margin:0 0 6px">${USE[use]} × ${LV[level]}
+    ${advice?`<br><span style="color:var(--actual)">${advice}</span>
+      <button class="ghost sm" onclick="fixLevel('${fitBest[0]}')">${LV[fitBest[0]]}로 맞추기</button>`
+    :`<span class="pill ok">잘 맞는 조합</span>`}</p>`;
   html+=`<p class="lead" style="margin:0">감량률 <b>${canon.loss[0]}~${canon.loss[1]}%</b> ·
     DTR <b>${canon.dtr[0]}~${canon.dtr[1]}%</b> ·
     구간 <b>건조 ${fmt(phase.dry)} / 메일라아드 ${fmt(phase.mai)} / 발달 ${fmt(phase.dev)}</b></p>
@@ -1906,6 +1951,7 @@ function showRec(){
     예열은 14℃까지 봅니다. 시작 온도보다 <b>구간별로 열을 얼마나 넣는가</b>가 결과를 가르기 때문입니다.</p>`;
   $("rec_out").innerHTML=html;
 }
+window.fixLevel=lv=>{ $("r_level").value=lv; showRec(); };
 $("r_bean").addEventListener("change",showRec);
 ["r_use","r_level"].forEach(id=>{ const e=$(id); if(e) e.addEventListener("change",showRec); });
 $("rec_lib").onclick=()=>$("rec_file").click();
@@ -2003,7 +2049,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"4.7",saved:new Date().toISOString(),...dbForExport()},null,1)],
+  const b=new Blob([JSON.stringify({v:"4.9",saved:new Date().toISOString(),...dbForExport()},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
