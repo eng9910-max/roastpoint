@@ -77,7 +77,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
 </head>
 <body>
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v2.2</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v2.3</span>
   <button class="ghost" id="undo" title="Ctrl+Z">되돌리기</button>
   <button class="ghost" id="redo" title="Ctrl+Shift+Z">다시</button>
   <a href="./" style="font-size:12.5px;color:var(--setpoint);margin-left:auto">← 기록장</a>
@@ -94,6 +94,8 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
       점을 <b>끌어서</b> 옮기고, 빈 곳을 <b>클릭</b>하면 점이 생기고, 점을 <b>더블클릭</b>하면 지워집니다.
       첫 점은 예열 온도라 시간이 0:00에 고정됩니다. 회색 선은 불러온 로스트 로그의 실측 곡선입니다.
     </p>
+
+    <div id="fixreport" class="card" hidden style="margin-bottom:14px;padding:12px 14px"></div>
 
     <div class="stats" id="stats"></div>
     <div id="logread" class="hint" style="margin-top:12px"></div>
@@ -169,7 +171,10 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
           <div class="row" style="margin-top:6px"><button class="ghost" id="tgtapply">이 목표로 설정</button></div>
         </div>
         <div id="autofixrow" style="margin-top:7px" hidden>
-          <div class="row"><button id="autofix">목표에 맞춰 자동 보정</button></div>
+          <div class="row">
+            <button class="ghost" id="autofix">다시 보정</button>
+            <button class="ghost" id="autoraw">보정 전으로</button>
+          </div>
           <div id="autofixmsg" class="hint" style="margin-top:6px"></div>
         </div>
       </div>
@@ -3242,7 +3247,7 @@ $("cplink").onclick=async()=>{
 
 /* ---------- 저장 / 불러오기 ---------- */
 $("save").onclick=()=>{
-  const d={v:"2.2",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
+  const d={v:"2.3",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
            coolT:+$("coolT").value,coolV:+$("coolV").value};
   const b=new Blob([JSON.stringify(d,null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
@@ -3320,14 +3325,18 @@ function curveStat(pts){
            rEarly:(at(d*0.4)-pts[0][1])/((d*0.4)/60),
            rDev:(e[1]-at(d*0.75))/((d*0.25)/60) };
 }
-$("autofix").onclick=()=>{
+let rawCurve=null;                       // 보정 전 곡선 (되돌리기용)
+function runAutoFix(quiet){
   if(!planTarget) return;
-  const before=S.temps.map(p=>[p[0],p[1]]);
+  const before=(rawCurve||S.temps).map(p=>[p[0],p[1]]);
+  rawCurve=before.map(p=>[p[0],p[1]]);
   const b4=curveStat(before);
-  pushHist();
+  if(!quiet) pushHist();
+  S.temps=before.map(p=>[p[0],p[1]]);
   S.temps=autoFit(S.temps,planTarget);
   const af=curveStat(S.temps);
-  addRef("보정 전 — "+($("pbase").value||"원본"), before);   // 그래프에 남긴다
+  const rn="보정 전 — "+($("pbase").value||"원본");
+  if(!(S.refs||[]).some(r=>r.name===rn)) addRef(rn, before);   // 그래프에 남긴다
   $("pver").value="v1.1"; syncName(); draw();
 
   const g=planTarget;
@@ -3339,8 +3348,17 @@ $("autofix").onclick=()=>{
       <td class="num" style="color:${hit?"var(--ok)":"var(--actual)"};font-weight:600">${c.toFixed(dec)}${unit}</td>
       <td class="num" style="color:var(--ink-2)">${(c-a>=0?"+":"")}${(c-a).toFixed(dec)}</td></tr>`;
   };
-  $("autofixmsg").innerHTML=
-    `<table style="margin-top:4px"><tr><th>항목</th><th class="num">보정 전</th>
+  const seg=(pts)=>{ const n=pts.length,e=pts[n-1],d=e[0]||1;
+    const at=x=>{ for(let i=1;i<n;i++){ const q=pts[i-1],r2=pts[i];
+      if(x<=r2[0]) return r2[0]===q[0]?r2[1]:q[1]+(r2[1]-q[1])*(x-q[0])/(r2[0]-q[0]); } return e[1]; };
+    return [0,.25,.5,.75,1].slice(1).map((z,i)=>{
+      const a0=[0,.25,.5,.75][i]*d, a1=z*d;
+      return (at(a1)-at(a0))/((a1-a0)/60); }); };
+  const sb=seg(before), sa=seg(S.temps);
+  $("fixreport").hidden=false;
+  $("fixreport").innerHTML=
+    `<p class="tagline">목표에 맞춰 보정했습니다 — 무엇이 어떻게 바뀌었는지</p>
+     <table><tr><th>항목</th><th class="num">보정 전</th>
       <th class="num">목표</th><th class="num">보정 후</th><th class="num">바뀐 폭</th></tr>`+
     row("예열 ℃",b4.pre,g.pre,af.pre,"",1)+
     row("배출 ℃",b4.drop,g.drop,af.drop,"",1)+
@@ -3348,9 +3366,24 @@ $("autofix").onclick=()=>{
     row("초반 열량",b4.rEarly,g.rEarly,af.rEarly,"",1)+
     row("발달 기울기",b4.rDev,g.rDev,af.rDev,"",1)+
     `</table>
+     <table style="margin-top:9px"><tr><th>구간 승온율</th>
+       <th class="num">1구간</th><th class="num">2구간</th><th class="num">3구간</th><th class="num">4구간</th></tr>
+       <tr><td>보정 전</td>${sb.map(v=>`<td class="num" style="color:var(--muted)">${v.toFixed(1)}</td>`).join("")}</tr>
+       <tr><td>보정 후</td>${sa.map(v=>`<td class="num" style="font-weight:600">${v.toFixed(1)}</td>`).join("")}</tr>
+       <tr><td>변화</td>${sa.map((v,i)=>`<td class="num" style="color:var(--ink-2)">${(v-sb[i]>=0?"+":"")}${(v-sb[i]).toFixed(1)}</td>`).join("")}</tr>
+     </table>
      <p class="hint" style="margin-top:6px">보정 전 곡선을 <b>비교 레이어에 점선으로 남겼습니다.</b>
      그래프에서 어디가 어떻게 옮겨졌는지 바로 보입니다. 구간 비율 표에서도 나란히 견줄 수 있고요.
-     마음에 안 들면 <b>되돌리기</b>로 원래대로 갑니다.</p>`;
+     <b>보정 전으로</b>를 누르면 원래 곡선으로 돌아갑니다.</p>`;
+}
+$("autofix").onclick=()=>runAutoFix(false);
+$("autoraw").onclick=()=>{
+  if(!rawCurve) return;
+  pushHist();
+  S.temps=rawCurve.map(p=>[p[0],p[1]]);
+  $("pver").value="v1.0"; syncName(); draw();
+  $("fixreport").innerHTML=`<p class="tagline">보정 전 상태</p><span class="pill">원래 곡선</span> 보정 전 상태로 되돌렸습니다.
+    <b>다시 보정</b>을 누르면 목표에 맞춥니다.`;
 };
 
 
@@ -3406,6 +3439,7 @@ $("tgtapply").onclick=()=>{
           $("fromplan").innerHTML=`계획에서 받음${h.bean?" · "+h.bean:""}`;
           if(g){
             planTarget=g; showTarget();
+            setTimeout(()=>runAutoFix(true),0);   // 들어오자마자 보정된 모습으로
             $("libmsg").innerHTML=`<b>계획의 목표</b> — 배출 ${(+g.drop).toFixed(1)}℃ ·
               총 ${fmt(g.dur)} · 초반 ${(+g.rEarly).toFixed(1)}℃/분 ·
               발달 ${(+g.rDev).toFixed(1)}℃/분 · 예열 ${(+g.pre).toFixed(0)}℃<br>
