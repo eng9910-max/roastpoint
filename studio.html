@@ -77,7 +77,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
 </head>
 <body>
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v2.0</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v2.1</span>
   <button class="ghost" id="undo" title="Ctrl+Z">되돌리기</button>
   <button class="ghost" id="redo" title="Ctrl+Shift+Z">다시</button>
   <a href="./" style="font-size:12.5px;color:var(--setpoint);margin-left:auto">← 기록장</a>
@@ -151,9 +151,27 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
     <div>
       <h2>② 모아둔 프로파일 <span class="pill" id="libcount">0</span></h2>
       <textarea id="bulk" rows="2" placeholder="공유 링크를 여러 줄 붙여넣으세요 — 한 번에 다 들어갑니다"></textarea>
-      <div id="autofixrow" style="margin-top:6px" hidden>
-        <div class="row"><button id="autofix">목표에 맞춰 자동 보정</button></div>
-        <div id="autofixmsg" class="hint" style="margin-top:6px"></div>
+      <div style="margin-top:9px;border-top:1px solid var(--rule);padding-top:8px">
+        <div class="row" style="justify-content:space-between">
+          <span class="hint" id="tgtstate">목표 없음</span>
+          <button class="ghost" id="tgtedit" style="padding:2px 7px">목표 직접 넣기</button>
+        </div>
+        <div id="tgtform" hidden style="margin-top:6px">
+          <div class="row">
+            <div style="flex:1"><label>배출 ℃</label><input type="number" step="0.1" id="tg_drop" placeholder="203"></div>
+            <div style="flex:1"><label>총시간 초</label><input type="number" id="tg_dur" placeholder="400"></div>
+          </div>
+          <div class="row" style="margin-top:5px">
+            <div style="flex:1"><label>초반 열량</label><input type="number" step="0.1" id="tg_early" placeholder="14.5"></div>
+            <div style="flex:1"><label>발달 기울기</label><input type="number" step="0.1" id="tg_dev" placeholder="2.8"></div>
+            <div style="flex:1"><label>예열 ℃</label><input type="number" step="0.1" id="tg_pre" placeholder="143"></div>
+          </div>
+          <div class="row" style="margin-top:6px"><button class="ghost" id="tgtapply">이 목표로 설정</button></div>
+        </div>
+        <div id="autofixrow" style="margin-top:7px" hidden>
+          <div class="row"><button id="autofix">목표에 맞춰 자동 보정</button></div>
+          <div id="autofixmsg" class="hint" style="margin-top:6px"></div>
+        </div>
       </div>
       <div class="row" style="margin-top:6px">
         <button class="ghost" id="bulkadd">일괄 넣기</button>
@@ -3223,7 +3241,7 @@ $("cplink").onclick=async()=>{
 
 /* ---------- 저장 / 불러오기 ---------- */
 $("save").onclick=()=>{
-  const d={v:"2.0",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
+  const d={v:"2.1",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
            coolT:+$("coolT").value,coolV:+$("coolV").value};
   const b=new Blob([JSON.stringify(d,null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
@@ -3254,7 +3272,7 @@ $("loadpreset").onclick=()=>{
 };
 
 setFans(PRESETS["파카마라 워시드 v1.0 — 대립·고밀도"].fans);
-renderRefs(); libRender();
+renderRefs(); libRender(); showTarget();
 
 
 /* ---------- 계획의 목표에 맞춰 곡선 자동 보정 ----------
@@ -3335,6 +3353,33 @@ $("autofix").onclick=()=>{
      마음에 안 들면 <b>되돌리기</b>로 원래대로 갑니다.</p>`;
 };
 
+
+/* 목표 표시 · 직접 입력 — 계획 탭을 거치지 않아도 자동 보정을 쓸 수 있게 */
+function showTarget(){
+  const g=planTarget;
+  if(!g){
+    $("tgtstate").innerHTML=`목표 없음 — <b>로스팅 계획</b>에서 프로파일을 고르면 자동으로 들어옵니다`;
+    $("autofixrow").hidden=true; return;
+  }
+  $("tgtstate").innerHTML=`<span class="pill ok">목표</span> 배출 ${(+g.drop).toFixed(1)}℃ ·
+    총 ${fmt(g.dur)} · 초반 ${(+g.rEarly).toFixed(1)} · 발달 ${(+g.rDev).toFixed(1)} · 예열 ${(+g.pre).toFixed(0)}℃`;
+  $("autofixrow").hidden=false;
+}
+$("tgtedit").onclick=()=>{
+  const f=$("tgtform"); f.hidden=!f.hidden;
+  if(!f.hidden&&planTarget){
+    $("tg_drop").value=(+planTarget.drop).toFixed(1); $("tg_dur").value=Math.round(planTarget.dur);
+    $("tg_early").value=(+planTarget.rEarly).toFixed(1); $("tg_dev").value=(+planTarget.rDev).toFixed(1);
+    $("tg_pre").value=(+planTarget.pre).toFixed(0);
+  }
+};
+$("tgtapply").onclick=()=>{
+  const g={ drop:+$("tg_drop").value||203, dur:+$("tg_dur").value||400,
+            rEarly:+$("tg_early").value||14.5, rDev:+$("tg_dev").value||2.8,
+            pre:+$("tg_pre").value||143 };
+  planTarget=g; $("tgtform").hidden=true; showTarget();
+};
+
 /* 로스팅 계획에서 넘어온 프로파일을 받는다 (같은 주소라 저장 영역을 공유) */
 (function(){
   if(!/from=plan/.test(location.hash)) return;
@@ -3360,7 +3405,7 @@ $("autofix").onclick=()=>{
           $("fromplan").className="pill ok";
           $("fromplan").innerHTML=`계획에서 받음${h.bean?" · "+h.bean:""}`;
           if(g){
-            planTarget=g; $("autofixrow").hidden=false;
+            planTarget=g; showTarget();
             $("libmsg").innerHTML=`<b>계획의 목표</b> — 배출 ${(+g.drop).toFixed(1)}℃ ·
               총 ${fmt(g.dur)} · 초반 ${(+g.rEarly).toFixed(1)}℃/분 ·
               발달 ${(+g.rDev).toFixed(1)}℃/분 · 예열 ${(+g.pre).toFixed(0)}℃<br>
