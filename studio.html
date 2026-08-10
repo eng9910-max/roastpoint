@@ -77,7 +77,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
 </head>
 <body>
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v2.3</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v2.4</span>
   <button class="ghost" id="undo" title="Ctrl+Z">되돌리기</button>
   <button class="ghost" id="redo" title="Ctrl+Shift+Z">다시</button>
   <a href="./" style="font-size:12.5px;color:var(--setpoint);margin-left:auto">← 기록장</a>
@@ -230,6 +230,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
       <h2>⑤ IKAWA 앱으로 보내기</h2>
       <button id="mklink" class="wide">링크 · QR 만들기</button>
       <div id="qr" hidden></div>
+      <div class="hint" id="savedmsg" style="margin-top:6px"></div>
       <div class="linkbox" id="linkout">아직 만들지 않았습니다.</div>
       <div class="row" style="margin-top:7px">
         <button class="ghost" id="cplink">복사</button>
@@ -2778,6 +2779,36 @@ $("alog").onclick=()=>{
 
 
 
+
+/* ---------- 기록장 프로파일 탭에 등록 ----------
+   스튜디오에서 만든 곡선은 여기서 저장해야 기록장 목록에 나타난다.
+   같은 저장 영역을 쓰므로 읽어서 추가하고 다시 넣는다. */
+function saveToRecords(name,pts,fans,cb){
+  try{
+    const q=indexedDB.open("roastpoint",1);
+    q.onupgradeneeded=()=>{ try{ q.result.createObjectStore("kv"); }catch(e){} };
+    q.onsuccess=()=>{
+      const db=q.result;
+      const t=db.transaction("kv","readwrite"), st=t.objectStore("kv");
+      const r=st.get("db");
+      r.onsuccess=()=>{
+        const d=r.result||{beans:[],roasts:[],profiles:[],settings:{}};
+        d.profiles=d.profiles||[];
+        const key=pts.map(x=>Math.round(x[0])+":"+Math.round(x[1]*10)).join(",");
+        const hit=d.profiles.find(x=>x.key===key);
+        if(hit){ cb&&cb(false,d.profiles.length); return; }
+        d.profiles.push({ id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),
+          key, name, src:"스튜디오", archived:false, mt:Date.now(),
+          pts:pts.map(x=>[x[0],x[1]]) });
+        st.put(d,"db");
+        t.oncomplete=()=>cb&&cb(true,d.profiles.length);
+      };
+      r.onerror=()=>cb&&cb(null);
+    };
+    q.onerror=()=>cb&&cb(null);
+  }catch(e){ cb&&cb(null); }
+}
+
 /* ---------- 프로파일 라이브러리 ---------- */
 S.lib=[];
 function libAdd(name,pts,fans){
@@ -3232,6 +3263,13 @@ function makeLink(){
 }
 $("mklink").onclick=()=>{
   const url=makeLink();
+  saveToRecords(fullName(),S.temps,readFans(),(added,total)=>{
+    const el=$("savedmsg"); if(!el) return;
+    el.innerHTML = added===null
+      ? `<span class="pill bad">기록장 저장 실패</span>`
+      : added ? `<span class="pill good">기록장 프로파일 탭에 저장됨</span> (총 ${total}개)`
+              : `<span class="pill">같은 곡선이 이미 프로파일 탭에 있습니다</span>`;
+  });
   $("linkout").textContent=url;
   const a=$("openlink"); a.href=url; a.hidden=false;
   try{ const q=qrcode(0,"L"); q.addData(url); q.make();
@@ -3247,7 +3285,7 @@ $("cplink").onclick=async()=>{
 
 /* ---------- 저장 / 불러오기 ---------- */
 $("save").onclick=()=>{
-  const d={v:"2.3",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
+  const d={v:"2.4",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
            coolT:+$("coolT").value,coolV:+$("coolV").value};
   const b=new Blob([JSON.stringify(d,null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
