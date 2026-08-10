@@ -80,7 +80,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v4.6</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v4.7</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -380,9 +380,13 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
       <div class="grid g5">
         <div><label>저장소 (소유자/이름)</label><input type="text" id="g_repo" placeholder="eng9910-max/roastpoint-data"></div>
         <div><label>파일 경로</label><input type="text" id="g_path" placeholder="db.json"></div>
-        <div class="wide"><label>토큰 (Fine-grained · Contents 읽기·쓰기)</label>
+        <div class="wide"><label>토큰 (Fine-grained · Contents 읽기·쓰기)
+          <span id="g_tokstate" class="pill" style="margin-left:6px"></span></label>
           <input type="password" id="g_token" placeholder="github_pat_..."></div>
       </div>
+      <p class="note" style="color:var(--actual)">토큰은 이 기기에 남습니다. 앱을 닫거나 파일을 새로 올려도 유지되지만,
+      브라우저에서 <b>사이트 데이터를 삭제하면 기록과 함께 사라집니다.</b>
+      토큰은 비밀번호 관리 앱이나 메모에 따로 보관해두세요 — GitHub에서 다시 볼 수 없습니다.</p>
       <p class="note">토큰은 이 기기에만 저장되고 서버로 가지 않습니다.
       <b>비공개 저장소</b>를 쓰고, 그 저장소 하나에만 권한을 주고, 만료일을 짧게 잡으세요.
       저장할 때마다 커밋이 남아 <b>이력이 통째로 보존</b>됩니다.</p>
@@ -1001,7 +1005,7 @@ async function ghUp(quiet){
   try{
     const cur=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
     const body={message:`로스트포인트 ${new Date().toISOString().slice(0,16)} — 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`,
-      content:b64enc(JSON.stringify({v:"4.6",at:Date.now(),...dbForExport()}))};
+      content:b64enc(JSON.stringify({v:"4.7",at:Date.now(),...dbForExport()}))};
     if(cur&&cur.sha) body.sha=cur.sha;
     await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`,
       {method:"PUT",body:JSON.stringify(body)});
@@ -1016,8 +1020,14 @@ $("y_mode").addEventListener("change",()=>{
   $("y_gh").hidden=!gh; $("y_kv").hidden=gh;
   DB.settings.syncMode=syncMode(); persist();
 });
+function tokState(){
+  const v=($("g_token").value||"").trim(), e=$("g_tokstate");
+  if(!e) return;
+  if(!v){ e.textContent="없음"; e.className="pill warn"; }
+  else { e.textContent=`저장됨 · ${v.slice(0,11)}…${v.slice(-4)}`; e.className="pill ok"; }
+}
 ["g_repo","g_path","g_token"].forEach(id=>$(id).addEventListener("input",()=>{
-  DB.settings[id]= $(id).value.trim(); persist();
+  DB.settings[id]= $(id).value.trim(); persist(); if(id==="g_token") tokState();
 }));
 
 /* 내보내는 데이터에서 비밀값을 뺀다 — 토큰이 저장소에 박히면 안 된다 */
@@ -1047,7 +1057,7 @@ async function syncUp(quiet){
   try{
     const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
       method:"PUT",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({v:"4.6",at:Date.now(),...dbForExport()})});
+      body:JSON.stringify({v:"4.7",at:Date.now(),...dbForExport()})});
     const j=await r.json();
     if(!r.ok) throw new Error(j.error||"실패");
     if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
@@ -1162,6 +1172,7 @@ async function restore(){
   applySettings(); renderBeans(); renderRoasts(); renderProfiles(); stats();
   if(DB.settings.syncKey) $("y_key").value=DB.settings.syncKey;
   ["g_repo","g_path","g_token"].forEach(id=>{ if(DB.settings[id]) $(id).value=DB.settings[id]; });
+  tokState();
   if(DB.settings.syncMode){ $("y_mode").value=DB.settings.syncMode;
     $("y_mode").dispatchEvent(new Event("change")); }
   if(DB.settings.syncAuto){ $("y_auto").checked=true;
@@ -1992,7 +2003,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"4.6",saved:new Date().toISOString(),...dbForExport()},null,1)],
+  const b=new Blob([JSON.stringify({v:"4.7",saved:new Date().toISOString(),...dbForExport()},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
