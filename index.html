@@ -80,7 +80,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v4.3</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v4.4</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -230,6 +230,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <div class="core">
       <div class="grid g5">
         <div class="wide"><label>생두 *</label><select id="r_bean"></select></div>
+        <div><label>용도</label><select id="r_use">
+          <option value="filter">필터 · 드립</option>
+          <option value="espresso">에스프레소</option>
+          <option value="latte">라떼 · 밀크</option></select></div>
         <div><label>투입량 g</label><input type="number" step="0.1" id="r_in"></div>
         <div><label>배출량 g</label><input type="number" step="0.1" id="r_out"></div>
         <div><label>감량률 %</label><input type="text" id="r_loss" readonly></div>
@@ -387,6 +391,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <div class="row" style="margin-top:8px">
       <button id="y_up">지금 올리기</button>
       <button id="y_down">지금 내려받기 (합치기)</button>
+      <button class="ghost" id="y_ref">새로고침</button>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink);margin:0">
         <input type="checkbox" id="y_auto" style="width:auto"> 자동
       </label>
@@ -988,7 +993,7 @@ async function ghUp(quiet){
   try{
     const cur=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
     const body={message:`로스트포인트 ${new Date().toISOString().slice(0,16)} — 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`,
-      content:b64enc(JSON.stringify({v:"4.3",at:Date.now(),...DB}))};
+      content:b64enc(JSON.stringify({v:"4.4",at:Date.now(),...DB}))};
     if(cur&&cur.sha) body.sha=cur.sha;
     await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`,
       {method:"PUT",body:JSON.stringify(body)});
@@ -1027,7 +1032,7 @@ async function syncUp(quiet){
   try{
     const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
       method:"PUT",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({v:"4.3",at:Date.now(),...DB})});
+      body:JSON.stringify({v:"4.4",at:Date.now(),...DB})});
     const j=await r.json();
     if(!r.ok) throw new Error(j.error||"실패");
     if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
@@ -1063,6 +1068,15 @@ async function runSync(btn,label,fn){
   $("y_msg").innerHTML=`<span class="pill">${label} 중…</span> 잠시만요.`;
   try{ await fn(false); }finally{ b.disabled=false; b.textContent=old; }
 }
+$("y_ref").onclick=()=>runSync("y_ref","새로고침",
+  syncMode()==="gh"?ghDown:syncDown);
+/* 다른 기기에서 바뀐 걸 잡기 위해 앱으로 돌아올 때마다 확인 */
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden||!DB.settings.syncAuto) return;
+  if(Date.now()-(window.__lastPull||0)<20000) return;
+  window.__lastPull=Date.now();
+  (syncMode()==="gh"?ghDown:syncDown)(true);
+});
 $("y_up").onclick=()=>runSync("y_up","올리기",
   syncMode()==="gh"?ghUp:syncUp);
 $("y_down").onclick=()=>runSync("y_down","내려받기",
@@ -1661,77 +1675,168 @@ function historyBlock(beanId){
   return out;
 }
 
-/* ---------- 생두 → 권장 목표 (스튜디오와 같은 규칙) ---------- */
-function targetFor(b){
-  let t={pre:143,drop:203,dur:400,ror4:3.0}, why=[];
+/* ---------- 생두 ↔ 프로파일 매칭 ----------
+   네 개의 절대값을 비교하던 방식은 생두가 바뀌어도 순위가 거의 안 바뀌었다.
+   로스팅에서 실제로 중요한 것은 시작 온도가 아니라 '구간별로 열을 얼마나 넣는가'다.
+   그래서 곡선을 성격 벡터로 바꾼 뒤, 생두 조건에서 나온 목표와 항목별로 비교한다. */
+
+function profChar(pts){
+  const n=pts.length, end=pts[n-1], dur=end[0]||1, pre=pts[0][1];
+  const at=x=>{ for(let i=1;i<n;i++){ const a=pts[i-1],b=pts[i];
+    if(x<=b[0]) return b[0]===a[0]?b[1]:a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0]); } return end[1]; };
+  const rEarly=(at(dur*0.40)-pre)/((dur*0.40)/60);        // 건조에 넣는 열
+  const rMid  =(at(dur*0.75)-at(dur*0.40))/((dur*0.35)/60);
+  const rDev  =(end[1]-at(dur*0.75))/((dur*0.25)/60);     // 크랙 이후 발달
+  // 150℃ 도달 비율 — 건조 구간이 전체의 몇 %인가
+  let t150=null;
+  for(let i=1;i<n;i++){ const a=pts[i-1],b=pts[i];
+    if(a[1]<150&&b[1]>=150){ t150=a[0]+(b[0]-a[0])*(150-a[1])/(b[1]-a[1]); break; } }
+  return {pre,drop:end[1],dur,rEarly,rMid,rDev,dryPct:t150!=null?t150/dur*100:null};
+}
+
+/* 생두 → 목표 성격 + 근거 */
+function targetFor(b,use){
+  use=use||"filter";
+  const t={drop:203,dur:400,rEarly:14.5,rDev:2.8,pre:143}, why=[];
   const add=(o,txt)=>{ for(const k in o) t[k]+=o[k]; why.push(txt); };
+
   const proc=(b.proc||"");
-  if(/워시드|washed/i.test(proc))      add({pre:+3,drop:-1},"워시드 — 표면 당분이 없어 초반 열을 조금 더");
-  else if(/내추럴|natural/i.test(proc)&&!/펄프드/.test(proc))
-                                       add({pre:-4,drop:-2},"내추럴 — 잔여당이 타기 쉬워 낮게 시작하고 얕게");
-  else if(/펄프드|pulped/i.test(proc)) add({pre:-1,drop:+1},"펄프드 내추럴 — 중간, 단맛을 살려 조금 깊게");
-  else if(/허니|honey/i.test(proc))    add({pre:-1,drop:0}, "허니 — 내추럴과 워시드의 중간");
+  if(/워시드|washed/i.test(proc))
+    add({drop:-1,rEarly:+1,pre:+3},"워시드 — 표면 당분이 없어 건조에 열을 조금 더 넣는다");
+  else if(/내추럴|natural/i.test(proc)&&!/펄프드|pulped/i.test(proc))
+    add({drop:-2,rDev:-0.4,pre:-4},"내추럴 — 잔여당이 타기 쉬워 얕게 끊고 후반을 눕힌다");
+  else if(/펄프드|pulped/i.test(proc))
+    add({drop:+1,pre:-1},"펄프드 내추럴 — 중간, 단맛을 살려 조금 깊게");
+  else if(/허니|honey/i.test(proc))
+    add({rDev:-0.2,pre:-1},"허니 — 내추럴과 워시드의 중간");
+
   const alt=parseInt(String(b.alt||"").replace(/[,\s]/g,""))||0;
   const dens=+b.dens||0;
-  if(dens>=850)      add({pre:+7,dur:+45},`밀도 ${dens}g/L — 고밀도라 예열을 올리고 시간을 늘린다`);
-  else if(dens&&dens<700) add({pre:-5,dur:-30},`밀도 ${dens}g/L — 저밀도라 초반 화력을 낮춘다`);
-  else if(!dens&&alt>=1800) add({pre:+6,dur:+40},`고도 ${alt}m — 고밀도로 추정`);
-  else if(!dens&&alt>=1500) add({pre:+2,dur:+20},`고도 ${alt}m — 중고밀도`);
-  else if(!dens&&alt&&alt<1300) add({pre:-5,dur:-30},`고도 ${alt}m — 저밀도로 추정`);
+  if(dens>=850)            add({rEarly:+2.5,dur:+45,pre:+6},`밀도 ${dens}g/L — 고밀도라 초반 열량을 올리고 시간을 늘린다`);
+  else if(dens&&dens<700)  add({rEarly:-2.5,dur:-30,pre:-5},`밀도 ${dens}g/L — 저밀도라 초반을 눌러 표면이 타지 않게 한다`);
+  else if(!dens&&alt>=1800)add({rEarly:+2,dur:+40,pre:+5},`고도 ${alt}m — 고밀도로 추정`);
+  else if(!dens&&alt>=1500)add({rEarly:+1,dur:+20,pre:+2},`고도 ${alt}m — 중고밀도`);
+  else if(!dens&&alt&&alt<1300) add({rEarly:-2,dur:-30,pre:-5},`고도 ${alt}m — 저밀도로 추정`);
+
   const v=(b.var||"").toLowerCase();
   if(/파카마라|pacamara|마라고지페|maragog/.test(v))
-    add({pre:+4,dur:+50},"대립종 — 속까지 열이 가는 데 오래 걸린다");
+    add({rEarly:+1.5,dur:+50,pre:+3},"대립종 — 알이 커서 속까지 열이 가는 데 오래 걸린다");
   else if(/게이샤|기샤|geisha|gesha/.test(v))
-    add({pre:-3,dur:+20,ror4:-0.8},"게이샤 — 납작하고 향이 잘 날아가 후반을 눕힌다");
-  else if(/재래|heirloom|landrace|74110|74112/.test(v))
+    add({rDev:-0.9,drop:-1,dur:+20,pre:-3},"게이샤 — 납작하고 향이 잘 날아가 후반을 확실히 눕힌다");
+  else if(/재래|heirloom|landrace|74110|74112|kurume/.test(v))
     add({dur:-20},"소립 재래종 — 빨리 익는다");
+  else if(/sl28|sl34|ruiru|batian|케냐/.test(v))
+    add({rEarly:+1.5,dur:+10},"케냐 계열 대립·고밀도 — 초반 열량을 올린다");
+
   const mo=+b.moist||0;
-  if(mo&&mo<9.5) add({pre:-3,dur:-20},`수분 ${mo}% — 마른 크롭이라 빨리 익는다`);
-  else if(mo&&mo>12) add({pre:+3,dur:+20},`수분 ${mo}% — 수분이 많아 건조에 시간이 더 든다`);
-  why.push("기준 예열 143℃ — 보유 로그 26배치의 실제 예열(136~155℃) 중앙값에 맞춘 값");
+  if(mo&&mo<9.5)      add({dur:-20,rEarly:-0.5},`수분 ${mo}% — 마른 크롭이라 빨리 익는다`);
+  else if(mo&&mo>12)  add({dur:+20,rEarly:+1},`수분 ${mo}% — 수분이 많아 건조에 시간이 더 든다`);
+
+  if(use==="espresso") add({drop:+4,dur:+30,rDev:+0.3},"에스프레소 — 바디와 단맛을 위해 더 발달시킨다");
+  else if(use==="latte") add({drop:+5.5,dur:+20,rDev:+0.5},"라떼 — 우유를 뚫으려면 더 깊게");
+  else why.push("필터·드립 — 기준값");
+
+  why.push("기준값(예열 143℃ · 총 400초 · 초반 14.5 · 발달 2.8)은 보유 로그 실측 범위에 맞춘 것");
   return {t,why};
+}
+
+/* 항목별 허용폭과 비중 — 왜 이 점수인지 화면에 그대로 보여준다 */
+const DIMS=[
+  ["drop",  "배출온도",   2.0, 30],
+  ["rDev",  "발달 기울기", 1.2, 25],
+  ["rEarly","초반 열량",   3.0, 20],
+  ["dur",   "총시간",     60,  15],
+  ["pre",   "예열",       14,  10]
+];
+function matchScore(ch,t,prof,bean){
+  const parts=DIMS.map(([k,label,tol,w])=>{
+    const d=Math.abs(ch[k]-t[k]);
+    const fit=Math.exp(-Math.pow(d/tol,2));           // 허용폭 안이면 완만하게 감점
+    return {k,label,diff:ch[k]-t[k],pts:fit*w,max:w};
+  });
+  let score=parts.reduce((a,x)=>a+x.pts,0);
+  const notes=[];
+
+  // 이름에 담긴 성격 — 만든 사람이 무엇을 겨냥했는지
+  const nm=(prof.name||"").toLowerCase();
+  const bv=(bean.var||"").toLowerCase(), bp=(bean.proc||"");
+  const isGe=/게이샤|기샤|geisha|gesha/;
+  if(isGe.test(nm)&&isGe.test(bv)){ score+=7; notes.push("게이샤용으로 만들어진 프로파일 +7"); }
+  else if(isGe.test(nm)&&!isGe.test(bv)){ score-=4; notes.push("게이샤 전용 프로파일을 다른 품종에 −4"); }
+  if(/natural|내추럴/i.test(nm)&&/내추럴|natural/i.test(bp)){ score+=4; notes.push("내추럴용 프로파일 +4"); }
+  if(/washed|워시드/i.test(nm)&&/워시드|washed/i.test(bp)){ score+=4; notes.push("워시드용 프로파일 +4"); }
+  if(/cupping|커핑|analytic/i.test(nm)){ score-=3; notes.push("커핑 평가용이라 음용 목적과 다름 −3"); }
+
+  // 실제로 볶아본 결과 — 이론보다 무겁게 본다
+  if(prof.id){
+    const used=DB.roasts.filter(r=>r.profileId===prof.id);
+    const cups=used.filter(r=>r.cup&&r.cup.sum).map(r=>r.cup.sum);
+    if(cups.length){
+      const m=cups.reduce((a,b2)=>a+b2,0)/cups.length;
+      const bonus=Math.max(-6,Math.min(12,(m-45)/27*12));
+      score+=bonus;
+      notes.push(`실제 컵 평균 ${m.toFixed(0)}/72 (${cups.length}회) ${bonus>=0?"+":""}${bonus.toFixed(0)}`);
+    }else if(used.length){ score+=2; notes.push(`${used.length}번 볶아본 프로파일 +2`); }
+  }
+  return {score:Math.max(0,Math.min(100,score)),parts,notes};
 }
 let RECLIB=[];
 function showRec(){
   const b=DB.beans.find(x=>x.id===$("r_bean").value);
   if(!b){ $("recbox").hidden=true; return; }
   $("recbox").hidden=false;
-  const {t,why}=targetFor(b);
+  const use=$("r_use")?$("r_use").value:"filter";
+  const {t,why}=targetFor(b,use);
   const H=historyFor(b.id);
+
   let html=`<p class="tagline">${H.length?"두 번째부터 — 지난 결과로 조정":"첫 배치 — 여기서 시작"}</p>`;
   html+=historyBlock(b.id);
   html+=`<p class="tagline" style="margin-top:12px">이 생두의 권장 목표</p>`;
-  html+=`<p class="lead" style="margin:0">예열 <b>${t.pre.toFixed(0)}℃</b> ·
-    배출 <b>${t.drop.toFixed(1)}℃</b> · 총 <b>${fmt(t.dur)}</b> · 후반 <b>${t.ror4.toFixed(1)}℃/분</b></p>
+  html+=`<p class="lead" style="margin:0">배출 <b>${t.drop.toFixed(1)}℃</b> ·
+    총 <b>${fmt(t.dur)}</b> · 초반 열량 <b>${t.rEarly.toFixed(1)}℃/분</b> ·
+    발달 기울기 <b>${t.rDev.toFixed(1)}℃/분</b> · 예열 <b>${t.pre.toFixed(0)}℃</b></p>
     <p class="note">${why.map(w=>"· "+w).join("<br>")}</p>`;
-  const POOL=BUILTIN.concat(DB.profiles.filter(p=>!p.archived).map(p=>({name:p.name,src:p.src||"내 기록",pts:p.pts}))).concat(RECLIB);
-  if(POOL.length){
-    const stat=pts=>{ const n=pts.length,end=pts[n-1],dur=end[0]||1;
-      const at=x=>{ for(let i=1;i<n;i++){ const p=pts[i-1],q=pts[i];
-        if(x<=q[0]) return q[0]===p[0]?q[1]:p[1]+(q[1]-p[1])*(x-p[0])/(q[0]-p[0]); } return end[1]; };
-      return {pre:pts[0][1],drop:end[1],dur,ror4:(end[1]-at(dur*0.75))/((dur*0.25)/60)}; };
-    const ranked=POOL.map(p=>{ const st=stat(p.pts);
-      const d=Math.abs(st.pre-t.pre)/2+Math.abs(st.drop-t.drop)*2+Math.abs(st.dur-t.dur)/20+Math.abs(st.ror4-t.ror4)*6;
-      return {p,st,score:Math.max(0,100-d)};
-    }).sort((a,b2)=>b2.score-a.score).slice(0,3);
-    html+=`<table><tr><th>프로파일</th><th>출처</th><th class="num">점수</th><th>고칠 곳</th></tr>`+
-      ranked.map(r=>{
-        const f=[];
-        if(Math.abs(r.st.pre-t.pre)>=2) f.push(`예열 ${r.st.pre>t.pre?"−":"+"}${Math.abs(r.st.pre-t.pre).toFixed(0)}℃`);
-        if(Math.abs(r.st.drop-t.drop)>=1) f.push(`배출 ${r.st.drop>t.drop?"−":"+"}${Math.abs(r.st.drop-t.drop).toFixed(1)}℃`);
-        if(Math.abs(r.st.dur-t.dur)>=20) f.push(`총시간 ${r.st.dur>t.dur?"−":"+"}${Math.abs(r.st.dur-t.dur).toFixed(0)}초`);
-        return `<tr><td>${r.p.name}</td>
-          <td><span class="pill">${r.p.src||"불러옴"}</span></td>
-          <td class="num">${r.score.toFixed(0)}</td>
-          <td>${f.length?f.join(" · "):"그대로"}</td></tr>`;
-      }).join("")+`</table>
-      <p class="note">기본으로 담긴 ${BUILTIN.length}개에 더해, 스튜디오에서 저장한
-      <b>프로파일 파일</b>을 불러오면 모아둔 프로파일 전체에 순위를 매깁니다.
-      로그를 스튜디오에 넣으면 그 계획 곡선이 자동으로 라이브러리에 쌓입니다.</p>`;
-  }
+
+  const POOL=BUILTIN.map(p=>({name:p.name,src:p.src,pts:p.pts}))
+    .concat(DB.profiles.filter(p=>!p.archived)
+      .map(p=>({id:p.id,name:p.name,src:p.src||"내 기록",pts:p.pts})))
+    .concat(RECLIB.map(p=>({name:p.name,src:"불러옴",pts:p.pts})));
+
+  if(!POOL.length){ $("rec_out").innerHTML=html; return; }
+  const ranked=POOL.map(p=>{
+    const ch=profChar(p.pts);
+    const m=matchScore(ch,t,p,b);
+    return {p,ch,...m};
+  }).sort((a,b2)=>b2.score-a.score);
+
+  const top=ranked.slice(0,5);
+  const sign=x=>(x>0?"+":"")+x.toFixed(x>=10||x<=-10?0:1);
+  html+=`<p class="tagline" style="margin-top:12px">후보 ${ranked.length}개 중 상위 5</p>`;
+  html+=`<table><tr><th>프로파일</th><th>출처</th><th class="num">점수</th>
+    <th class="num">배출</th><th class="num">시간</th><th class="num">초반</th><th class="num">발달</th>
+    <th>목표와의 차이</th></tr>`+
+    top.map((r,i)=>{
+      const gaps=r.parts.filter(x=>Math.abs(x.diff)>=(x.k==="dur"?30:x.k==="pre"?8:x.k==="rEarly"?2:1))
+        .map(x=>`${x.label} ${sign(x.diff)}`);
+      return `<tr><td>${r.p.name}${i===0?' <span class="pill ok">추천</span>':''}</td>
+        <td><span class="pill">${r.p.src||"—"}</span></td>
+        <td class="num"><b>${r.score.toFixed(0)}</b></td>
+        <td class="num">${r.ch.drop.toFixed(1)}</td><td class="num">${fmt(r.ch.dur)}</td>
+        <td class="num">${r.ch.rEarly.toFixed(1)}</td><td class="num">${r.ch.rDev.toFixed(1)}</td>
+        <td>${gaps.length?gaps.join(" · "):"거의 맞음"}</td></tr>`;
+    }).join("")+`</table>`;
+
+  const w=top[0];
+  html+=`<p class="tagline" style="margin-top:12px">1위를 고른 이유</p>
+    <p class="note">${w.parts.map(x=>
+      `${x.label} ${x.pts.toFixed(0)}/${x.max}점 (차이 ${sign(x.diff)})`).join(" · ")}
+      ${w.notes.length?"<br>"+w.notes.join("<br>"):""}</p>
+    <p class="note">항목마다 허용폭이 다릅니다 — 배출온도는 2℃, 발달 기울기는 1.2℃/분 안이면 거의 감점이 없고,
+    예열은 14℃까지 봅니다. 시작 온도보다 <b>구간별로 열을 얼마나 넣는가</b>가 결과를 가르기 때문입니다.</p>`;
   $("rec_out").innerHTML=html;
 }
 $("r_bean").addEventListener("change",showRec);
+if($("r_use")) $("r_use").addEventListener("change",showRec);
 $("rec_lib").onclick=()=>$("rec_file").click();
 $("rec_file").onchange=async e=>{
   try{ const d=JSON.parse(await e.target.files[0].text());
@@ -1827,7 +1932,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"4.3",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"4.4",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
