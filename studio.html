@@ -77,7 +77,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
 </head>
 <body>
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v2.1</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v2.2</span>
   <button class="ghost" id="undo" title="Ctrl+Z">되돌리기</button>
   <button class="ghost" id="redo" title="Ctrl+Shift+Z">다시</button>
   <a href="./" style="font-size:12.5px;color:var(--setpoint);margin-left:auto">← 기록장</a>
@@ -2554,6 +2554,7 @@ var qrcode = function() {
 "use strict";
 const $=id=>document.getElementById(id);
 const fmt=s=>`${Math.floor(s/60)}:${String(Math.round(s%60)).padStart(2,"0")}`;
+var planTarget=null;   // 계획에서 받은 목표 — 초기화보다 먼저 참조될 수 있어 var 로 둔다
 
 const PRESETS={
   "파카마라 워시드 v1.0 — 대립·고밀도":{
@@ -3241,7 +3242,7 @@ $("cplink").onclick=async()=>{
 
 /* ---------- 저장 / 불러오기 ---------- */
 $("save").onclick=()=>{
-  const d={v:"2.1",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
+  const d={v:"2.2",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
            coolT:+$("coolT").value,coolV:+$("coolV").value};
   const b=new Blob([JSON.stringify(d,null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
@@ -3279,7 +3280,6 @@ renderRefs(); libRender(); showTarget();
    시간을 목표 길이로 늘리거나 줄이고, 예열·배출을 목표에 맞춘 뒤,
    초반(0~40%)과 발달(75~100%) 구간의 기울기를 목표에 맞도록 값을 다시 배치한다.
    구간 안의 굴곡은 원래 비율을 그대로 유지한다 — 모양은 남기고 높이만 옮기는 방식. */
-let planTarget=null;
 function autoFit(pts,g){
   const n=pts.length, curDur=pts[n-1][0]||1;
   const k=(+g.dur)/curDur;
