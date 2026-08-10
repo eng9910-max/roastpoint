@@ -80,7 +80,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v4.2</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v4.3</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="roasts">로스팅</button>
@@ -938,9 +938,18 @@ function b64dec(b64){
   return new TextDecoder().decode(a);
 }
 function ghCfg(){
-  return { repo:($("g_repo").value||"").trim(),
-           path:($("g_path").value||"db.json").trim(),
+  let repo=($("g_repo").value||"").trim()
+    .replace(/^https?:\/\/github\.com\//i,"").replace(/\.git$/i,"")
+    .replace(/^\/+|\/+$/g,"");
+  return { repo, path:($("g_path").value||"db.json").trim().replace(/^\/+/,""),
            token:($("g_token").value||"").trim() };
+}
+function ghCheck(c){
+  if(!c.repo) return "저장소 칸이 비어 있습니다. 예: eng9910-max/roastpoint-data";
+  if(!/^[\w.-]+\/[\w.-]+$/.test(c.repo)) return `저장소 형식이 맞지 않습니다 — "${c.repo}". 소유자/이름 두 마디여야 합니다.`;
+  if(!c.token) return "토큰 칸이 비어 있습니다.";
+  if(!/^(github_pat_|ghp_)/.test(c.token)) return "토큰 형식이 아닙니다. github_pat_ 로 시작해야 합니다.";
+  return null;
 }
 async function ghApi(url,opt){
   const {token}=ghCfg();
@@ -954,7 +963,9 @@ async function ghApi(url,opt){
 }
 async function ghDown(quiet){
   const c=ghCfg();
-  if(!c.repo||!c.token){ if(!quiet) $("y_msg").textContent="저장소와 토큰을 넣으세요."; return; }
+  const bad=ghCheck(c);
+  if(bad){ if(!quiet) $("y_msg").innerHTML=`<span class="pill warn">확인</span> ${bad}`; return; }
+  if(!quiet) $("y_msg").innerHTML=`<span class="pill">진행 중</span> ${c.repo} / ${c.path}`;
   try{
     const j=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
     if(!j){ if(!quiet) $("y_msg").textContent="저장소에 아직 파일이 없습니다. 먼저 올리세요."; return; }
@@ -971,11 +982,13 @@ async function ghDown(quiet){
 }
 async function ghUp(quiet){
   const c=ghCfg();
-  if(!c.repo||!c.token){ if(!quiet) $("y_msg").textContent="저장소와 토큰을 넣으세요."; return; }
+  const bad=ghCheck(c);
+  if(bad){ if(!quiet) $("y_msg").innerHTML=`<span class="pill warn">확인</span> ${bad}`; return; }
+  if(!quiet) $("y_msg").innerHTML=`<span class="pill">진행 중</span> ${c.repo} / ${c.path}`;
   try{
     const cur=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
     const body={message:`로스트포인트 ${new Date().toISOString().slice(0,16)} — 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`,
-      content:b64enc(JSON.stringify({v:"4.2",at:Date.now(),...DB}))};
+      content:b64enc(JSON.stringify({v:"4.3",at:Date.now(),...DB}))};
     if(cur&&cur.sha) body.sha=cur.sha;
     await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`,
       {method:"PUT",body:JSON.stringify(body)});
@@ -1014,7 +1027,7 @@ async function syncUp(quiet){
   try{
     const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
       method:"PUT",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({v:"4.2",at:Date.now(),...DB})});
+      body:JSON.stringify({v:"4.3",at:Date.now(),...DB})});
     const j=await r.json();
     if(!r.ok) throw new Error(j.error||"실패");
     if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
@@ -1814,7 +1827,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"4.2",saved:new Date().toISOString(),...DB},null,1)],
+  const b=new Blob([JSON.stringify({v:"4.3",saved:new Date().toISOString(),...DB},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
