@@ -88,7 +88,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v6.5</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v6.6</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="plan">로스팅 계획</button>
@@ -1114,7 +1114,7 @@ async function ghUp(quiet){
   try{
     const cur=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
     const body={message:`로스트포인트 ${new Date().toISOString().slice(0,16)} — 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`,
-      content:b64enc(JSON.stringify({v:"6.5",at:Date.now(),...dbForExport()}))};
+      content:b64enc(JSON.stringify({v:"6.6",at:Date.now(),...dbForExport()}))};
     if(cur&&cur.sha) body.sha=cur.sha;
     await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`,
       {method:"PUT",body:JSON.stringify(body)});
@@ -1166,7 +1166,7 @@ async function syncUp(quiet){
   try{
     const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
       method:"PUT",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({v:"6.5",at:Date.now(),...dbForExport()})});
+      body:JSON.stringify({v:"6.6",at:Date.now(),...dbForExport()})});
     const j=await r.json();
     if(!r.ok) throw new Error(j.error||"실패");
     if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
@@ -1386,7 +1386,8 @@ function renderProfiles(){
         <td class="num">${a.loss!=null?a.loss.toFixed(1)+"%":""}</td>
         <td class="num">${a.dtr!=null?a.dtr.toFixed(0)+"%":""}</td>
         <td class="num">${a.cup!=null?a.cup.toFixed(0)+"/72":""}</td>
-        <td style="white-space:nowrap"><button class="ghost sm" onclick="archProfile(${i0})">${head.archived?"복원":"보관"}</button>
+        <td style="white-space:nowrap"><button class="ghost sm" onclick="renameProfile(${i0})">이름</button>
+            <button class="ghost sm" onclick="archProfile(${i0})">${head.archived?"복원":"보관"}</button>
             <button class="ghost sm" onclick="delProfile(${i0})">삭제</button></td></tr>`;
       g.ps.slice(1).forEach(p=>{
         const s2=profStat(p.pts), a2=profAgg(p), ix=DB.profiles.indexOf(p);
@@ -1398,7 +1399,8 @@ function renderProfiles(){
           <td class="num">${a2.loss!=null?a2.loss.toFixed(1)+"%":""}</td>
           <td class="num">${a2.dtr!=null?a2.dtr.toFixed(0)+"%":""}</td>
           <td class="num">${a2.cup!=null?a2.cup.toFixed(0)+"/72":""}</td>
-          <td style="white-space:nowrap"><button class="ghost sm" onclick="archProfile(${ix})">${p.archived?"복원":"보관"}</button>
+          <td style="white-space:nowrap"><button class="ghost sm" onclick="renameProfile(${ix})">이름</button>
+              <button class="ghost sm" onclick="archProfile(${ix})">${p.archived?"복원":"보관"}</button>
               <button class="ghost sm" onclick="delProfile(${ix})">삭제</button></td></tr>`;
       });
       return out;
@@ -1409,6 +1411,12 @@ window.toggleGroup=btn=>{
   const open=btn.textContent.includes("▾");
   while(tr&&tr.classList.contains("ver-row")){ tr.hidden=!open; tr=tr.nextElementSibling; }
   btn.textContent=btn.textContent.replace(open?"▾":"▴",open?"▴":"▾");
+};
+window.renameProfile=i=>{
+  const p=DB.profiles[i]; if(!p) return;
+  const v=prompt("프로파일 이름", p.name||"");
+  if(v===null) return;
+  p.name=v.trim()||p.name; p.mt=Date.now(); renderProfiles(); persist();
 };
 window.archProfile=i=>{
   const p=DB.profiles[i]; if(!p) return;
@@ -1535,8 +1543,15 @@ function readLog(text,fname){
            dryPct:(t150!=null&&end.t)?t150/end.t*100:null };
 }
 let pendingProfileId=null;
+let lastCtxName=null;
+function fallbackName(){
+  if(lastCtxName) return lastCtxName;
+  const n=new Date();
+  return `로스팅 ${n.toISOString().slice(0,10)} ${String(n.getHours()).padStart(2,"0")}:${String(n.getMinutes()).padStart(2,"0")}`;
+}
 function applyLog(L){
   pendingLog=L;
+  if(!cleanLogName(L.prof)) L.prof=fallbackName();
   pendingProfileId = (L.sp&&L.sp.length>2) ? addProfile(L.prof,L.sp,"로그") : null;
   $("r_prof").value=L.prof; $("r_pre").value=L.pre.toFixed(1);
   $("r_drop").value=L.drop.toFixed(1); $("r_dur").value=L.dur.toFixed(1);
@@ -2194,7 +2209,14 @@ async function applyContext(){
   if(!$("r_bean").value){ $("r_bean").value=ctx.beanId; syncBean("r_bean"); }
   if(ctx.level&&$("r_level")) $("r_level").value=ctx.level;
   if(ctx.use&&$("r_use")) $("r_use").value=ctx.use;
+  lastCtxName=ctx.name||null;
   if(ctx.name&&!$("r_prof").value) $("r_prof").value=ctx.name;
+  // 로그 이름이 GUID 라 임시 이름이 붙었다면 계획의 이름으로 바로잡는다
+  if(ctx.name&&pendingProfileId){
+    const p=DB.profiles.find(x=>x.id===pendingProfileId);
+    if(p&&/^로스팅 \d{4}-/.test(p.name)){ p.name=ctx.name; p.mt=Date.now();
+      $("r_prof").value=ctx.name; renderProfiles(); persist(); }
+  }
   const el=$("ctxmsg"); if(!el) return;
   el.hidden=false;
   el.innerHTML=`<span class="pill ok">계획에서 이어짐</span>
@@ -2466,7 +2488,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"6.5",saved:new Date().toISOString(),...dbForExport()},null,1)],
+  const b=new Blob([JSON.stringify({v:"6.6",saved:new Date().toISOString(),...dbForExport()},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
