@@ -77,7 +77,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
 </head>
 <body>
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v1.9</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v2.0</span>
   <button class="ghost" id="undo" title="Ctrl+Z">되돌리기</button>
   <button class="ghost" id="redo" title="Ctrl+Shift+Z">다시</button>
   <a href="./" style="font-size:12.5px;color:var(--setpoint);margin-left:auto">← 기록장</a>
@@ -124,7 +124,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
 
   <aside id="right">
     <div>
-      <h2>프로파일 이름</h2>
+      <h2>지금 편집 중</h2>
       <label for="pbase">원본 (기반이 된 프로파일)</label>
       <input type="text" id="pbase" placeholder="Caravela" style="margin-bottom:7px">
       <label for="pname">수정본 이름</label>
@@ -142,11 +142,18 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
 
 
     <div>
-      <h2>프로파일 라이브러리 <span class="pill" id="libcount">0</span></h2>
+      <h2>① 곡선 가져오기</h2>
+      <textarea id="inlink" rows="2" placeholder="share.ikawa.support 링크 붙여넣기"></textarea>
+      <button class="ghost wide" id="declink" style="margin-top:6px">링크 풀어서 편집하기</button>
+    </div>
+
+
+    <div>
+      <h2>② 모아둔 프로파일 <span class="pill" id="libcount">0</span></h2>
       <textarea id="bulk" rows="2" placeholder="공유 링크를 여러 줄 붙여넣으세요 — 한 번에 다 들어갑니다"></textarea>
-      <div class="row" id="autofixrow" style="margin-top:6px" hidden>
-        <button id="autofix">목표에 맞춰 자동 보정</button>
-        <span class="hint" id="autofixmsg"></span>
+      <div id="autofixrow" style="margin-top:6px" hidden>
+        <div class="row"><button id="autofix">목표에 맞춰 자동 보정</button></div>
+        <div id="autofixmsg" class="hint" style="margin-top:6px"></div>
       </div>
       <div class="row" style="margin-top:6px">
         <button class="ghost" id="bulkadd">일괄 넣기</button>
@@ -159,32 +166,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
     </div>
 
     <div>
-      <h2>생두로 프로파일 추천받기</h2>
-      <div class="row">
-        <div style="flex:1"><label>가공</label><select id="rc_proc">
-          <option value="washed">워시드</option><option value="natural">내추럴</option>
-          <option value="pn">펄프드 내추럴</option><option value="honey">허니</option></select></div>
-        <div style="flex:1"><label>고도 m</label><input type="number" id="rc_alt" placeholder="1700"></div>
-      </div>
-      <div class="row" style="margin-top:6px">
-        <div style="flex:1"><label>품종</label><input type="text" id="rc_var" placeholder="파카마라 / 게이샤 …"></div>
-        <div style="flex:1"><label>용도</label><select id="rc_use">
-          <option value="filter">필터·드립</option><option value="espresso">에스프레소</option>
-          <option value="latte">라떼</option></select></div>
-      </div>
-      <button id="rc_go" class="wide" style="margin-top:8px">추천받기</button>
-      <div id="rc_out" style="margin-top:8px"></div>
-    </div>
-
-    <div>
-      <h2>공유 링크 가져오기</h2>
-      <textarea id="inlink" rows="2" placeholder="share.ikawa.support 링크 붙여넣기"></textarea>
-      <button class="ghost wide" id="declink" style="margin-top:6px">링크 풀어서 편집하기</button>
-    </div>
-
-
-    <div>
-      <h2>비교 레이어</h2>
+      <h2>③ 비교해 보기</h2>
       <div class="row">
         <button class="ghost" id="ref_cur">현재 곡선 추가</button>
         <button class="ghost" id="ref_preset">프리셋 추가</button>
@@ -199,7 +181,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
     </div>
 
     <div>
-      <h2>실측 로그 겹쳐보기</h2>
+      <h2>③-2 실측 로그 겹치기</h2>
       <button class="ghost wide" id="pickcsv">로스트 로그 CSV 열기</button>
       <input type="file" id="csvfile" multiple>
       <p class="hint" id="csvmsg"></p>
@@ -208,13 +190,13 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
     </div>
 
     <div>
-      <h2>팬 %</h2>
+      <h2>④ 팬</h2>
       <table><tr><th>시각</th><th>%</th><th></th></tr><tbody id="fpts"></tbody></table>
       <div class="row" style="margin-top:5px"><button class="ghost" id="addF">줄 추가</button></div>
     </div>
 
     <div>
-      <h2>쿨다운</h2>
+      <h2>④-2 쿨다운</h2>
       <div class="row">
         <div style="flex:1"><label>배출 후 초</label><input type="number" id="coolT" value="130"></div>
         <div style="flex:1"><label>목표 ℃</label><input type="number" id="coolV" value="21"></div>
@@ -222,7 +204,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
     </div>
 
     <div>
-      <h2>내보내기</h2>
+      <h2>⑤ IKAWA 앱으로 보내기</h2>
       <button id="mklink" class="wide">링크 · QR 만들기</button>
       <div id="qr" hidden></div>
       <div class="linkbox" id="linkout">아직 만들지 않았습니다.</div>
@@ -233,7 +215,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
     </div>
 
     <div>
-      <h2>저장 · 불러오기</h2>
+      <h2>파일로 저장 · 불러오기</h2>
       <div class="row">
         <button class="ghost" id="save">파일로 저장</button>
         <button class="ghost" id="load">파일 불러오기</button>
@@ -2807,73 +2789,6 @@ $("libfile").onchange=async e=>{
 
 /* ---------- 생두 → 목표값 → 추천 ----------
    블랙박스가 아니라 규칙이다. 왜 그 숫자가 나왔는지 화면에 같이 적는다. */
-function targetFor({proc,alt,vari,use}){
-  let t={pre:143,drop:203,dur:400,ror4:3.0}, why=[];
-  const add=(o,txt)=>{ for(const k in o) t[k]+=o[k]; why.push(txt); };
-  if(proc==="washed")      add({pre:+3,drop:-1},"워시드 — 표면 당분이 없어 초반 열을 조금 더 준다");
-  else if(proc==="natural")add({pre:-4,drop:-2},"내추럴 — 잔여당이 타기 쉬워 낮게 시작하고 얕게 끊는다");
-  else if(proc==="pn")     add({pre:-1,drop:+1},"펄프드 내추럴 — 중간, 단맛을 살려 조금 깊게");
-  else                     add({pre:-1,drop:0}, "허니 — 내추럴과 워시드의 중간");
-  const a=+alt||0;
-  if(a>=1800)      add({pre:+6,dur:+40},`고도 ${a}m — 고밀도라 예열을 올리고 시간을 늘린다`);
-  else if(a>=1500) add({pre:+2,dur:+20},`고도 ${a}m — 중고밀도`);
-  else if(a&&a<1300) add({pre:-5,dur:-30},`고도 ${a}m — 저밀도라 초반 화력을 낮춘다`);
-  const v=(vari||"").toLowerCase();
-  if(/파카마라|pacamara|마라고지페|maragog/.test(v))
-    add({pre:+4,dur:+50},"대립종 — 알이 커서 속까지 열이 가는 데 오래 걸린다");
-  else if(/게이샤|기샤|geisha|gesha/.test(v))
-    add({pre:-3,dur:+20,ror4:-0.8},"게이샤 — 납작하고 향이 잘 날아가 후반을 눕힌다");
-  else if(/재래|heirloom|landrace|74110|74112/.test(v))
-    add({dur:-20},"소립 재래종 — 빨리 익는다");
-  if(use==="espresso") add({drop:+4,dur:+30},"에스프레소 — 바디와 단맛을 위해 조금 더 발달시킨다");
-  else if(use==="latte") add({drop:+5,dur:+20},"라떼 — 우유를 뚫으려면 더 깊게");
-  else add({},"필터·드립 — 기준값");
-  return {t,why};
-}
-function profStats(pts){
-  const n=pts.length, end=pts[n-1], dur=end[0]||1;
-  const at=t=>{ for(let i=1;i<n;i++){ const a=pts[i-1],b=pts[i];
-    if(t<=b[0]) return b[0]===a[0]?b[1]:a[1]+(b[1]-a[1])*(t-a[0])/(b[0]-a[0]); } return end[1]; };
-  const ror4=(end[1]-at(dur*0.75))/((dur*0.25)/60);
-  return {pre:pts[0][1],drop:end[1],dur,ror4};
-}
-$("rc_go").onclick=()=>{
-  const lib=S.lib.length?S.lib:Object.keys(PRESETS).map(k=>({name:k.split(" — ")[0],pts:PRESETS[k].temps,fans:PRESETS[k].fans}));
-  const {t,why}=targetFor({proc:$("rc_proc").value,alt:$("rc_alt").value,
-                           vari:$("rc_var").value,use:$("rc_use").value});
-  const ranked=lib.map(p=>{
-    const st=profStats(p.pts);
-    const d=Math.abs(st.pre-t.pre)/2 + Math.abs(st.drop-t.drop)*2
-          + Math.abs(st.dur-t.dur)/20 + Math.abs(st.ror4-t.ror4)*6;
-    return {p,st,score:Math.max(0,100-d)};
-  }).sort((a,b)=>b.score-a.score).slice(0,3);
-
-  const fix=st=>{
-    const f=[];
-    if(Math.abs(st.pre-t.pre)>=2) f.push(`예열 ${st.pre>t.pre?"−":"+"}${Math.abs(st.pre-t.pre).toFixed(0)}℃`);
-    if(Math.abs(st.drop-t.drop)>=1) f.push(`배출 ${st.drop>t.drop?"−":"+"}${Math.abs(st.drop-t.drop).toFixed(1)}℃`);
-    if(Math.abs(st.dur-t.dur)>=20) f.push(`총시간 ${st.dur>t.dur?"−":"+"}${Math.abs(st.dur-t.dur).toFixed(0)}초`);
-    return f.length?f.join(" · "):"그대로 써도 됩니다";
-  };
-  $("rc_out").innerHTML =
-    `<p class="hint" style="margin:0 0 6px">목표 — 예열 <b>${t.pre.toFixed(0)}℃</b> ·
-      배출 <b>${t.drop.toFixed(1)}℃</b> · 총 <b>${fmt(t.dur)}</b> · 후반 <b>${t.ror4.toFixed(1)}℃/분</b><br>
-      ${why.map(w=>"· "+w).join("<br>")}</p>` +
-    `<table><tr><th>프로파일</th><th class="num">점수</th><th>고칠 곳</th><th></th></tr>` +
-    ranked.map((r,i)=>`<tr><td>${r.p.name}</td><td class="num">${r.score.toFixed(0)}</td>
-      <td>${fix(r.st)}</td>
-      <td><button class="ghost" style="padding:1px 6px" onclick="useRec(${i})">편집기로</button></td></tr>`).join("")+
-    `</table><p class="hint">라이브러리가 비어 있으면 기본 프리셋으로 계산합니다. 링크를 모아 넣을수록 정확해집니다.</p>`;
-  window.__rec=ranked;
-};
-window.useRec=i=>{
-  const r=window.__rec&&window.__rec[i]; if(!r) return;
-  pushHist(); S.temps=r.p.pts.map(p=>[...p]);
-  if(r.p.fans&&r.p.fans.length) setFans(r.p.fans);
-  $("pbase").value=r.p.name; $("pname").value="추천 수정본"; $("pver").value="v1.0";
-  syncName(); draw();
-};
-
 /* ---------- 정규화 비교 ---------- */
 /* 기종이 다르면 온도의 절대값을 비교할 수 없다.
    시간은 총 로스팅 시간으로, 온도는 터닝포인트~배출 구간으로 각각 0~1로 눕혀
@@ -3308,7 +3223,7 @@ $("cplink").onclick=async()=>{
 
 /* ---------- 저장 / 불러오기 ---------- */
 $("save").onclick=()=>{
-  const d={v:"1.9",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
+  const d={v:"2.0",base:$("pbase").value,name:$("pname").value,temps:S.temps,fans:readFans(),
            coolT:+$("coolT").value,coolV:+$("coolV").value};
   const b=new Blob([JSON.stringify(d,null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
@@ -3379,21 +3294,45 @@ function autoFit(pts,g){
   out[out.length-1]=[Math.round(d),Math.round(newA[3]*10)/10];
   return out.filter((p,i)=>i===0||p[0]>out[i-1][0]).slice(0,20);
 }
+function curveStat(pts){
+  const n=pts.length,e=pts[n-1],d=e[0]||1;
+  const at=x=>{ for(let i=1;i<n;i++){ const q=pts[i-1],r=pts[i];
+    if(x<=r[0]) return r[0]===q[0]?r[1]:q[1]+(r[1]-q[1])*(x-q[0])/(r[0]-q[0]); } return e[1]; };
+  return { pre:pts[0][1], drop:e[1], dur:d,
+           rEarly:(at(d*0.4)-pts[0][1])/((d*0.4)/60),
+           rDev:(e[1]-at(d*0.75))/((d*0.25)/60) };
+}
 $("autofix").onclick=()=>{
   if(!planTarget) return;
+  const before=S.temps.map(p=>[p[0],p[1]]);
+  const b4=curveStat(before);
   pushHist();
   S.temps=autoFit(S.temps,planTarget);
+  const af=curveStat(S.temps);
+  addRef("보정 전 — "+($("pbase").value||"원본"), before);   // 그래프에 남긴다
   $("pver").value="v1.1"; syncName(); draw();
-  const c=(pts=>{const st=(function(p2){const n=p2.length,e=p2[n-1],du=e[0]||1;
-    const a=x=>{for(let i=1;i<n;i++){const q=p2[i-1],r=p2[i];
-      if(x<=r[0])return r[0]===q[0]?r[1]:q[1]+(r[1]-q[1])*(x-q[0])/(r[0]-q[0]);}return e[1];};
-    return {pre:p2[0][1],drop:e[1],dur:du,
-      rEarly:(a(du*0.4)-p2[0][1])/((du*0.4)/60),
-      rDev:(e[1]-a(du*0.75))/((du*0.25)/60)};})(pts);
-    return st;})(S.temps);
-  $("autofixmsg").innerHTML=`보정 완료 — 예열 ${c.pre.toFixed(1)} · 배출 ${c.drop.toFixed(1)} ·
-    총 ${fmt(c.dur)} · 초반 ${c.rEarly.toFixed(1)} · 발달 ${c.rDev.toFixed(1)}
-    <span style="color:var(--ink-2)">(곡선 모양은 유지했습니다 — 마음에 안 들면 되돌리기)</span>`;
+
+  const g=planTarget;
+  const row=(label,a,t,c,unit,dec)=>{
+    const hit=Math.abs(c-t)<=Math.max(0.05,Math.abs(t)*0.005);
+    return `<tr><td>${label}</td>
+      <td class="num" style="color:var(--muted)">${a.toFixed(dec)}${unit}</td>
+      <td class="num">${(+t).toFixed(dec)}${unit}</td>
+      <td class="num" style="color:${hit?"var(--ok)":"var(--actual)"};font-weight:600">${c.toFixed(dec)}${unit}</td>
+      <td class="num" style="color:var(--ink-2)">${(c-a>=0?"+":"")}${(c-a).toFixed(dec)}</td></tr>`;
+  };
+  $("autofixmsg").innerHTML=
+    `<table style="margin-top:4px"><tr><th>항목</th><th class="num">보정 전</th>
+      <th class="num">목표</th><th class="num">보정 후</th><th class="num">바뀐 폭</th></tr>`+
+    row("예열 ℃",b4.pre,g.pre,af.pre,"",1)+
+    row("배출 ℃",b4.drop,g.drop,af.drop,"",1)+
+    row("총시간 초",b4.dur,g.dur,af.dur,"",0)+
+    row("초반 열량",b4.rEarly,g.rEarly,af.rEarly,"",1)+
+    row("발달 기울기",b4.rDev,g.rDev,af.rDev,"",1)+
+    `</table>
+     <p class="hint" style="margin-top:6px">보정 전 곡선을 <b>비교 레이어에 점선으로 남겼습니다.</b>
+     그래프에서 어디가 어떻게 옮겨졌는지 바로 보입니다. 구간 비율 표에서도 나란히 견줄 수 있고요.
+     마음에 안 들면 <b>되돌리기</b>로 원래대로 갑니다.</p>`;
 };
 
 /* 로스팅 계획에서 넘어온 프로파일을 받는다 (같은 주소라 저장 영역을 공유) */
