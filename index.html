@@ -88,7 +88,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v6.6</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v6.8</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="plan">로스팅 계획</button>
@@ -190,7 +190,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
   <div class="block">
     <h2>③ 등록된 생두 <span id="b_count" class="pill"></span></h2>
-    <div class="scrollx"><table id="b_table"></table></div>
+    <div class="scrollx"><div class="tbl"><table id="b_table"></table></div></div>
   </div>
 </section>
 
@@ -330,7 +330,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
   <div class="block">
     <h2>로스팅 기록 <span id="r_count" class="pill"></span></h2>
-    <div class="scrollx"><table id="r_table"></table></div>
+    <div class="scrollx"><div class="tbl"><table id="r_table"></table></div></div>
   </div>
 </section>
 
@@ -344,14 +344,14 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
       <div style="flex:1;max-width:320px"><label>생두</label><select id="cmp_bean"></select></div>
       <button class="ghost" id="cmp_go" style="align-self:flex-end">불러오기</button>
     </div>
-    <div id="cmp_out" style="margin-top:10px"></div>
+    <div id="cmp_out" class="tbl" style="margin-top:10px"></div>
   </div>
 
   <div class="block">
     <h2>평가 대기 <span id="cw_count" class="pill"></span></h2>
     <p class="lead">볶은 지 이틀이 지났는데 아직 컵 평가가 비어 있는 배치입니다.
     누르면 그 배치의 평가로 들어갑니다.</p>
-    <div class="scrollx"><table id="cw_table"></table></div>
+    <div class="scrollx"><div class="tbl"><table id="cw_table"></table></div></div>
   </div>
 
   <div class="block">
@@ -416,7 +416,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
         <input type="checkbox" id="pf_arch" style="width:auto"> 보관함 포함
       </label>
     </div>
-    <div class="scrollx"><table id="pf_table"></table></div>
+    <div class="scrollx"><div class="tbl"><table id="pf_table"></table></div></div>
   </div>
 </section>
 
@@ -1114,7 +1114,7 @@ async function ghUp(quiet){
   try{
     const cur=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
     const body={message:`로스트포인트 ${new Date().toISOString().slice(0,16)} — 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`,
-      content:b64enc(JSON.stringify({v:"6.6",at:Date.now(),...dbForExport()}))};
+      content:b64enc(JSON.stringify({v:"6.8",at:Date.now(),...dbForExport()}))};
     if(cur&&cur.sha) body.sha=cur.sha;
     await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`,
       {method:"PUT",body:JSON.stringify(body)});
@@ -1166,7 +1166,7 @@ async function syncUp(quiet){
   try{
     const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
       method:"PUT",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({v:"6.6",at:Date.now(),...dbForExport()})});
+      body:JSON.stringify({v:"6.8",at:Date.now(),...dbForExport()})});
     const j=await r.json();
     if(!r.ok) throw new Error(j.error||"실패");
     if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
@@ -2225,6 +2225,36 @@ async function applyContext(){
     <button class="ghost sm" data-ctxclear="1">연결 끊기</button>`;
 }
 
+
+/* ---------- 공유 제목·본문에서 프로파일 이름 뽑기 ----------
+   CSV 안에는 이름이 없다. 열 데이터뿐이다.
+   파일로 받으면 파일명이 "Roast_data__Roasted_with_<이름>.csv" 라 이름이 살아 있지만,
+   앱에서 바로 공유하면 파일명이 32자리 코드가 된다. 대신 title·text 가 함께 오므로 거기서 캔다. */
+function nameFromShare(txt){
+  if(!txt) return "";
+  const t=String(txt).replace(/\r/g,"");
+  const pats=[
+    /Roasted\s+with\s+([^\n,;]{2,80})/i,
+    /Roast\s*data\s*[::]\s*([^\n,;]{2,80})/i,
+    /(?:프로파일|profile)\s*[::]\s*([^\n,;]{2,80})/i
+  ];
+  for(const re of pats){
+    const m=t.match(re);
+    if(m){
+      const v=m[1].replace(/\.(csv|alog)$/i,"").replace(/[_]+/g," ").trim();
+      if(v&&!/^[0-9A-F\s-]{20,}$/i.test(v)) return v;
+    }
+  }
+  // 밑줄로 이어붙인 형태
+  const u=t.match(/Roast[_ ]?data[_ ]*Roasted[_ ]?with[_ ]*([^\n,;]{2,80})/i);
+  if(u) return u[1].replace(/\.(csv|alog)$/i,"").replace(/[_]+/g," ").trim();
+  // 첫 줄이 쓸 만하면 그것으로
+  const first=t.split("\n").map(x=>x.trim()).find(x=>x.length>2&&x.length<80);
+  if(first&&!/^https?:/i.test(first)&&!/^[0-9A-F\s-]{20,}$/i.test(first)
+     &&!/^time,/i.test(first)) return first.replace(/\.(csv|alog)$/i,"").trim();
+  return "";
+}
+
 /* ---------- 1차 크랙 교차 확인 ----------
    CSV에는 앱에서 누른 마커가 담기지 않는다. 그래서 앱이 승온율 흔적으로 따로 추정하고,
    사람이 넣은 값과 나란히 놓아 서로 검산하게 한다. */
@@ -2470,17 +2500,20 @@ $("r_clear").onclick=()=>{clearRoast();rmsg("");};
 function beanName(id){ const b=DB.beans.find(x=>x.id===id); return b?b.name:"(삭제됨)"; }
 function renderRoasts(){
   $("r_count").textContent=DB.roasts.length+"건";
-  $("r_table").innerHTML=`<tr><th>날짜</th><th>생두</th><th>기종</th><th>프로파일</th><th class="num">배출℃</th>
-    <th class="num">시간</th><th class="num">DTR</th><th class="num">감량</th><th class="num">원가</th><th>컵</th><th></th></tr>`+
+  $("r_table").innerHTML=`<tr><th class="tight">날짜</th><th>생두</th><th class="tight">기종</th><th>프로파일</th>
+    <th class="num tight">배출℃</th><th class="num tight">시간</th><th class="num tight">DTR</th>
+    <th class="num tight">감량</th><th class="num tight">원가</th><th class="tight">컵</th><th></th></tr>`+
     (DB.roasts.length?DB.roasts.slice().reverse().map(r=>{
       const i=DB.roasts.indexOf(r);
       const cup=r.cup?(r.cup.total?r.cup.total+"점":(r.cup.sum?r.cup.sum+"/72":(r.cup.note?"메모":"점수")))
                     :`<span class="pill warn">미기입</span>`;
-      return `<tr><td>${r.date||""}</td><td>${beanName(r.beanId)}</td><td>${r.machine||""}</td><td>${r.prof||""}</td>
-        <td class="num">${r.drop?.toFixed(1)??""}</td><td class="num">${r.dur?fmt(r.dur):""}</td>
-        <td class="num">${r.dtr?.toFixed(1)??""}</td><td class="num">${r.loss?.toFixed(1)??""}</td>
-        <td class="num">${r.cost?r.cost.toLocaleString()+"원":""}</td>
-        <td>${cup}</td><td><button class="ghost sm" onclick="editRoast(${i})">수정</button>
+      const when=(r.date||"")+(r.time?` <span style="color:var(--muted)">${r.time}</span>`:"");
+      return `<tr><td class="tight">${when}</td><td class="name">${beanName(r.beanId)}</td>
+        <td class="tight">${r.machine||""}</td><td class="name">${r.prof||""}</td>
+        <td class="num tight">${r.drop?.toFixed(1)??""}</td><td class="num tight">${r.dur?fmt(r.dur):""}</td>
+        <td class="num tight">${r.dtr?.toFixed(1)??""}</td><td class="num tight">${r.loss?.toFixed(1)??""}</td>
+        <td class="num tight">${r.cost?r.cost.toLocaleString()+"원":""}</td>
+        <td class="tight">${cup}</td><td class="tight"><button class="ghost sm" onclick="editRoast(${i})">수정</button>
         <button class="ghost sm" onclick="delRoast(${i})">삭제</button></td></tr>`;
     }).join(""):`<tr><td colspan="11" style="color:var(--muted)">아직 없습니다</td></tr>`);
 }
@@ -2488,7 +2521,7 @@ window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); ren
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
-  const b=new Blob([JSON.stringify({v:"6.6",saved:new Date().toISOString(),...dbForExport()},null,1)],
+  const b=new Blob([JSON.stringify({v:"6.8",saved:new Date().toISOString(),...dbForExport()},null,1)],
     {type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(b);
   a.download="roastpoint-records-"+new Date().toISOString().slice(0,10)+".json"; a.click();
@@ -2588,10 +2621,17 @@ async function pickupShared(){
     const logFiles=files.filter(f=>isLog(f.text)||/\.(csv|alog)$/i.test(f.name||""));
     if(logFiles.length||(sharedText&&isLog(sharedText))){
       let done=0, errs=[];
+      const shareName=nameFromShare(sharedText);
       for(const f of logFiles){
         try{
           if(/\.alog$/i.test(f.name)||f.text.trim().startsWith("{")) applyAlog(parseAlog(f.text));
-          else applyLog(readLog(f.text,f.name));
+          else{
+            const L=readLog(f.text,f.name);
+            if(!cleanLogName(f.name).replace(/^로그 /,"")||/^로그 \d/.test(cleanLogName(f.name))){
+              if(shareName) L.prof=shareName;                 // 공유 제목에서 살린 이름
+            }
+            applyLog(L);
+          }
           done++;
         }catch(err){ errs.push(`${f.name}: ${err.message}`); }
       }
