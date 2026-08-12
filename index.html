@@ -82,19 +82,60 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 .note{font-size:12.5px;color:var(--muted);margin-top:6px}
 .bar{display:flex;gap:7px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--rule);margin-top:22px}
 @media(max-width:640px){nav{width:100%;margin-left:0}nav button{flex:1}}
+
+/* ---------- 라벨 인쇄 ----------
+   화면 미리보기와 인쇄물이 같은 함수로 만들어진다. 미리보기는 축소만 걸린 A4다. */
+#printroot{display:none}
+.sheetbox{position:relative;margin:0 0 14px;overflow:hidden}
+.sheet{width:210mm;height:297mm;background:#fff;position:relative;
+  transform-origin:0 0;box-shadow:0 0 0 1px var(--rule)}
+.lb{position:absolute;overflow:hidden;color:#111;line-height:1.26;
+  font-family:"Noto Sans KR",system-ui,-apple-system,"Segoe UI",sans-serif;
+  display:flex;flex-direction:column}
+/* 줄이 눌려 찌그러지지 않게 — 눌리면 넘침을 감지할 수 없다 */
+.lb>*{flex:none}
+.lb.frame{outline:.2mm solid #9a9a9a;outline-offset:-.1mm}
+.lb .l-brand{font-size:.72em;letter-spacing:.14em;text-transform:uppercase;color:#666;
+  display:flex;justify-content:space-between;gap:.6em}
+.lb .l-name{font-size:1.3em;font-weight:700;line-height:1.15;margin-top:.15em;
+  word-break:keep-all;overflow-wrap:anywhere}
+.lb .l-sub{font-size:.86em;color:#333;margin-top:.1em}
+.lb .l-spec{font-size:.82em;color:#555;margin-top:.15em}
+.lb .l-note{font-size:.9em;margin-top:.25em;word-break:keep-all;overflow-wrap:anywhere}
+.lb .l-note b{font-weight:700}
+.lb .l-line{border-top:.15mm solid #bbb;margin-top:.3em;padding-top:.2em}
+.lb .l-foot{font-size:.8em;color:#333;margin-top:auto;display:flex;
+  justify-content:space-between;gap:.5em;padding-top:.25em}
+.lb .l-num{font-size:1.1em;color:#aaa;margin:auto;text-align:center}
+.lb.over{outline:.5mm solid var(--actual)!important;outline-offset:-.25mm}
+#lb_prevwrap{overflow-x:auto;background:var(--paper-2);padding:10px;border:1px solid var(--rule)}
+
+@media print{
+  @page{size:A4;margin:0}
+  html,body{background:#fff!important;margin:0!important;padding:0!important}
+  body>header,body>main{display:none!important}
+  #printroot{display:block!important}
+  #printroot .sheetbox{margin:0;overflow:visible}
+  /* 297mm 를 꽉 채우면 반올림 때문에 빈 쪽이 하나 더 나오는 브라우저가 있다 — 0.1mm 줄인다 */
+  #printroot .sheet{height:296.9mm;transform:none!important;box-shadow:none;
+    break-after:page;page-break-after:always}
+  #printroot .sheet:last-child{break-after:auto;page-break-after:auto}
+  #printroot .lb.over{outline:none!important}
+}
 </style>
 </head>
 <body>
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v6.8</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v6.9</span>
   <nav>
     <button class="on" data-p="beans">생두</button>
     <button data-p="plan">로스팅 계획</button>
     <button data-p="roasts">로스팅 기록</button>
     <button data-p="profiles">프로파일</button>
     <button data-p="cup">커핑</button>
+    <button data-p="label">라벨</button>
     <button data-p="data">데이터</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 14px;font-size:14.5px;color:var(--setpoint);text-decoration:none">스튜디오 →</a>
   </nav>
@@ -420,6 +461,109 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
   </div>
 </section>
 
+<!-- ================= 라벨 ================= -->
+<section class="pane" id="p-label">
+
+  <div class="block">
+    <h2>① 무엇을 붙일지 고르기 <span id="lb_count" class="pill"></span></h2>
+    <p class="lead">고른 항목이 <b>한 칸에 하나씩</b> 들어갑니다. 로스팅 기록을 고르면
+    생두 정보와 <b>컵노트가 함께</b> 인쇄되고, 생두를 고르면 보관 통에 붙일 라벨이 됩니다.</p>
+    <div class="row" style="margin-bottom:9px">
+      <label style="margin:0">대상</label>
+      <select id="lb_target" style="width:auto">
+        <option value="roast">로스팅 기록 (원두 봉투용)</option>
+        <option value="bean">생두 (보관 용기용)</option>
+      </select>
+      <input type="text" id="lb_find" placeholder="이름으로 찾기" style="width:auto;flex:1;min-width:140px">
+      <button class="ghost sm" id="lb_all">전체 선택</button>
+      <button class="ghost sm" id="lb_none">선택 해제</button>
+    </div>
+    <div class="scrollx"><div class="tbl"><table id="lb_table"></table></div></div>
+  </div>
+
+  <div class="block">
+    <h2>② 라벨지 규격</h2>
+    <p class="lead">쓰는 라벨지를 고르면 칸 크기와 여백이 채워집니다.
+    <b>처음 한 번은 「시험 인쇄」로 빈 종이에 격자만 뽑아</b> 라벨지에 겹쳐 보세요.
+    한 칸씩 밀리면 아래 <b>미세 조정</b>에 밀린 만큼(mm) 넣으면 맞습니다.</p>
+    <div class="row" style="margin-bottom:9px">
+      <label style="margin:0">규격</label>
+      <select id="lb_sheet" style="width:auto;flex:1;min-width:230px"></select>
+      <label style="margin:0">시작 칸</label>
+      <input type="number" id="lb_start" min="1" value="1" style="width:74px">
+    </div>
+    <p class="note" style="margin:0 0 9px">시작 칸은 <b>왼쪽→오른쪽, 위→아래</b>로 셉니다.
+    이미 몇 장 뗀 라벨지를 다시 쓸 때 유용합니다.</p>
+    <div class="extra">
+      <p class="tagline">칸 배치 — 직접 고쳐도 됩니다 (mm)</p>
+      <div class="grid g5">
+        <div><label>가로 칸 수</label><input type="number" id="lb_cols" min="1" step="1"></div>
+        <div><label>세로 칸 수</label><input type="number" id="lb_rows" min="1" step="1"></div>
+        <div><label>칸 너비</label><input type="number" id="lb_w" step="0.1"></div>
+        <div><label>칸 높이</label><input type="number" id="lb_h" step="0.1"></div>
+        <div><label>왼쪽 여백</label><input type="number" id="lb_mx" step="0.1"></div>
+        <div><label>위 여백</label><input type="number" id="lb_my" step="0.1"></div>
+        <div><label>가로 간격</label><input type="number" id="lb_gx" step="0.1"></div>
+        <div><label>세로 간격</label><input type="number" id="lb_gy" step="0.1"></div>
+        <div><label>미세 조정 ← →</label><input type="number" id="lb_ox" step="0.1" value="0"></div>
+        <div><label>미세 조정 ↑ ↓</label><input type="number" id="lb_oy" step="0.1" value="0"></div>
+      </div>
+      <p class="note">폼텍 규격은 칸 크기가 공식 값이고 여백은 A4 가운데 정렬로 잡았습니다.
+      라벨지마다 미세하게 다르니 시험 인쇄로 한 번만 맞춰두면 됩니다.</p>
+    </div>
+  </div>
+
+  <div class="block">
+    <h2>③ 라벨에 넣을 내용</h2>
+    <div class="grid g5">
+      <div><label>브랜드 · 로스터 이름</label><input type="text" id="lb_brand" placeholder="ROASTPOINT"></div>
+      <div><label>중량 표기</label><input type="text" id="lb_weight" placeholder="200g"></div>
+      <div><label>배전도</label><select id="lb_level">
+        <option value="auto">자동 (색도에서 추정)</option>
+        <option value="">표기 안 함</option>
+        <option value="라이트">라이트</option>
+        <option value="미디엄 라이트">미디엄 라이트</option>
+        <option value="미디엄">미디엄</option>
+        <option value="미디엄 다크">미디엄 다크</option>
+        <option value="다크">다크</option>
+      </select></div>
+      <div><label>권장 음용 시작 (로스팅 후 일)</label><input type="number" id="lb_bestA" value="4" min="0"></div>
+      <div><label>권장 음용 끝 (일)</label><input type="number" id="lb_bestB" value="30" min="1"></div>
+      <div><label>글자 크기</label><select id="lb_fs">
+        <option value="0.85">작게</option>
+        <option value="1" selected>보통</option>
+        <option value="1.2">크게</option>
+        <option value="1.4">아주 크게</option>
+      </select></div>
+      <div class="wide"><label>추출 안내 — 넣고 싶을 때만</label>
+        <input type="text" id="lb_recipe" placeholder="15g / 250ml / 92℃ / 2:30"></div>
+    </div>
+    <div class="extra" style="margin-top:9px">
+      <p class="tagline">항목 — 켠 것만 인쇄됩니다</p>
+      <div id="lb_fields"></div>
+      <div class="row" style="margin-top:10px">
+        <label style="display:flex;align-items:center;gap:7px;margin:0;font-size:13px;color:var(--ink)">
+          <input type="checkbox" id="lb_frame" style="width:auto"> 칸 테두리 그리기 (자리 확인용 — 실제 인쇄에는 보통 끕니다)
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="block">
+    <h2>④ 미리보기 · 인쇄</h2>
+    <div class="row" style="margin-bottom:9px">
+      <button id="lb_print">인쇄</button>
+      <button class="ghost" id="lb_test">시험 인쇄 (격자만)</button>
+      <button class="ghost" id="lb_reset">규격 되돌리기</button>
+      <span class="note" id="lb_msg"></span>
+    </div>
+    <p class="note" style="margin:0 0 9px">인쇄 창에서 <b>여백 없음</b>, <b>배율 100%</b>(‘페이지에 맞춤’ 끄기),
+    용지 <b>A4</b>인지 확인하세요. 이 셋 중 하나만 달라도 칸이 어긋납니다.</p>
+    <div id="lb_prevwrap"><div id="lb_prev"></div></div>
+  </div>
+
+</section>
+
 <!-- ================= 데이터 ================= -->
 <section class="pane" id="p-data">
   <div class="block">
@@ -492,6 +636,9 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 </main>
 
+<!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
+<div id="printroot"></div>
+
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
@@ -507,6 +654,7 @@ document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".pane").forEach(p=>p.classList.toggle("on",p.id==="p-"+b.dataset.p));
   if(b.dataset.p==="data") stats();
   if(b.dataset.p==="cup"){ renderWaiting(); cmpFill(); }
+  if(b.dataset.p==="label") lbOpen();
 });
 
 
@@ -2769,6 +2917,356 @@ pickupShared();
     h.innerHTML="iOS는 앱 간 공유 대상 등록을 지원하지 않습니다. IKAWA에서 <b>파일에 저장</b> 후 아래에서 고르세요.";
   }
 })();
+
+/* ================= 라벨 인쇄 =================
+   화면 미리보기와 실제 인쇄물을 같은 함수(lbBuild)로 만든다.
+   그래야 "미리보기에서 보이던 대로" 나온다. 칸 위치는 전부 mm 로만 계산하고,
+   브라우저 배율·여백은 인쇄 대화상자에서 100% · 여백 없음이어야 맞는다. */
+
+const MMPX = 96/25.4;                      // 화면 미리보기 축소용
+/* 폼텍 칸 크기는 공식 값. 여백은 A4 가운데 정렬로 잡고 사용자가 고칠 수 있게 둔다. */
+const LBS=[
+  {id:"ls3105", g:"폼텍 A4",  n:"LS-3105 · 21칸 · 63×38",      c:3,r:7, w:63,   h:38,   gx:2.5,gy:0},
+  {id:"ls3106", g:"폼텍 A4",  n:"LS-3106 · 24칸 · 64×34",      c:3,r:8, w:64,   h:34,   gx:2.5,gy:0},
+  {id:"ls3102", g:"폼텍 A4",  n:"LS-3102 · 40칸 · 47×26.9",    c:4,r:10,w:47,   h:26.9, gx:2,  gy:0},
+  {id:"ls3109", g:"폼텍 A4",  n:"LS-3109 · 18칸 · 100×30",     c:2,r:9, w:100,  h:30,   gx:2,  gy:0},
+  {id:"ls3107", g:"폼텍 A4",  n:"LS-3107 · 16칸 · 99.1×33.9",  c:2,r:8, w:99.1, h:33.9, gx:2.5,gy:0},
+  {id:"ls3108", g:"폼텍 A4",  n:"LS-3108 · 14칸 · 99.1×38.1",  c:2,r:7, w:99.1, h:38.1, gx:2.5,gy:0},
+  {id:"ls3112", g:"폼텍 A4",  n:"LS-3112 · 12칸 · 63.5×70",    c:3,r:4, w:63.5, h:70,   gx:2.5,gy:0},
+  {id:"ls3114", g:"폼텍 A4",  n:"LS-3114 · 8칸 · 99.1×67.7",   c:2,r:4, w:99.1, h:67.7, gx:2.5,gy:0},
+  {id:"ls3118", g:"폼텍 A4",  n:"LS-3118 · 4칸 · 99.1×140",    c:2,r:2, w:99.1, h:140,  gx:2.5,gy:0},
+  {id:"av7160", g:"에이버리 호환", n:"L7160 · 21칸 · 63.5×38.1", c:3,r:7, w:63.5,h:38.1, gx:2.5,gy:0},
+  {id:"av7165", g:"에이버리 호환", n:"L7165 · 8칸 · 99.1×67.7",  c:2,r:4, w:99.1,h:67.7, gx:2.5,gy:0},
+  {id:"full2",  g:"무테 (여백 없이 꽉 채움)", n:"2칸 · 210×148.5",  c:1,r:2, w:210, h:148.5, gx:0,gy:0,mx:0,my:0},
+  {id:"full4",  g:"무테 (여백 없이 꽉 채움)", n:"4칸 · 105×148.5",  c:2,r:2, w:105, h:148.5, gx:0,gy:0,mx:0,my:0},
+  {id:"full8",  g:"무테 (여백 없이 꽉 채움)", n:"8칸 · 105×74.25",  c:2,r:4, w:105, h:74.25, gx:0,gy:0,mx:0,my:0},
+  {id:"full12", g:"무테 (여백 없이 꽉 채움)", n:"12칸 · 70×74.25",  c:3,r:4, w:70,  h:74.25, gx:0,gy:0,mx:0,my:0},
+  {id:"custom", g:"", n:"직접 지정",             c:3,r:7, w:63,  h:38,    gx:2.5,gy:0}
+];
+/* 라벨에 넣을 수 있는 항목 — [키, 이름, 기본값, 어느 대상에서 쓰나] */
+const LBF=[
+  ["brand", "브랜드 · 로스터 이름",1,"both"],
+  ["origin","원산지 · 생산지역",   1,"both"],
+  ["farm",  "농장 · 농장주",       1,"both"],
+  ["var",   "품종",               1,"both"],
+  ["proc",  "가공",               1,"both"],
+  ["alt",   "고도",               1,"both"],
+  ["grade", "등급 · 수확시기",     0,"both"],
+  ["level", "배전도",             1,"roast"],
+  ["date",  "로스팅 날짜",         1,"both"],
+  ["best",  "권장 음용 기간",      0,"roast"],
+  ["weight","중량",               1,"both"],
+  ["flavor","향미 태그",           1,"both"],
+  ["note",  "내 컵노트",           1,"roast"],
+  ["seller","판매처 컵노트",       0,"both"],
+  ["score", "컵 점수",            0,"roast"],
+  ["batch", "기종 · 프로파일",     0,"roast"],
+  ["nums",  "로스팅 수치 (DTR·감량·배출℃)",0,"roast"],
+  ["recipe","추출 안내",           0,"both"]
+];
+const LBSEL=new Map();                    // id → 매수
+let lbReady=false;
+
+const lbEsc=s=>String(s==null?"":s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const lbJoin=(sep,...a)=>a.map(x=>(x==null?"":String(x).trim())).filter(Boolean).join(sep);
+function lbDate(s){ return s?String(s).replace(/-/g,"."):""; }
+function lbPlus(s,d){
+  if(!s) return "";
+  const t=new Date(s+"T00:00:00"); if(isNaN(t)) return "";
+  t.setDate(t.getDate()+(+d||0));
+  return `${t.getFullYear()}.${String(t.getMonth()+1).padStart(2,"0")}.${String(t.getDate()).padStart(2,"0")}`;
+}
+/* 색도(Agtron 원두)로 배전도를 어림잡는다. 값이 없으면 비워 둔다 — 추측해서 틀린 표기를 하느니 낫다. */
+function lbLevelAuto(r){
+  const a=+(r&&r.agt); if(!a) return "";
+  if(a>=75) return "라이트";
+  if(a>=65) return "미디엄 라이트";
+  if(a>=55) return "미디엄";
+  if(a>=45) return "미디엄 다크";
+  return "다크";
+}
+const lbFlavor=k=>{ const f=CATA.find(x=>x[0]===k); return f?f[1]:k; };
+
+/* ---------- 설정 읽기·쓰기 ---------- */
+function lbCfg(){
+  const num=(id,d)=>{ const v=parseFloat($(id).value); return isNaN(v)?d:v; };
+  const f={}; LBF.forEach(([k])=>{ const e=$("lbf_"+k); f[k]=e?e.checked:false; });
+  return {
+    target:$("lb_target").value, sheet:$("lb_sheet").value,
+    cols:Math.max(1,Math.round(num("lb_cols",3))), rows:Math.max(1,Math.round(num("lb_rows",7))),
+    w:num("lb_w",63), h:num("lb_h",38), mx:num("lb_mx",0), my:num("lb_my",0),
+    gx:num("lb_gx",0), gy:num("lb_gy",0), ox:num("lb_ox",0), oy:num("lb_oy",0),
+    start:Math.max(1,Math.round(num("lb_start",1))),
+    fs:num("lb_fs",1), frame:$("lb_frame").checked,
+    brand:$("lb_brand").value.trim(), weight:$("lb_weight").value.trim(),
+    level:$("lb_level").value, recipe:$("lb_recipe").value.trim(),
+    bestA:num("lb_bestA",4), bestB:num("lb_bestB",30), f
+  };
+}
+function lbSave(){
+  const c=lbCfg(); delete c.start;
+  DB.settings.label=c; persist();
+}
+function lbLoad(){
+  const c=DB.settings.label; if(!c) return;
+  const set=(id,v)=>{ if(v!=null&&v!=="") $(id).value=v; };
+  if(c.sheet) $("lb_sheet").value=c.sheet;
+  ["cols","rows","w","h","mx","my","gx","gy","ox","oy"].forEach(k=>{
+    if(c[k]!=null) $("lb_"+k).value=c[k];
+  });
+  set("lb_target",c.target); set("lb_fs",c.fs); set("lb_brand",c.brand);
+  set("lb_weight",c.weight); set("lb_recipe",c.recipe);
+  if(c.level!=null) $("lb_level").value=c.level;
+  if(c.bestA!=null) $("lb_bestA").value=c.bestA;
+  if(c.bestB!=null) $("lb_bestB").value=c.bestB;
+  $("lb_frame").checked=!!c.frame;
+  if(c.f) LBF.forEach(([k])=>{ const e=$("lbf_"+k); if(e&&c.f[k]!=null) e.checked=!!c.f[k]; });
+}
+
+/* ---------- 규격 채우기 ---------- */
+function lbApplySheet(keepOffsets){
+  const s=LBS.find(x=>x.id===$("lb_sheet").value);
+  if(!s||s.id==="custom") return;
+  const mx=s.mx!=null?s.mx:(210-(s.c*s.w+(s.c-1)*s.gx))/2;
+  const my=s.my!=null?s.my:(297-(s.r*s.h+(s.r-1)*s.gy))/2;
+  $("lb_cols").value=s.c; $("lb_rows").value=s.r;
+  $("lb_w").value=s.w; $("lb_h").value=s.h;
+  $("lb_gx").value=s.gx; $("lb_gy").value=s.gy;
+  $("lb_mx").value=Math.max(0,+mx.toFixed(2)); $("lb_my").value=Math.max(0,+my.toFixed(2));
+  if(!keepOffsets){ $("lb_ox").value=0; $("lb_oy").value=0; }
+}
+
+/* ---------- 인쇄할 내용 만들기 ---------- */
+function lbList(){                          // 화면 목록에 뿌릴 대상
+  const q=$("lb_find").value.trim().toLowerCase();
+  if($("lb_target").value==="bean")
+    return DB.beans.slice().reverse().filter(b=>!q||(b.name||"").toLowerCase().includes(q));
+  return DB.roasts.slice().reverse().filter(r=>{
+    if(!q) return true;
+    return (beanName(r.beanId)+" "+(r.prof||"")).toLowerCase().includes(q);
+  });
+}
+function lbData(o,cfg){                     // 한 칸에 들어갈 값들을 정리
+  const isBean=cfg.target==="bean";
+  const b=isBean?o:DB.beans.find(x=>x.id===o.beanId);
+  const r=isBean?null:o;
+  const cup=(r&&r.cup)||{};
+  const left=isBean?(()=>{ const q=+b?.qty||0; return q?Math.max(0,q-usedG(b.id)):0; })():0;
+  return {
+    name: (b&&b.name)||"(생두 없음)",
+    origin: lbJoin(" · ", b&&b.origin, b&&b.region),
+    farm: (b&&b.farm)||"",
+    var: (b&&b.var)||"", proc: (b&&b.proc)||"", alt: b&&b.alt?b.alt+"m":"",
+    grade: lbJoin(" · ", b&&b.grade, b&&b.harvest),
+    level: cfg.level==="auto"?lbLevelAuto(r):cfg.level,
+    date: isBean?lbDate(b&&b.bought):lbDate(r&&r.date),
+    dateLabel: isBean?"구입":"로스팅",
+    best: (!isBean&&r&&r.date)?`${lbPlus(r.date,cfg.bestA)} ~ ${lbPlus(r.date,cfg.bestB)}`:"",
+    weight: cfg.weight || (isBean?(left?left.toFixed(0)+"g":""):(r&&r.outG?r.outG+"g":"")),
+    flavor: isBean
+      ? ((b&&b.noteCats)||[]).map(lbFlavor).join(", ")
+      : (cup.flavors||[]).map(lbFlavor).join(", "),
+    note: cup.note||"",
+    seller: (b&&b.notes)||"",
+    score: cup.total!=null?cup.total+"점":(cup.sum?cup.sum+"/72":""),
+    batch: lbJoin(" · ", r&&r.machine, r&&r.prof),
+    nums: r?lbJoin(" · ",
+      r.drop?"배출 "+(+r.drop).toFixed(1)+"℃":"",
+      r.dur?"총 "+fmt(r.dur):"",
+      r.dtr?"DTR "+(+r.dtr).toFixed(1)+"%":"",
+      r.loss?"감량 "+(+r.loss).toFixed(1)+"%":""):"",
+    recipe: cfg.recipe
+  };
+}
+function lbHtml(d,cfg){
+  const on=k=>cfg.f[k], E=lbEsc, out=[];
+  const bd=on("brand")?E(cfg.brand):"", lv=on("level")&&d.level?E(d.level):"";
+  if(bd||lv) out.push(`<div class="l-brand"><span>${bd}</span><span>${lv}</span></div>`);
+  out.push(`<div class="l-name">${E(d.name)}</div>`);
+  const sub=lbJoin(" · ", on("origin")?d.origin:"", on("farm")?d.farm:"");
+  if(sub) out.push(`<div class="l-sub">${E(sub)}</div>`);
+  const spec=lbJoin(" · ", on("var")?d.var:"", on("proc")?d.proc:"",
+                    on("alt")?d.alt:"", on("grade")?d.grade:"");
+  if(spec) out.push(`<div class="l-spec">${E(spec)}</div>`);
+
+  const notes=[];
+  if(on("flavor")&&d.flavor) notes.push(`<b>향미</b> ${E(d.flavor)}`);
+  if(on("note")&&d.note)     notes.push(`<b>컵노트</b> ${E(d.note)}`);
+  if(on("seller")&&d.seller) notes.push(`<b>판매처</b> ${E(d.seller)}`);
+  if(on("recipe")&&d.recipe) notes.push(`<b>추출</b> ${E(d.recipe)}`);
+  if(notes.length)
+    out.push(`<div class="l-note l-line">${notes.join("<br>")}</div>`);
+
+  const extra=lbJoin(" · ", on("batch")?d.batch:"", on("nums")?d.nums:"");
+  if(extra) out.push(`<div class="l-spec">${E(extra)}</div>`);
+  if(on("best")&&d.best) out.push(`<div class="l-spec">권장 음용 ${E(d.best)}</div>`);
+
+  const L=[], R=[];
+  if(on("date")&&d.date) L.push(`${d.dateLabel} ${d.date}`);
+  if(on("score")&&d.score) L.push(d.score);
+  if(on("weight")&&d.weight) R.push(d.weight);
+  if(L.length||R.length)
+    out.push(`<div class="l-foot l-line"><span>${E(L.join(" · "))}</span><span>${E(R.join(" "))}</span></div>`);
+  return out.join("");
+}
+
+/* ---------- 종이 만들기 ---------- */
+function lbBuild(host,items,cfg,test){
+  host.innerHTML="";
+  const per=cfg.cols*cfg.rows;
+  const start=Math.min(per-1,cfg.start-1);
+  const total=test?per:start+items.length;
+  const pages=Math.max(1,Math.ceil(total/per));
+  const base=Math.max(5,Math.min(12,cfg.h*0.175))*cfg.fs;
+  const pad=Math.max(1.1,Math.min(4,Math.min(cfg.h,cfg.w)*0.06));
+  for(let p=0;p<pages;p++){
+    const box=document.createElement("div"); box.className="sheetbox";
+    const sh=document.createElement("div"); sh.className="sheet";
+    for(let i=0;i<per;i++){
+      const idx=p*per+i;
+      const it=test?null:(idx>=start?items[idx-start]:undefined);
+      if(!test&&it===undefined) continue;
+      const col=i%cfg.cols, row=Math.floor(i/cfg.cols);
+      const el=document.createElement("div");
+      el.className="lb"+((cfg.frame||test)?" frame":"");
+      el.style.cssText=
+        `left:${(cfg.mx+col*(cfg.w+cfg.gx)+cfg.ox).toFixed(2)}mm;`+
+        `top:${(cfg.my+row*(cfg.h+cfg.gy)+cfg.oy).toFixed(2)}mm;`+
+        `width:${cfg.w}mm;height:${cfg.h}mm;padding:${pad.toFixed(2)}mm;`+
+        `font-size:${base.toFixed(2)}pt`;
+      el.innerHTML=test?`<div class="l-num">${idx+1}</div>`:lbHtml(lbData(it,cfg),cfg);
+      sh.appendChild(el);
+    }
+    box.appendChild(sh); host.appendChild(box);
+  }
+  return pages;
+}
+function lbFit(host){                        // 미리보기를 화면 폭에 맞춰 줄인다
+  const w=$("lb_prevwrap").clientWidth-22;
+  const s=Math.max(.2,Math.min(1,w/(210*MMPX)));
+  host.querySelectorAll(".sheetbox").forEach(b=>{
+    const sh=b.querySelector(".sheet");
+    sh.style.transform=`scale(${s})`;
+    b.style.width=(210*MMPX*s)+"px"; b.style.height=(297*MMPX*s)+"px";
+  });
+}
+function lbPicked(){                         // 선택한 항목을 매수만큼 펼친다
+  const out=[], target=$("lb_target").value;
+  lbList().forEach(o=>{
+    const n=LBSEL.get(o.id)||0;
+    for(let i=0;i<n;i++) out.push(o);
+  });
+  return out;
+}
+function lbRender(){
+  if(!lbReady) return;
+  const cfg=lbCfg(), items=lbPicked(), host=$("lb_prev");
+  $("lb_start").max=cfg.cols*cfg.rows;
+  const empty=!items.length;
+  const pages=lbBuild(host,items,cfg,empty);
+  lbFit(host);
+  let over=0;
+  host.querySelectorAll(".lb").forEach(el=>{
+    if(el.scrollHeight>el.clientHeight+1){ el.classList.add("over"); over++; }
+  });
+  const per=cfg.cols*cfg.rows;
+  $("lb_count").textContent=items.length?`${items.length}장`:"고른 것 없음";
+  $("lb_msg").innerHTML=empty
+    ? `<span class="pill">칸 번호 미리보기</span> 위에서 인쇄할 항목을 고르세요. 한 장에 ${per}칸입니다.`
+    : `<span class="pill ok">${items.length}장 · ${pages}쪽</span> 한 장에 ${per}칸`
+      +(over?` · <span class="pill warn">넘침 ${over}칸</span> 글자 크기를 줄이거나 항목을 몇 개 끄세요.`:"");
+}
+const lbSoon=(()=>{ let t=null; return ()=>{ clearTimeout(t); t=setTimeout(lbRender,120); }; })();
+
+/* ---------- 목록 ---------- */
+function lbTable(){
+  const target=$("lb_target").value, rows=lbList();
+  const head=target==="bean"
+    ? `<tr><th style="width:38px"></th><th>생두</th><th>가공</th><th class="num">남은 양</th><th class="num" style="width:74px">매수</th></tr>`
+    : `<tr><th style="width:38px"></th><th class="tight">날짜</th><th>생두</th><th class="tight">컵노트</th><th class="num" style="width:74px">매수</th></tr>`;
+  $("lb_table").innerHTML=head+(rows.length?rows.map(o=>{
+    const n=LBSEL.get(o.id)||0;
+    const cells=target==="bean"
+      ? `<td class="name">${o.name||""}</td><td>${o.proc||""}</td>
+         <td class="num">${(()=>{const q=+o.qty||0;return q?Math.max(0,q-usedG(o.id)).toFixed(0):"–";})()}</td>`
+      : `<td class="tight">${o.date||""}</td><td class="name">${beanName(o.beanId)}</td>
+         <td class="tight">${o.cup&&o.cup.note?"있음":(o.cup&&o.cup.flavors?"향미만":'<span class="pill warn">없음</span>')}</td>`;
+    return `<tr><td><input type="checkbox" data-lbid="${o.id}" ${n?"checked":""} style="width:auto"></td>
+      ${cells}
+      <td class="num"><input type="number" min="0" step="1" data-lbn="${o.id}" value="${n}"
+        style="width:60px;text-align:right;padding:3px 5px"></td></tr>`;
+  }).join(""):`<tr><td colspan="5" style="color:var(--muted)">아직 없습니다</td></tr>`);
+}
+/* 생두 라벨에는 로스팅에서만 나오는 항목이 없다 — 아예 감춘다 */
+function lbScope(){
+  const bean=$("lb_target").value==="bean";
+  LBF.forEach(([k,,,scope])=>{
+    const w=$("lbw_"+k); if(w) w.hidden=bean&&scope==="roast";
+  });
+  ["lb_level","lb_bestA","lb_bestB"].forEach(id=>{
+    const p=$(id).parentElement; if(p) p.hidden=bean;
+  });
+}
+function lbOpen(){
+  if(!lbReady){
+    $("lb_sheet").innerHTML=(()=>{
+      let html="",g=null;
+      LBS.forEach(s=>{
+        if(s.g!==g){ if(g!==null) html+="</optgroup>"; g=s.g; if(g) html+=`<optgroup label="${g}">`; }
+        html+=`<option value="${s.id}">${s.n}</option>`;
+      });
+      return html+(g?"</optgroup>":"");
+    })();
+    $("lb_fields").innerHTML=`<div class="sliders">`+LBF.map(([k,n,d,scope])=>
+      `<label id="lbw_${k}" data-scope="${scope}"
+        style="display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink)">
+       <input type="checkbox" id="lbf_${k}" ${d?"checked":""} style="width:auto"> ${n}</label>`).join("")+`</div>`;
+    $("lb_sheet").value="ls3105"; lbApplySheet();
+    lbReady=true; lbLoad();
+    ["lb_cols","lb_rows","lb_w","lb_h","lb_mx","lb_my","lb_gx","lb_gy","lb_ox","lb_oy",
+     "lb_start","lb_fs","lb_frame","lb_brand","lb_weight","lb_level","lb_recipe","lb_bestA","lb_bestB"]
+      .forEach(id=>$(id).addEventListener("input",()=>{ lbSave(); lbSoon(); }));
+    LBF.forEach(([k])=>$("lbf_"+k).addEventListener("change",()=>{ lbSave(); lbSoon(); }));
+    $("lb_sheet").addEventListener("change",()=>{ lbApplySheet(true); lbSave(); lbRender(); });
+    $("lb_target").addEventListener("change",()=>{ LBSEL.clear(); lbSave(); lbScope(); lbTable(); lbRender(); });
+    $("lb_find").addEventListener("input",lbTable);
+    $("lb_table").addEventListener("change",e=>{
+      /* 표를 통째로 다시 그리면 입력 중인 칸이 흔들린다 — 짝이 되는 칸만 맞춘다 */
+      const t=e.target, row=t.closest("tr");
+      if(t.dataset.lbid!=null){
+        const id=t.dataset.lbid, box=row&&row.querySelector("[data-lbn]");
+        if(t.checked){ const n=Math.max(1,LBSEL.get(id)||1); LBSEL.set(id,n); if(box) box.value=n; }
+        else { LBSEL.delete(id); if(box) box.value=0; }
+        lbRender();
+      }else if(t.dataset.lbn!=null){
+        const id=t.dataset.lbn, n=Math.max(0,parseInt(t.value)||0);
+        if(n) LBSEL.set(id,n); else LBSEL.delete(id);
+        t.value=n;
+        const chk=row&&row.querySelector("[data-lbid]"); if(chk) chk.checked=n>0;
+        lbRender();
+      }
+    });
+    $("lb_all").onclick=()=>{ lbList().forEach(o=>LBSEL.set(o.id,Math.max(1,LBSEL.get(o.id)||1)));
+      lbTable(); lbRender(); };
+    $("lb_none").onclick=()=>{ LBSEL.clear(); lbTable(); lbRender(); };
+    $("lb_reset").onclick=()=>{ lbApplySheet(); $("lb_start").value=1; lbSave(); lbRender();
+      $("lb_msg").innerHTML='<span class="pill">되돌림</span> 규격 기본값으로 돌아갔습니다.'; };
+    $("lb_print").onclick=()=>{
+      const cfg=lbCfg(), items=lbPicked();
+      if(!items.length){ $("lb_msg").innerHTML='<span class="pill warn">고른 것 없음</span> 인쇄할 항목을 먼저 고르세요.'; return; }
+      lbBuild($("printroot"),items,cfg,false);
+      window.print();
+    };
+    $("lb_test").onclick=()=>{
+      lbBuild($("printroot"),[],lbCfg(),true);
+      window.print();
+    };
+    window.addEventListener("resize",()=>lbFit($("lb_prev")));
+  }
+  lbScope(); lbTable(); lbRender();
+}
+window.addEventListener("afterprint",()=>{ $("printroot").innerHTML=""; });
 
 restore();
 </script>
