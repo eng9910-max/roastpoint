@@ -621,9 +621,13 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <p class="note" id="ik_support"></p>
     <div class="row">
       <button id="ik_connect">머신 연결</button>
+      <button class="ghost" id="ik_connectall">모든 기기 보기</button>
       <button class="ghost" id="ik_disconnect" disabled>끊기</button>
       <span class="note" id="ik_msg"></span>
     </div>
+    <p class="note">목록에 IKAWA가 <b>「알 수 없거나 지원되지 않는 기기」</b>로 뜨고 페어링 버튼이 눌리지 않으면,
+    블루투스 드라이버가 광고 정보를 제대로 못 읽는 경우입니다.
+    그때는 <b>「모든 기기 보기」</b>로 열어 주소가 <span class="mono">88:6B:0F:…</span> 인 기기를 고르세요.</p>
     <p class="note">이 기능은 IKAWA가 공식 지원하는 방식이 아니라, <b>공개된 통신 규격을 읽어 만든 것</b>입니다.
     펌웨어가 바뀌면 동작하지 않을 수 있고 제조사 보증 대상이 아닙니다.
     크롬·엣지에서만 되고 <b>아이폰에서는 되지 않습니다</b>(iOS가 웹 블루투스를 지원하지 않음).</p>
@@ -677,9 +681,28 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
       <button class="ghost sm" id="ik_selftest">자체 시험</button>
     </div>
     <div class="scrollx"><div class="tbl"><table id="ik_fields"></table></div></div>
+    <div class="extra" id="ik_remotebox" hidden style="margin-bottom:10px">
+      <p class="tagline">다른 기기에서 올라온 기록</p>
+      <p class="note" id="ik_remoteinfo" style="margin:0 0 7px"></p>
+      <div class="row">
+        <button class="ghost sm" id="ik_remoteshow">펼쳐 보기</button>
+        <button class="ghost sm" id="ik_remotedl">파일로 저장</button>
+      </div>
+      <pre id="ik_remotelog" class="mono" hidden style="font-size:11.5px;background:#fff;
+        border:1px solid var(--rule);padding:9px;max-height:200px;overflow:auto;
+        margin:8px 0 0;white-space:pre-wrap"></pre>
+    </div>
+
     <p class="tagline" style="margin-top:12px">통신 기록</p>
+    <div class="row" style="margin-bottom:7px">
+      <button class="ghost sm" id="ik_pause">멈춤</button>
+      <button class="ghost sm" id="ik_copy">복사</button>
+      <button class="ghost sm" id="ik_dl">파일로 저장</button>
+      <button class="ghost sm" id="ik_logclear">비우기</button>
+      <span class="note" id="ik_logmsg">연결 중에는 계속 흐릅니다 — <b>「멈춤」</b>을 눌러 세운 뒤 복사하세요.</span>
+    </div>
     <pre id="ik_log" class="mono" style="font-size:11.5px;background:#fff;border:1px solid var(--rule);
-      padding:9px;max-height:220px;overflow:auto;margin:0;white-space:pre-wrap"></pre>
+      padding:9px;max-height:220px;overflow:auto;margin:0;white-space:pre-wrap;user-select:text"></pre>
   </div>
 
 </section>
@@ -4079,23 +4102,44 @@ const IK={
   WRITE  :"851a4582-19c1-4e6c-ab37-e7a03766ba16",
   STATUS_GET:11
 };
-/* HDLC 계열 프레이밍이라 X-25가 가장 유력하지만, 응답이 올 때까지 순서대로 시도한다 */
-const CRCV=[
-  {n:"X-25 (HDLC)",  poly:0x8408, init:0xFFFF, xor:0xFFFF, ref:true,  le:true },
-  {n:"CCITT-FALSE",  poly:0x1021, init:0xFFFF, xor:0,      ref:false, le:false},
-  {n:"XMODEM",       poly:0x1021, init:0,      xor:0,      ref:false, le:false},
-  {n:"MODBUS",       poly:0xA001, init:0xFFFF, xor:0,      ref:true,  le:true },
-  {n:"CCITT (0 init, LE)", poly:0x1021, init:0, xor:0,     ref:false, le:true }
-];
+/* CRC 종류를 모르므로 후보를 넓게 잡는다.
+   이름 있는 것들을 앞에 두고, 그다음 흔한 다항식 × 초깃값 × 반사 × 뒤집기 조합을 훑는다.
+   같은 상태 요청을 보내는 것뿐이라 머신에 위험하지 않다. */
+function rev16(x){ let r=0; for(let i=0;i<16;i++) r=(r<<1)|((x>>>i)&1); return r&0xFFFF; }
 function crc16(bytes,v){
   let c=v.init;
-  for(const b of bytes){
-    if(v.ref){ c^=b; for(let i=0;i<8;i++) c=(c&1)?((c>>>1)^v.poly):(c>>>1); }
-    else     { c^=(b<<8); for(let i=0;i<8;i++) c=(c&0x8000)?(((c<<1)^v.poly)&0xFFFF):((c<<1)&0xFFFF); }
-    c&=0xFFFF;
+  if(v.ref){ const rp=rev16(v.poly);
+    for(const b of bytes){ c^=b; for(let i=0;i<8;i++) c=(c&1)?((c>>>1)^rp):(c>>>1); c&=0xFFFF; }
+  }else{
+    for(const b of bytes){ c^=(b<<8);
+      for(let i=0;i<8;i++) c=(c&0x8000)?(((c<<1)^v.poly)&0xFFFF):((c<<1)&0xFFFF); c&=0xFFFF; }
   }
   return (c^v.xor)&0xFFFF;
 }
+const CRCV=(()=>{
+  const named=[
+    {n:"X-25 (HDLC)", poly:0x1021, init:0xFFFF, xor:0xFFFF, ref:true,  le:true },
+    {n:"CCITT-FALSE", poly:0x1021, init:0xFFFF, xor:0,      ref:false, le:false},
+    {n:"XMODEM",      poly:0x1021, init:0,      xor:0,      ref:false, le:false},
+    {n:"KERMIT",      poly:0x1021, init:0,      xor:0,      ref:true,  le:true },
+    {n:"MODBUS",      poly:0x8005, init:0xFFFF, xor:0,      ref:true,  le:true },
+    {n:"ARC",         poly:0x8005, init:0,      xor:0,      ref:true,  le:true },
+    {n:"MCRF4XX",     poly:0x1021, init:0xFFFF, xor:0,      ref:true,  le:true },
+    {n:"CCITT 0-init BE", poly:0x1021, init:0, xor:0,       ref:false, le:true }
+  ];
+  const out=named.slice(), seen=new Set(named.map(v=>[v.poly,v.init,v.xor,v.ref,v.le].join()));
+  [0x1021,0x8005,0x3D65,0xA097,0xC867,0x8BB7].forEach(poly=>
+    [0x0000,0xFFFF].forEach(init=>
+      [0x0000,0xFFFF].forEach(xor=>
+        [true,false].forEach(ref=>
+          [true,false].forEach(le=>{
+            const k=[poly,init,xor,ref,le].join();
+            if(seen.has(k)) return; seen.add(k);
+            out.push({n:`0x${poly.toString(16).toUpperCase()}/${init?"FFFF":"0000"}`
+              +`${xor?"^FFFF":""}${ref?"/rev":""}${le?"/LE":"/BE"}`,poly,init,xor,ref,le});
+          })))));
+  return out;
+})();
 function ikFrame(payload,v){                    // payload → 보낼 바이트열
   const c=crc16(payload,v);
   const body=payload.concat(v.le?[c&0xFF,(c>>8)&0xFF]:[(c>>8)&0xFF,c&0xFF]);
@@ -4164,11 +4208,43 @@ function ikFindStatus(payload){
 }
 
 let ikDev=null, ikChr=null, ikBuf=[], ikSeq=1, ikPoll=null, ikCrc=CRCV[0];
-let ikCurve=[], ikT0=null, ikLastState=null, ikNegot=null;
-const ikLog=(s)=>{ const e=$("ik_log"); if(!e) return;
-  const t=new Date(); const hh=String(t.getHours()).padStart(2,"0"),
-        mm=String(t.getMinutes()).padStart(2,"0"), ss=String(t.getSeconds()).padStart(2,"0");
-  e.textContent=`${hh}:${mm}:${ss}  ${s}\n`+e.textContent.split("\n").slice(0,220).join("\n"); };
+let ikCurve=[], ikT0=null, ikLastState=null, ikNegot=null, ikRx=0;
+/* 화면이 계속 흐르면 폰에서 글자를 잡아 복사할 수가 없다.
+   그래서 기록은 배열에 따로 쌓고, 화면 갱신만 멈출 수 있게 한다 — 멈춰도 수집은 계속된다. */
+let ikLines=[], ikFrozen=false, ikQuiet=false;
+const ikLog=(s)=>{
+  const t=new Date(), p=n=>String(n).padStart(2,"0");
+  ikLines.unshift(`${p(t.getHours())}:${p(t.getMinutes())}:${p(t.getSeconds())}  ${s}`);
+  if(ikLines.length>400) ikLines.length=400;
+  if(!ikFrozen&&$("ik_log")) $("ik_log").textContent=ikLines.join("\n");
+};
+/* 폰에서 기록을 복사해 옮기는 게 번거로우므로, 동기화 데이터에 실어 보낸다.
+   폰이 올리면 PC에서 앱을 열 때 같이 내려와 파일로 뽑을 수 있다.
+   저장이 잦으면 동기화가 시끄러워지므로 10초에 한 번으로 묶는다. */
+let ikSyncAt=0;
+function ikSyncLog(force){
+  const now=Date.now();
+  if(!force&&now-ikSyncAt<10000) return;
+  ikSyncAt=now;
+  DB.settings.ikLog={
+    at:new Date().toISOString(),
+    dev:(ikDev&&ikDev.name)||"(이름 없음)",
+    ua:navigator.userAgent.slice(0,120),
+    crc:ikCrc.n, pts:ikCurve.length, state:ikLastState,
+    lines:ikLines.slice(0,200)
+  };
+  persist();
+}
+function ikLogText(){
+  const info=[
+    "── 로스트포인트 통신 기록 ──",
+    "시각: "+new Date().toISOString(),
+    "브라우저: "+navigator.userAgent,
+    "기기: "+(ikDev?(ikDev.name||"(이름 없음)")+" / "+(ikDev.id||""):"(연결 안 됨)"),
+    "CRC: "+ikCrc.n+"   곡선 점: "+ikCurve.length+"   상태값: "+ikLastState,
+    "─────────────────────────────",""];
+  return info.concat(ikLines).join("\n");
+}
 const hex=a=>[...a].map(b=>b.toString(16).padStart(2,"0")).join(" ");
 
 function ikSetState(txt,cls){ const e=$("ik_state"); e.textContent=txt; e.className=cls||"pill"; }
@@ -4178,7 +4254,7 @@ async function ikSend(payload,why){
   try{
     if(ikChr.writeValueWithoutResponse) await ikChr.writeValueWithoutResponse(f);
     else await ikChr.writeValue(f);
-    ikLog(`→ ${why||""} [${ikCrc.n}] ${hex(f).slice(0,90)}`);
+    if(!ikQuiet) ikLog(`→ ${why||""} [${ikCrc.n}] ${hex(f).slice(0,90)}`);
     return true;
   }catch(e){ ikLog("→ 실패: "+e.message); return false; }
 }
@@ -4203,7 +4279,9 @@ function ikHandleFrame(raw){
   }
   if(!payload){ ikLog(`← CRC 불일치 (${body.length}B) ${hex(body).slice(0,60)}`); payload=body.slice(0,-2); }
   else ikLog(`← ${payload.length}B`);
-  if(ikNegot){ clearTimeout(ikNegot); ikNegot=null; }
+  if(ikNegot){ clearTimeout(ikNegot); ikNegot=null; ikQuiet=false;
+    ikLog("✓ 응답 도착 — CRC 탐색을 멈춥니다");
+    ikPoll=setInterval(()=>ikSend(ikMsg(IK.STATUS_GET,ikSeq++&0x7fff),"상태 요청"),1000); }
   const st=ikFindStatus(payload);
   if(st) ikOnStatus(st);
   else ikLog("  (상태 메시지를 찾지 못함 — 원시 필드 표를 보세요)");
@@ -4221,8 +4299,9 @@ function ikOnStatus(st){
   }
   if(st.state!==ikLastState){
     ikLog(`■ 머신 상태 값 = ${st.state}  (예열/로스팅/냉각 중 무엇인지 지금 화면을 보고 적어두세요)`);
-    ikLastState=st.state;
+    ikLastState=st.state; ikSyncLog(true);        // 상태가 바뀐 건 중요하니 바로 올린다
   }
+  ikSyncLog(false);
   ikRenderLive(st);
 }
 function ikRenderLive(st){
@@ -4251,51 +4330,81 @@ function ikRenderLive(st){
       }).join("");
   }
 }
-async function ikConnect(){
+async function ikConnect(all){
   if(!navigator.bluetooth){ $("ik_msg").innerHTML=
     `<span class="pill warn">불가</span> 이 브라우저는 웹 블루투스를 지원하지 않습니다.`; return; }
   try{
     $("ik_msg").innerHTML=`<span class="pill">기기 선택 중…</span>`;
-    ikDev=await navigator.bluetooth.requestDevice({
-      filters:[{services:[IK.SERVICE]}], optionalServices:[IK.SERVICE]});
+    /* 서비스 UUID 필터만 걸면 낡은 블루투스 드라이버(특히 Windows)에서
+       광고 패킷의 서비스 목록을 못 읽어 「알 수 없거나 지원되지 않는 기기」로 뜬다.
+       이름으로도 걸고, 그래도 안 되면 all=true 로 전부 띄워 직접 고르게 한다. */
+    ikDev=await navigator.bluetooth.requestDevice(all
+      ? {acceptAllDevices:true, optionalServices:[IK.SERVICE]}
+      : {filters:[{services:[IK.SERVICE]},{namePrefix:"IKAWA"},{namePrefix:"ikawa"}],
+         optionalServices:[IK.SERVICE]});
     ikDev.addEventListener("gattserverdisconnected",()=>{
       ikSetState("끊김","pill warn"); clearInterval(ikPoll); ikPoll=null;
       $("ik_connect").disabled=false; $("ik_disconnect").disabled=true;
-      $("ik_send").disabled=true; ikLog("연결이 끊겼습니다.");
+      $("ik_send").disabled=true; ikLog("연결이 끊겼습니다."); ikSyncLog(true);
     });
     ikLog("기기: "+(ikDev.name||"(이름 없음)"));
     const server=await ikDev.gatt.connect();
     const svc=await server.getPrimaryService(IK.SERVICE);
+    try{
+      const all=await svc.getCharacteristics();
+      ikLog(`서비스 특성 ${all.length}개:`);
+      all.forEach(c=>ikLog(`   ${c.uuid}  [${Object.keys(c.properties||{})
+        .filter(k=>c.properties[k]).join(",")}]`));
+    }catch(e){ ikLog("특성 목록을 읽지 못함: "+e.message); }
     const notify=await svc.getCharacteristic(IK.NOTIFY);
     ikChr=await svc.getCharacteristic(IK.WRITE);
+    const pr=c=>Object.keys(c.properties||{}).filter(k=>c.properties[k]).join(",");
+    ikLog(`알림 특성: ${pr(notify)}`);
+    ikLog(`쓰기 특성: ${pr(ikChr)}`);
     await notify.startNotifications();
-    notify.addEventListener("characteristicvaluechanged",e=>
-      ikOnPacket(new Uint8Array(e.target.value.buffer)));
+    ikLog("알림 구독 시작됨");
+    notify.addEventListener("characteristicvaluechanged",e=>{
+      const b=new Uint8Array(e.target.value.buffer);
+      ikRx+=b.length;
+      ikLog(`◀ 원시 ${b.length}B  ${hex(b).slice(0,120)}`);   // 해석 전에 무조건 남긴다
+      ikOnPacket(b);
+    });
     ikSetState("연결됨 · 응답 대기","pill");
     $("ik_connect").disabled=true; $("ik_disconnect").disabled=false;
     $("ik_send").disabled=false; $("ik_msg").innerHTML=
       `<span class="pill ok">연결됨</span> 상태를 요청합니다.`;
-    ikNegotiate(0);
-    ikPoll=setInterval(()=>ikSend(ikMsg(IK.STATUS_GET,ikSeq++&0x7fff),"상태 요청"),1000);
+    ikNegotiate(0);                       // 응답이 오면 그때 1초 폴링을 시작한다
   }catch(e){
     $("ik_msg").innerHTML=`<span class="pill warn">실패</span> ${e.message}`;
     ikLog("연결 실패: "+e.message);
   }
 }
-/* 응답이 없으면 CRC 방식을 바꿔가며 다시 물어본다 — 같은 상태 요청이라 안전하다 */
+/* 응답이 올 때까지 CRC 후보를 훑는다. 보내는 건 언제나 '상태 알려줘' 하나뿐이라 안전하다.
+   화면이 지저분해지지 않게 진행 상황만 위쪽 한 줄로 갱신한다. */
 function ikNegotiate(i){
-  if(i>=CRCV.length){ ikLog("✗ 다섯 가지 CRC 모두 응답 없음 — 진단 기록을 확인하세요"); return; }
+  if(i===0){ ikRx=0; ikQuiet=true; ikLog(`CRC 후보 ${CRCV.length}가지를 훑습니다…`); }
+  if(i>=CRCV.length){
+    ikQuiet=false;
+    ikLog(`✗ CRC 후보 ${CRCV.length}가지를 모두 시도했으나 응답이 없습니다.`);
+    ikLog(ikRx>0
+      ? `  다만 머신에서 원시 데이터 ${ikRx}B 는 들어왔습니다 — 프레임 형식이 다른 쪽을 봐야 합니다.`
+      : `  머신에서 들어온 바이트가 0입니다 — 알림이 안 오거나 쓰기가 머신에 닿지 않습니다.`);
+    $("ik_msg").innerHTML=`<span class="pill warn">응답 없음</span>
+      받은 바이트 ${ikRx}B. 아래 「파일로 저장」으로 기록을 보내주세요.`;
+    ikSyncLog(true);
+    return;
+  }
   ikCrc=CRCV[i]; $("ik_crc").value=i;
-  ikLog(`CRC ${ikCrc.n} 로 시도`);
-  ikSend(ikMsg(IK.STATUS_GET,ikSeq++&0x7fff),"상태 요청(교섭)");
-  ikNegot=setTimeout(()=>ikNegotiate(i+1),1600);
+  $("ik_msg").innerHTML=`<span class="pill">CRC 찾는 중 ${i+1}/${CRCV.length}</span> ${ikCrc.n}`;
+  ikSend(ikMsg(IK.STATUS_GET,ikSeq++&0x7fff),"교섭");
+  ikNegot=setTimeout(()=>ikNegotiate(i+1),900);
 }
 function ikDisconnect(){
   clearInterval(ikPoll); ikPoll=null;
   if(ikNegot){ clearTimeout(ikNegot); ikNegot=null; }
   try{ if(ikDev&&ikDev.gatt.connected) ikDev.gatt.disconnect(); }catch(e){}
   ikSetState("끊김"); $("ik_connect").disabled=false; $("ik_disconnect").disabled=true;
-  $("ik_send").disabled=true;
+  $("ik_send").disabled=true; ikLog("사용자가 연결을 끊었습니다."); ikSyncLog(true);
 }
 /* 프로파일 보내기 — Message{1:cmd_type, 2:seq, 4:CmdProfileSet{1:RoastProfile}} */
 function ikProfileMsg(cmdType,p){
@@ -4395,8 +4504,38 @@ function ikInit(){
        머신을 켜고 <b>IKAWA 앱과의 연결을 끊은 뒤</b> 연결하세요 — 동시에 붙으면 불안정할 수 있습니다.`
     : `<span class="pill warn">사용 불가</span> 이 브라우저는 웹 블루투스를 지원하지 않습니다.
        <b>PC의 크롬이나 엣지</b>에서 열어주세요. 아이폰·사파리는 지원하지 않습니다.`;
-  $("ik_connect").onclick=ikConnect;
+  $("ik_connect").onclick=()=>ikConnect(false);
+  $("ik_connectall").onclick=()=>ikConnect(true);
   $("ik_disconnect").onclick=ikDisconnect;
+  $("ik_pause").onclick=()=>{
+    ikFrozen=!ikFrozen;
+    $("ik_pause").textContent=ikFrozen?"이어보기":"멈춤";
+    if(!ikFrozen){ $("ik_log").textContent=ikLines.join("\n");
+      $("ik_logmsg").innerHTML="다시 흐릅니다."; }
+    else $("ik_logmsg").innerHTML=`<span class="pill ok">멈춤</span> 화면만 세웠습니다 —
+      기록은 계속 쌓입니다. 이제 글자를 잡아 복사하거나 아래 「복사」를 누르세요.`;
+  };
+  $("ik_copy").onclick=async()=>{
+    const t=ikLogText();
+    try{ await navigator.clipboard.writeText(t);
+      $("ik_logmsg").innerHTML=`<span class="pill ok">복사됨</span> ${ikLines.length}줄. 붙여넣기 하시면 됩니다.`;
+    }catch(e){
+      // 클립보드 권한이 없을 때 — 전체 선택이라도 되게 한다
+      const r=document.createRange(); r.selectNodeContents($("ik_log"));
+      const s=getSelection(); s.removeAllRanges(); s.addRange(r);
+      $("ik_logmsg").innerHTML=`<span class="pill warn">자동 복사 실패</span>
+        글자를 전부 선택해뒀습니다 — 길게 눌러 「복사」를 고르세요.`;
+    }
+  };
+  $("ik_dl").onclick=()=>{
+    const b=new Blob([ikLogText()],{type:"text/plain;charset=utf-8"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(b);
+    a.download="roastpoint-통신기록-"+new Date().toISOString().slice(0,19).replace(/[:T]/g,"")+".txt";
+    a.click(); URL.revokeObjectURL(a.href);
+    $("ik_logmsg").innerHTML=`<span class="pill ok">저장됨</span> 다운로드 폴더에 담았습니다 —
+      그 파일을 그대로 보내주시면 됩니다.`;
+  };
+  $("ik_logclear").onclick=()=>{ ikLines=[]; $("ik_log").textContent=""; $("ik_logmsg").textContent=""; };
   $("ik_selftest").onclick=ikSelfTest;
   $("ik_clear").onclick=()=>{ ikCurve=[]; ikT0=null; $("ik_chart").innerHTML="";
     $("ik_save").disabled=true; $("ik_savemsg").textContent=""; };
@@ -4404,8 +4543,33 @@ function ikInit(){
   $("ik_send").onclick=()=>ikSendProfile(+$("ik_cmd").value||12);
   $("ik_cmdtry").onclick=()=>ikSendProfile(+$("ik_cmd").value||12);
 }
+/* 동기화로 넘어온 다른 기기의 진단 기록 — 폰에서 잡은 걸 PC에서 파일로 뽑을 수 있다 */
+function ikRemoteText(L){
+  return ["── 로스트포인트 통신 기록 (다른 기기) ──",
+    "올린 시각: "+(L.at||""), "기기: "+(L.dev||""), "브라우저: "+(L.ua||""),
+    "CRC: "+(L.crc||"")+"   곡선 점: "+(L.pts||0)+"   상태값: "+L.state,
+    "──────────────────────────────────",""].concat(L.lines||[]).join("\n");
+}
+function ikRemote(){
+  const L=DB.settings&&DB.settings.ikLog;
+  const box=$("ik_remotebox"); if(!box) return;
+  if(!L||!L.lines||!L.lines.length){ box.hidden=true; return; }
+  box.hidden=false;
+  $("ik_remoteinfo").innerHTML=`<b>${L.dev||"(이름 없음)"}</b> · ${(L.at||"").slice(0,19).replace("T"," ")}
+    · CRC ${L.crc||"?"} · 곡선 ${L.pts||0}점 · 상태값 ${L.state==null?"—":L.state} · ${L.lines.length}줄`;
+  $("ik_remotelog").textContent=ikRemoteText(L);
+  $("ik_remoteshow").onclick=()=>{ const p=$("ik_remotelog"); p.hidden=!p.hidden;
+    $("ik_remoteshow").textContent=p.hidden?"펼쳐 보기":"접기"; };
+  $("ik_remotedl").onclick=()=>{
+    const b=new Blob([ikRemoteText(L)],{type:"text/plain;charset=utf-8"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(b);
+    a.download="roastpoint-통신기록-폰-"+(L.at||"").slice(0,19).replace(/[:T-]/g,"")+".txt";
+    a.click(); URL.revokeObjectURL(a.href);
+  };
+}
 function ikOpen(){
   if(!ikInit.done){ ikInit(); ikInit.done=true; }
+  ikRemote();
   const list=allProfiles().filter(p=>!p.archived);
   const keep=$("ik_prof").value;
   $("ik_prof").innerHTML=list.map(p=>
