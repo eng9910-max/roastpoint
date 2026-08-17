@@ -4308,7 +4308,7 @@ let ikMTU=20;
 /* 블루투스는 한 번에 한 가지 작업만 한다.
    1초마다 도는 상태 요청이 프로파일 전송(8조각) 사이를 파고들면
    "GATT operation already in progress" 로 양쪽 다 깨진다 — 한 줄로 세워 차례로 보낸다. */
-let ikGate=Promise.resolve(), ikSending=false;
+let ikGate=Promise.resolve(), ikSending=false, ikInFlight=false;
 function ikSerial(fn){
   const run=ikGate.then(fn,fn);
   ikGate=run.then(()=>{},()=>{});
@@ -4324,12 +4324,22 @@ async function ikWriteRaw(bytes){
 async function ikSend(payload,why){
   if(!ikChr) return false;
   const f=ikFrame(payload,ikCrc);
+  const once=()=>ikSerial(()=>ikWriteRaw(f));
+  ikInFlight=true;
   try{
-    await ikSerial(()=>ikWriteRaw(f));
+    try{ await once(); }
+    catch(e){
+      // 신호가 약하면 앞 작업이 늦게 끝나며 겹친다 — 한 번은 조용히 다시 시도한다
+      if(!/already in progress|in progress/i.test(e.message||"")) throw e;
+      await new Promise(r=>setTimeout(r,250));
+      await once();
+      ikLog(`  (겹침 — 다시 보내 성공)`);
+    }
     if(!ikQuiet) ikLog(`→ ${why||""} [${ikCrc.n}] ${f.length}B`
       +(f.length>ikMTU?` (${Math.ceil(f.length/ikMTU)}조각)`:"")+`  ${hex(f).slice(0,60)}`);
     return true;
   }catch(e){ ikLog(`→ 실패 (${f.length}B): ${e.message}`); return false; }
+  finally{ ikInFlight=false; }
 }
 function ikOnPacket(bytes){                      // 알림으로 들어온 조각을 모아 프레임 단위로 자른다
   for(const b of bytes){
@@ -4354,7 +4364,8 @@ function ikHandleFrame(raw){
   else ikLog(`← ${payload.length}B`);
   if(ikNegot){ clearTimeout(ikNegot); ikNegot=null; ikQuiet=false;
     ikLog("✓ 응답 도착 — CRC 탐색을 멈춥니다");
-    ikPoll=setInterval(()=>{ if(!ikSending) ikSend(ikMsg(IK.STATUS_GET,ikSeq++&0x7fff),"상태 요청"); },1000); }
+    ikPoll=setInterval(()=>{ if(!ikSending&&!ikInFlight)
+      ikSend(ikMsg(IK.STATUS_GET,ikSeq++&0x7fff),"상태 요청"); },1000); }
   const pf=ikFindProfile(payload);
   if(pf){ ikOnProfileBack(pf); return; }
   const st=ikFindStatus(payload);
