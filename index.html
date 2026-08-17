@@ -636,6 +636,15 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <p class="note">목록에 IKAWA가 <b>「알 수 없거나 지원되지 않는 기기」</b>로 뜨고 페어링 버튼이 눌리지 않으면,
     블루투스 드라이버가 광고 정보를 제대로 못 읽는 경우입니다.
     그때는 <b>「모든 기기 보기」</b>로 열어 주소가 <span class="mono">88:6B:0F:…</span> 인 기기를 고르세요.</p>
+    <div class="row" style="margin-top:9px">
+      <button class="ghost" id="ik_readinfo" disabled>머신 정보 읽기</button>
+      <span class="note">기종·펌웨어·누적 로스팅 횟수를 물어봅니다. <b>읽기만 하고 아무것도 바꾸지 않습니다.</b></span>
+    </div>
+    <div class="extra" id="ik_infobox" hidden style="margin-top:9px">
+      <p class="tagline">머신 정보</p>
+      <div id="ik_info"></div>
+      <p class="note" id="ik_infonote"></p>
+    </div>
     <p class="note">이 기능은 IKAWA가 공식 지원하는 방식이 아니라, <b>공개된 통신 규격을 읽어 만든 것</b>입니다.
     펌웨어가 바뀌면 동작하지 않을 수 있고 제조사 보증 대상이 아닙니다.
     크롬·엣지에서만 되고 <b>아이폰에서는 되지 않습니다</b>(iOS가 웹 블루투스를 지원하지 않음).</p>
@@ -4384,7 +4393,13 @@ const IK={
   WRITE  :"851a4582-19c1-4e6c-ab37-e7a03766ba16",
   STATUS_GET:11,        // MACH_STATUS_GET_ALL
   PROFILE_SET:16,       // 프로파일 전송 — 소스에서 확인
-  PROFILE_GET:15
+  PROFILE_GET:15,
+  /* 읽기 전용 조회들 — 머신 상태를 바꾸지 않는다 */
+  BOOT_VER:0,           // BOOTLOADER_GET_VERSION
+  PROP_TYPE:2,          // MACH_PROP_GET_TYPE   → 기종·변형
+  PROP_ID:3,            // MACH_PROP_GET_ID     → 머신 고유번호
+  ROAST_COUNT:13,       // HIST_GET_TOTAL_ROAST_COUNT
+  SUPPORT_INFO:23       // MACH_PROP_GET_SUPPORT_INFO → 받아들이는 프로파일 규격
 };
 /* 머신 상태 값 — 아티산 소스 주석에 그대로 적혀 있다 */
 const IKSTATE={0:"대기",1:"예열 중",2:"원두를 넣으세요",3:"로스팅 중",4:"머신 사용 중",
@@ -4514,6 +4529,43 @@ function ikFindStatus(payload){
   return o;
 }
 
+/* 읽기 전용 조회들의 응답을 읽어낸다.
+   IkawaResponse{3:부트로더 4:기종 5:머신ID 15:로스팅횟수 21:지원규격} */
+function ikFindInfo(payload){
+  const u8=b=>(b instanceof Uint8Array)?b:new Uint8Array(b);
+  let fs; try{ fs=pbFieldsR(u8(payload)); }catch(e){ return null; }
+  const sub=n=>{ const f=fs.find(x=>x[0]===n&&x[2]===2); if(!f) return null;
+    try{ const o={}; pbFieldsR(u8(f[1])).forEach(([a,b,c])=>{
+      o[a]=(c===2)?new TextDecoder().decode(u8(b)):b; }); return o; }catch(e){ return null; } };
+  const o={}, t=sub(4), id=sub(5), bv=sub(3), rc=sub(15), si=sub(21);
+  if(t)  o.type={type:t[1],variant:t[2]};
+  if(id) o.id=id[1];
+  if(bv) o.boot={version:bv[1],revision:bv[2]};
+  if(rc) o.roasts=rc[1];
+  if(si) o.schema=si[1];
+  return Object.keys(o).length?o:null;
+}
+let ikInfo={};
+function ikOnInfo(o){
+  Object.assign(ikInfo,o);
+  const L=[];
+  if(ikInfo.type)   L.push(["기종 코드",`type ${ikInfo.type.type} · variant ${ikInfo.type.variant}`]);
+  if(ikInfo.id!=null)   L.push(["머신 고유번호",ikInfo.id]);
+  if(ikInfo.boot)   L.push(["펌웨어",`${ikInfo.boot.version}${ikInfo.boot.revision?" · "+ikInfo.boot.revision:""}`]);
+  if(ikInfo.roasts!=null) L.push(["총 로스팅 횟수",`${ikInfo.roasts}회`]);
+  if(ikInfo.schema!=null) L.push(["받아들이는 프로파일 규격",
+    `schema ${ikInfo.schema}`+(ikInfo.schema===1
+      ? ' <span class="pill ok">우리가 보내는 것과 같음</span>'
+      : ' <span class="pill warn">우리는 schema 1 로 보냅니다 — 안 맞을 수 있습니다</span>')]);
+  L.push(["흡기(인렛) 센서", ikHasInlet
+    ? '<span class="pill ok">있음</span> 두 센서를 다 보냅니다'
+    : '<span class="pill">확인 안 됨</span> 아직 흡기 값이 온 적이 없습니다 — 로스팅 중에 다시 보세요']);
+  $("ik_info").innerHTML=`<table><tr><th>항목</th><th>값</th></tr>`+
+    L.map(x=>`<tr><td>${x[0]}</td><td>${x[1]}</td></tr>`).join("")+`</table>`;
+  $("ik_infobox").hidden=false;
+  ikLog(`◈ 머신 정보 ${Object.keys(o).join(", ")}`);
+}
+
 /* 머신이 돌려준 프로파일(RespProfileGet)을 읽어낸다 — 보낸 게 실제로 들어갔는지 확인하는 유일한 길.
    IkawaResponse{1:seq, 2:resp, 16:resp_profile_get{1:RoastProfile}} */
 function ikFindProfile(payload){
@@ -4641,6 +4693,8 @@ function ikHandleFrame(raw){
     ikLog("✓ 응답 도착 — CRC 탐색을 멈춥니다");
     ikPoll=setInterval(()=>{ if(!ikSending&&!ikInFlight)
       ikSend(ikMsg(IK.STATUS_GET,ikSeq++&0x7fff),"상태 요청"); },1000); }
+  const inf=ikFindInfo(payload);
+  if(inf){ ikOnInfo(inf); return; }
   const pf=ikFindProfile(payload);
   if(pf){ ikOnProfileBack(pf); return; }
   const st=ikFindStatus(payload);
@@ -4780,7 +4834,8 @@ async function ikConnect(all){
     ikDev.addEventListener("gattserverdisconnected",()=>{
       ikSetState("끊김","pill warn"); clearInterval(ikPoll); ikPoll=null;
       $("ik_connect").disabled=false; $("ik_disconnect").disabled=true;
-      $("ik_send").disabled=true; ikLog("연결이 끊겼습니다."); ikSyncLog(true);
+      $("ik_send").disabled=true; $("ik_readback").disabled=true; $("ik_readinfo").disabled=true;
+      ikLog("연결이 끊겼습니다."); ikSyncLog(true);
     });
     ikLog("기기: "+(ikDev.name||"(이름 없음)"));
     const server=await ikDev.gatt.connect();
@@ -4812,7 +4867,8 @@ async function ikConnect(all){
     });
     ikSetState("연결됨 · 응답 대기","pill");
     $("ik_connect").disabled=true; $("ik_disconnect").disabled=false;
-    $("ik_send").disabled=false; $("ik_readback").disabled=false; $("ik_msg").innerHTML=
+    $("ik_send").disabled=false; $("ik_readback").disabled=false;
+    $("ik_readinfo").disabled=false; $("ik_msg").innerHTML=
       `<span class="pill ok">연결됨</span> 상태를 요청합니다.`;
     ikNegotiate(0);                       // 응답이 오면 그때 1초 폴링을 시작한다
   }catch(e){
@@ -5028,6 +5084,24 @@ function ikInit(){
     $("ik_markmsg").textContent="마커를 지웠습니다."; if(ikCurve.length>2) ikRenderLive({}); };
   $("ik_save").onclick=ikSaveBatch;
   $("ik_send").onclick=()=>ikSendProfile(IK.PROFILE_SET);
+  $("ik_readinfo").onclick=async()=>{
+    /* 모두 읽기 전용 명령이다. 상태 요청과 같은 성격이라 머신에 위험하지 않다.
+       하나씩 차례로 보내고 응답이 돌아올 틈을 준다. */
+    const asks=[[IK.PROP_TYPE,"기종"],[IK.PROP_ID,"머신 번호"],[IK.BOOT_VER,"펌웨어"],
+                [IK.ROAST_COUNT,"누적 로스팅"],[IK.SUPPORT_INFO,"프로파일 규격"]];
+    ikInfo={};
+    ikSending=true;                       // 그동안 상태 요청을 멈춘다
+    try{
+      for(const [cmd,label] of asks){
+        $("ik_msg").innerHTML=`<span class="pill">읽는 중…</span> ${label}`;
+        await ikSend(ikMsg(cmd,ikSeq++&0x7fff),`${label} 조회 (cmd ${cmd})`);
+        await new Promise(r=>setTimeout(r,450));
+      }
+    } finally { ikSending=false; }
+    $("ik_msg").innerHTML=Object.keys(ikInfo).length
+      ? `<span class="pill ok">머신 정보를 받았습니다</span>`
+      : `<span class="pill warn">응답 없음</span> 이 머신은 정보 조회에 답하지 않는 것 같습니다.`;
+  };
   $("ik_readback").onclick=async()=>{
     $("ik_cmdmsg").innerHTML=`<span class="pill">읽는 중…</span>`;
     await ikSend(ikMsg(IK.PROFILE_GET,ikSeq++&0x7fff),"프로파일 읽기");
