@@ -4,12 +4,12 @@
    페이지 이동은 네트워크를 먼저 본다. 그래야 새로 올린 파일이 바로 반영되고,
    캐시에 없는 페이지가 막히지 않는다. */
 
-const APP_CACHE   = "roast-app-v68";
+const APP_CACHE   = "roast-app-v69";
 const SHARE_CACHE = "roast-shared";
 const SCOPE       = self.registration.scope;
 const SHARE_KEY   = new URL("__shared__", SCOPE).href;
 
-const SHELL = ["./", "./index.html", "./studio.html", "./manifest.webmanifest",
+const SHELL = ["./", "./index.html", "./studio.html", "./theory.js", "./manifest.webmanifest",
                "./icons/icon-192.png", "./icons/icon-512.png"];
 
 self.addEventListener("install", e => {

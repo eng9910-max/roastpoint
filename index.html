@@ -393,6 +393,14 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <h2>로스팅 기록 <span id="r_count" class="pill"></span></h2>
     <div class="scrollx"><div class="tbl"><table id="r_table"></table></div></div>
   </div>
+
+  <div class="block" id="rp_box" hidden>
+    <h2>배치 리포트</h2>
+    <div class="extra" id="rp_out"></div>
+    <div class="row" style="margin-top:8px">
+      <button class="ghost" onclick="document.getElementById('rp_box').hidden=true">닫기</button>
+    </div>
+  </div>
 </section>
 
 <!-- ================= 커핑 ================= -->
@@ -637,6 +645,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <h2>② 실시간</h2>
     <div class="grid g5" id="ik_live"></div>
     <div id="ik_chart" style="margin-top:10px"></div>
+    <div class="extra" id="ik_coachbox" style="margin-top:9px" hidden>
+      <p class="tagline">지금 무슨 일이 벌어지고 있나 <span class="pill">교과서 기준</span></p>
+      <div id="ik_coach"></div>
+    </div>
     <div class="row" style="margin-top:10px;align-items:center">
       <span class="mono" id="ik_elapsed" style="font-size:26px;font-weight:600;min-width:92px"></span>
       <button id="ik_cc" disabled style="font-size:15px;padding:10px 16px">컬러 변환 (CC)</button>
@@ -794,6 +806,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
+<script src="theory.js"></script>
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
@@ -2508,22 +2521,7 @@ function profChar(pts){
   return {pre,drop:end[1],dur,rEarly,rMid,rDev,dryPct:t150!=null?t150/dur*100:null};
 }
 
-/* ── 1층 : 교과서 상수 ──────────────────────────────
-   SCA 로스팅 커리큘럼과 로스팅 문헌에서 통용되는 값. 임의로 손대지 않는다.
-   구간 비율(건조 약 50% · 메일라아드 약 30% · 발달 약 20%)과
-   배전도별 감량률·DTR 밴드가 여기 속한다.
-   주의 — 교과서의 절대 시간은 드럼(10~14분) 기준이라 쓰지 않는다.
-   IKAWA 50g은 5~7분이므로 비율만 가져오고 시간은 실측에서 잡는다. */
-const CANON={
-  level:{
-    light : {name:"라이트",        loss:[11,13],   dtr:[15,20], dropHint:[198,203]},
-    mlight: {name:"미디엄 라이트",  loss:[12,14],   dtr:[17,22], dropHint:[201,205]},
-    medium: {name:"미디엄",        loss:[13,15],   dtr:[19,24], dropHint:[204,208]},
-    mdark : {name:"미디엄 다크",    loss:[15,17],   dtr:[20,25], dropHint:[207,211]}
-  },
-  phase:{ dry:50, maillard:30, dev:20 },     // 전체 시간 대비 %
-  rule:"승온율은 끝까지 감소해야 한다 (크래시·플릭은 결함)"
-};
+
 
 /* ── 2층 : 생두 보정 ────────────────────────────────
    1층이 목적지를 정하고, 2층은 거기 도달하는 경로만 바꾼다.
@@ -2706,7 +2704,6 @@ const ARCH=[
    b:{proc:"펄프드 내추럴",alt:"1300",dens:"680",var:"카티모르",moist:"12.5"},
    note:"반습식이라 밀도가 낮고 수분이 많다. 낮은 열로 길게 가는 경로."}
 ];
-const LVNAME={light:"라이트",mlight:"미디엄 라이트",medium:"미디엄",mdark:"미디엄 다크"};
 const USENAME={filter:"필터",espresso:"에스프레소",latte:"라떼"};
 if($("pf_bean")){
   const uniq=k=>[...new Set(ARCH.flatMap(a=>a[k]))];
@@ -2734,18 +2731,7 @@ function archTargets(){                    // 원형 × 배전도 × 용도 → 
   });
   return ARCHT;
 }
-/* 배출온도가 어느 배전도 밴드에 앉는가 — 밴드는 겹치므로 가까운 쪽을 고르고 이웃을 같이 알린다 */
-function dropBand(drop){
-  const ks=Object.keys(CANON.level);
-  const d=k=>{ const [lo,hi]=CANON.level[k].dropHint;
-    return drop<lo?lo-drop:(drop>hi?drop-hi:0); };
-  const inb=ks.filter(k=>d(k)===0);
-  const best=ks.slice().sort((x,y)=>d(x)-d(y)||
-    Math.abs(drop-(CANON.level[x].dropHint[0]+CANON.level[x].dropHint[1])/2)
-   -Math.abs(drop-(CANON.level[y].dropHint[0]+CANON.level[y].dropHint[1])/2))[0];
-  return {level:best, canon:CANON.level[best], also:inb.filter(k=>k!==best),
-          out:d(best)>0?(drop<CANON.level[best].dropHint[0]?"under":"over"):null};
-}
+
 /* 곡선을 교과서 기준값과 견줘 말로 옮긴다 — 2층 보정 규칙을 그대로 뒤집은 문장이다 */
 const BASE={rEarly:14.5,rDev:2.8,dur:400,pre:143};
 function profRead(ch){
@@ -2816,15 +2802,7 @@ const fitPill=s=>s>=72?"pill ok":(s>=58?"pill":"pill warn");
    IKAWA 로그의 setpoint 와 temp above 는 같은 센서를 가리키므로 그대로 견줄 수 있다.
    지금까지는 배출·총시간 같은 끝점만 봤는데, 맛을 가르는 건 중간 경로다.
    설정을 못 따라간 구간이 있으면 끝점이 맞아도 다른 커피가 나온다. */
-function curveAt(c,x){                       // 곡선을 시각 x에서 선형 보간
-  if(!c||!c.length) return null;
-  if(x<=c[0][0]) return c[0][1];
-  for(let i=1;i<c.length;i++){
-    const a=c[i-1],b=c[i];
-    if(x<=b[0]) return b[0]===a[0]?b[1]:a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0]);
-  }
-  return c[c.length-1][1];
-}
+
 /* 교과서 구간(건조 50% · 메일라아드 30% · 발달 20%)별로 편차를 접는다 */
 function phaseDev(plan,act){
   if(!plan||!act) return null;
@@ -2893,28 +2871,7 @@ function curveSvg(plan,acts,marks){
     <text x="${X(tMax*0.89).toFixed(0)}" y="${T+10}" font-size="10" fill="var(--muted)">발달</text>
   </svg>`;
 }
-/* 곡선 → 승온율(℃/분) 계열. 창을 두고 기울기를 재야 잡음에 흔들리지 않는다.
-   교과서 규칙이 "승온율은 끝까지 감소해야 한다"이므로 이 곡선이 로스팅의 핵심 지표다. */
-function rorSeries(c,win){
-  if(!c||c.length<4) return [];
-  const W=win||30, out=[];
-  for(let i=0;i<c.length;i++){
-    const t=c[i][0];
-    let j=i; while(j>0&&t-c[j][0]<W) j--;
-    const dt=t-c[j][0];
-    if(dt>=Math.min(W*0.5,10)) out.push([t,+(((c[i][1]-c[j][1])/dt)*60).toFixed(2)]);
-  }
-  return out;
-}
-/* 마지막 25% 구간의 승온율 — 기록에 남기는 「후반 승온」. 로그 경로와 같은 정의를 쓴다. */
-function rorTail(c){
-  if(!c||c.length<4) return null;
-  const end=c[c.length-1][0];
-  const q=c.filter(p=>p[0]>=end*0.75);
-  if(q.length<2) return null;
-  const dt=(q[q.length-1][0]-q[0][0])/60;
-  return dt>0?(q[q.length-1][1]-q[0][1])/dt:null;
-}
+
 /* 승온율 곡선 그리기 — 0선을 기준으로 두고 감소 추세를 본다 */
 function rorSvg(series){
   if(!series||series.length<3) return "";
@@ -2934,6 +2891,139 @@ function rorSvg(series){
     ${zero}<path d="${d}" fill="none" stroke="var(--mark)" stroke-width="1.6"/>
     <text x="${L+4}" y="${T+10}" font-size="10" fill="var(--muted)">승온율 ℃/분 — 끝까지 내려가야 정상</text>
   </svg>`;
+}
+/* ── 실시간 해설 ─────────────────────────────────────────
+   새 이론을 만들지 않는다. 이미 쓰고 있는 것만 실시간으로 돌린다:
+     · CANON.phase  건조 50% · 메일라아드 30% · 발달 20%
+     · CANON.rule   승온율은 끝까지 감소해야 한다 (크래시·플릭은 결함)
+     · CANON.level  배전도별 배출온도 밴드
+     · DEVSAY       구간별 편차가 무엇을 뜻하는지 (계획 vs 실측에서 쓰던 문구)
+   기준 곡선은 머신에 올라가 있는 프로파일이다. 그게 없으면 구간 판정을 하지 않는다. */
+let ikRef=null;                     // 기준 프로파일 {name, pts}
+function ikCoach(){
+  const c=ikCurve; if(!c||c.length<4) return null;
+  const t=c[c.length-1][0], v=c[c.length-1][1];
+  const out={notes:[],marks:[],phase:null,pct:null};
+  const ref=ikRef&&ikRef.pts&&ikRef.pts.length>1?ikRef.pts:null;
+  const planDur=ref?ref[ref.length-1][0]:null;
+  const planDrop=ref?ref[ref.length-1][1]:null;
+
+  // ① 구간 — 계획 총시간이 있어야 말할 수 있다
+  if(planDur>0){
+    const f=t/planDur, P=CANON.phase;
+    const b1=P.dry/100, b2=(P.dry+P.maillard)/100;
+    out.pct=Math.min(100,Math.round(f*100));
+    out.phase = f<b1?"건조" : f<b2?"메일라아드" : f<=1.02?"발달" : "계획 초과";
+    out.marks.push({t:planDur*b1,label:"건조 끝",color:"var(--rule)"});
+    out.marks.push({t:planDur*b2,label:"발달 시작",color:"var(--rule)"});
+    const say={건조:"수분이 빠지는 구간입니다. 승온율이 가장 높아야 할 때입니다.",
+      메일라아드:"갈변과 단맛이 만들어지는 구간입니다. 여기서 식으면 단맛이 덜 쌓입니다.",
+      발달:"1차 크랙 이후 향이 자리잡는 구간입니다. 승온율이 살아 있어야 베이킹을 피합니다.",
+      "계획 초과":"계획 총시간을 넘겼습니다. 배출 시점을 지났는지 확인하세요."};
+    out.notes.push({lv:"info",t:`${out.phase} 구간 (${out.pct}%)`,d:say[out.phase]});
+  }
+
+  // ② 승온율 — 교과서 규칙은 "끝까지 감소"
+  const rs=rorSeries(c,30);
+  if(rs.length>4){
+    const now=rs[rs.length-1][1];
+    const recent=rs.slice(-Math.min(8,rs.length));
+    const lowest=Math.min(...rs.slice(0,-1).map(x=>x[1]));
+    const rise=now-lowest;
+    if(rise>1.2&&rs.length>8){
+      out.notes.push({lv:"warn",t:`승온율 반전 ${now.toFixed(1)}℃/분`,
+        d:`한 번 내려갔다 다시 올랐습니다(최저 ${lowest.toFixed(1)}). `
+         +`교과서가 결함으로 보는 <b>플릭</b>입니다 — ${CANON.rule}`});
+      out.marks.push({t:rs[rs.length-1][0],label:"플릭",color:"var(--actual)"});
+    }else if(now<1&&out.phase==="발달"&&(out.pct==null||out.pct<95)){
+      // 막바지(95% 이후)에는 승온율이 자연히 낮아진다 — 그때 경고해도 손쓸 시간이 없어 알리지 않는다.
+      // 배치가 끝난 뒤의 최종 판정은 저장할 때 「후반 승온」으로 따로 알린다.
+      out.notes.push({lv:"warn",t:`승온율 ${now.toFixed(1)}℃/분`,
+        d:"발달 구간인데 온도가 거의 안 오릅니다. <b>베이킹</b> 징후로, 향이 눌리고 밋밋해집니다. "
+         +"히터를 올리거나 조금 일찍 배출하세요."});
+    }else if(now<0){
+      out.notes.push({lv:"warn",t:`승온율 ${now.toFixed(1)}℃/분 (하강)`,
+        d:"온도가 내려가고 있습니다. <b>크래시</b>입니다 — 열이 모자랍니다."});
+      out.marks.push({t:rs[rs.length-1][0],label:"크래시",color:"var(--actual)"});
+    }else{
+      const dropRate=recent[0][1]-now;
+      out.notes.push({lv:"ok",t:`승온율 ${now.toFixed(1)}℃/분`,
+        d:dropRate>=0?"교과서대로 계속 내려가고 있습니다.":"거의 평평합니다 — 계속 지켜보세요."});
+    }
+  }
+
+  // ③ 계획 대비 편차 — 구간별 뜻은 계획 vs 실측에서 쓰던 문구 그대로
+  if(ref){
+    const want=curveAt(ref,t);
+    if(want!=null){
+      const d=v-want;
+      if(Math.abs(d)<=DEVOK)
+        out.notes.push({lv:"ok",t:`계획과 ${d>0?"+":""}${d.toFixed(1)}℃`,d:"설정을 잘 따라가고 있습니다."});
+      else{
+        const key=out.phase&&DEVSAY[out.phase]?out.phase:"메일라아드";
+        out.notes.push({lv:"warn",t:`계획과 ${d>0?"+":""}${d.toFixed(1)}℃`,d:DEVSAY[key][d<0?0:1]});
+      }
+    }
+  }
+
+  // ④ 지금 배출하면 어느 배전도인가
+  const band=dropBand(v);
+  if(v>190)
+    out.notes.push({lv:"info",t:`지금 배출하면 ${band.canon.name}`,
+      d:`밴드 ${band.canon.dropHint[0]}~${band.canon.dropHint[1]}℃ · `
+       +`감량 ${band.canon.loss[0]}~${band.canon.loss[1]}% · DTR ${band.canon.dtr[0]}~${band.canon.dtr[1]}%`
+       +(planDrop?` · 계획 배출 ${planDrop.toFixed(1)}℃`:"")});
+
+  // ⑤ 생두를 물린 해설 — 로스팅 기록 탭에서 고른 생두의 목표와 견준다.
+  //    곡선만 보는 것과 달리 "이 생두에게" 맞는지를 말할 수 있다.
+  const bean=DB.beans.find(x=>x.id===($("r_bean")&&$("r_bean").value));
+  if(bean){
+    const use=$("r_use")?$("r_use").value:"filter";
+    const lv=$("r_level")?$("r_level").value:"mlight";
+    const tg=targetFor(bean,use,lv);
+    const why=tg.why.length?tg.why[0].replace(/ —.*/,""):null;
+    // 올려둔 프로파일이 이 생두에게 맞는 길이인가
+    if(planDur>0){
+      const gap=planDur-tg.t.dur;
+      if(Math.abs(gap)>32)
+        out.notes.push({lv:"warn",t:`${bean.name} 기준 총시간 ${gap>0?"+":""}${Math.round(gap)}초`,
+          d:`이 생두의 목표는 <b>${fmt(Math.round(tg.t.dur))}</b>인데 올린 프로파일은 <b>${fmt(planDur)}</b>입니다.`
+           +(why?` ${why}.`:"")+(gap<0?" 속까지 열이 덜 갈 수 있습니다.":" 향이 빠질 수 있습니다.")});
+      else
+        out.notes.push({lv:"ok",t:`${bean.name} 기준 총시간 적정`,
+          d:`목표 ${fmt(Math.round(tg.t.dur))} · 계획 ${fmt(planDur)} — 허용폭 안입니다.`});
+    }
+    // 지금까지의 초반 열량이 이 생두 목표에 맞나 (건조 구간을 지난 뒤에만 말한다)
+    if(planDur>0&&t>=planDur*0.40){
+      const at40=curveAt(c,planDur*0.40), pre=c[0][1];
+      const rE=(at40-pre)/((planDur*0.40)/60);
+      const d=rE-tg.t.rEarly;
+      if(Math.abs(d)>1.6)
+        out.notes.push({lv:"warn",t:`초반 열량 ${rE.toFixed(1)}℃/분 (목표 ${tg.t.rEarly.toFixed(1)})`,
+          d:d<0?"이 생두에는 초반이 약했습니다 — 속이 덜 익을 수 있습니다."
+               :"이 생두에는 초반이 셌습니다 — 표면이 탈 수 있습니다."});
+    }
+    // 계획 배출온도가 목표 배전도 밴드에 있나
+    if(planDrop!=null){
+      const dd=planDrop-tg.t.drop;
+      if(Math.abs(dd)>1.5)
+        out.notes.push({lv:"info",t:`계획 배출 ${planDrop.toFixed(1)}℃ (목표 ${tg.t.drop.toFixed(1)})`,
+          d:`${LVNAME[lv]} 기준 ${tg.canon.dropHint[0]}~${tg.canon.dropHint[1]}℃.`
+           +(dd>0?" 계획이 더 깊습니다.":" 계획이 더 얕습니다.")});
+    }
+  }
+
+  // ⑥ 크랙을 찍었으면 DTR 이 어디까지 왔는지
+  if(ikMarks.crack!=null&&t>ikMarks.crack){
+    const dtrNow=(t-ikMarks.crack)/t*100;
+    const tgt=band.canon.dtr;
+    const lv=dtrNow<tgt[0]?"info":(dtrNow>tgt[1]?"warn":"ok");
+    out.notes.push({lv,t:`DTR ${dtrNow.toFixed(1)}%`,
+      d:`${band.canon.name} 권장 ${tgt[0]}~${tgt[1]}%. `
+       +(dtrNow<tgt[0]?`권장 하한까지 ${Math.round(tgt[0]/100*t/(1-tgt[0]/100)-(t-ikMarks.crack))}초쯤 남았습니다.`
+        :dtrNow>tgt[1]?"권장 범위를 넘었습니다 — 발달이 길어지고 있습니다.":"권장 범위 안입니다.")});
+  }
+  return out;
 }
 /* 팬(%)과 히터(%)를 한 축에 그린다. 온도가 왜 그렇게 움직였는지는 여기 있다. */
 function powerSvg(fan,heat,tMaxIn){
@@ -3530,9 +3620,11 @@ $("r_save").onclick=()=>{
     rmsg('<span class="pill ok">수정됨</span> 아래 목록에 반영됐습니다.');
   }else{
     DB.roasts.push(rec);
-    rmsg(`<span class="pill ok">저장됨</span> 로스팅 기록 ${DB.roasts.length}건. 아래 목록에 있습니다.`);
+    rmsg(`<span class="pill ok">저장됨</span> 로스팅 기록 ${DB.roasts.length}건. 아래에 리포트를 띄웠습니다.`);
   }
+  const savedId=rec.id;
   renderRoasts(); renderProfiles(); renderWaiting(); persist(); clearRoast();
+  roastReport(savedId);                     // 저장하면 바로 판정을 보여준다
 };
 function clearRoast(){
   ["r_prof","r_in","r_out","r_loss","r_pre","r_drop","r_dur","r_crack","r_dtr","r_ror",
@@ -3549,6 +3641,111 @@ function clearRoast(){
 $("r_clear").onclick=()=>{clearRoast();rmsg("");};
 
 function beanName(id){ const b=DB.beans.find(x=>x.id===id); return b?b.name:"(삭제됨)"; }
+
+/* ── 배치 리포트 ────────────────────────────────────────
+   흩어져 있던 판정을 한 장에 모은다. 새 기준을 만들지 않고 기존 것을 불러 쓴다:
+     renderCanon 의 밴드 판정 · phaseDev 의 구간 편차 · targetFor 의 생두 목표
+     nextAdvice 의 다음 배치 제안 · compareSeller 의 판매처 노트 대조 */
+window.roastReport=id=>{
+  const r=DB.roasts.find(x=>x.id===id); if(!r) return;
+  const b=DB.beans.find(x=>x.id===r.beanId);
+  const prof=r.profileId?DB.profiles.find(x=>x.id===r.profileId):null;
+  const box=$("rp_box"), out=$("rp_out");
+  let h=`<p class="tagline">${r.date||""} · ${beanName(r.beanId)}${r.prof?` · ${r.prof}`:""}</p>`;
+
+  // ① 곡선 — 계획과 실측, 그리고 승온율
+  if(r.act&&r.act.length>2){
+    const marks=[];
+    if(r.cc)    marks.push({t:r.cc,   label:"CC", color:"var(--mark)"});
+    if(r.crack) marks.push({t:r.crack,label:"1차",color:"var(--actual)"});
+    h+=(prof&&prof.pts?curveSvg(prof.pts,[r.act],marks):curveSvg(r.act,[],marks))
+      +rorSvg(rorSeries(r.act,30));
+    h+=`<p class="note" style="margin-top:5px">
+      ${prof?'<span style="color:var(--setpoint)">━</span> 계획 · ':""}
+      <span style="color:var(--actual)">━</span> 실측 · 세로선은 CC·1차 크랙</p>`;
+  }else{
+    h+=`<p class="note">실측 곡선이 없는 배치입니다. 로그를 올리거나 머신에 직접 연결하면 곡선이 담깁니다.</p>`;
+  }
+
+  // ② 구간 편차 — 계획 곡선이 있을 때만
+  if(prof&&prof.pts&&r.act){
+    const dev=phaseDev(prof.pts,r.act);
+    if(dev){
+      h+=`<p class="tagline" style="margin-top:12px">계획 대비 구간 편차</p>`;
+      h+=`<table><tr><th>구간</th><th class="num">평균</th><th class="num">최대</th><th>읽는 법</th></tr>`+
+        dev.map(x=>{ const ok=Math.abs(x.avg)<=DEVOK;
+          return `<tr><td>${x.name}</td>
+            <td class="num"><span class="${ok?"pill ok":"pill warn"}">${x.avg>0?"+":""}${x.avg.toFixed(1)}℃</span></td>
+            <td class="num">${x.max>0?"+":""}${x.max.toFixed(1)}℃</td>
+            <td class="note">${ok?"설정을 잘 따라갔습니다":DEVSAY[x.name][x.avg<0?0:1]}</td></tr>`;
+        }).join("")+`</table>`;
+    }
+  }
+
+  // ③ 밴드 판정 — 배전도는 색도에서 추정하거나 미디엄 라이트를 기준으로
+  const lv=(()=>{ const a=+r.agt; if(!a) return "mlight";
+    return a>=75?"light":a>=65?"mlight":a>=55?"medium":"mdark"; })();
+  const cn=CANON.level[lv];
+  h+=`<p class="tagline" style="margin-top:12px">교과서 밴드 대비 <span class="pill">${cn.name}</span></p>`;
+  const rows=[];
+  const band=(label,v,lo,hi,unit,low,high)=>{
+    if(v==null||isNaN(v)){ rows.push([label,"—",`${lo}~${hi}${unit}`,'<span class="note">값 없음</span>']); return; }
+    const ok=v>=lo&&v<=hi;
+    rows.push([label,v.toFixed(unit==="%"?1:0)+unit,`${lo}~${hi}${unit}`,
+      ok?'<span class="pill ok">밴드 안</span>'
+        :`<span class="pill warn">${v<lo?"낮음":"높음"}</span> <span class="note">${v<lo?low:high}</span>`]);
+  };
+  band("감량률",r.loss,cn.loss[0],cn.loss[1],"%","덜 익었을 수 있습니다","예상보다 깊습니다");
+  band("DTR",r.dtr,cn.dtr[0],cn.dtr[1],"%","발달이 짧습니다","발달이 깁니다");
+  band("배출온도",r.drop,cn.dropHint[0],cn.dropHint[1],"℃","얕게 끊겼습니다","깊게 갔습니다");
+  if(r.cc&&r.dur) band("건조 구간 비율",r.cc/r.dur*100,CANON.phase.dry-10,CANON.phase.dry+10,"%",
+    "건조가 빨랐습니다","건조가 길었습니다");
+  if(r.ror!=null) rows.push(["후반 승온",r.ror.toFixed(1)+"℃/분","1.0 이상",
+    r.ror<1?'<span class="pill warn">베이킹 위험</span>':'<span class="pill ok">정상</span>']);
+  h+=`<table><tr><th>항목</th><th class="num">실측</th><th class="num">기준</th><th>판정</th></tr>`+
+    rows.map(x=>`<tr><td>${x[0]}</td><td class="num">${x[1]}</td>
+      <td class="num">${x[2]}</td><td>${x[3]}</td></tr>`).join("")+`</table>`;
+
+  // ④ 이 생두의 목표와 견주기
+  if(b){
+    const tg=targetFor(b,"filter",lv);
+    h+=`<p class="tagline" style="margin-top:12px">이 생두의 목표와 견주기</p>`;
+    const cmp=[["배출온도",r.drop,tg.t.drop,"℃",1.1],["총시간",r.dur,tg.t.dur,"초",32],
+               ["예열",r.pre,tg.t.pre,"℃",7.5]];
+    h+=`<table><tr><th>항목</th><th class="num">실측</th><th class="num">목표</th><th>차이</th></tr>`+
+      cmp.map(([k,v,t2,u,tol])=>{
+        if(v==null||isNaN(v)) return `<tr><td>${k}</td><td class="num">—</td>
+          <td class="num">${u==="초"?fmt(Math.round(t2)):t2.toFixed(1)+u}</td><td></td></tr>`;
+        const d=v-t2, ok=Math.abs(d)<=tol;
+        return `<tr><td>${k}</td>
+          <td class="num">${u==="초"?fmt(Math.round(v)):v.toFixed(1)+u}</td>
+          <td class="num">${u==="초"?fmt(Math.round(t2)):t2.toFixed(1)+u}</td>
+          <td><span class="${ok?"pill ok":"pill warn"}">${d>0?"+":""}${u==="초"?Math.round(d)+"초":d.toFixed(1)+u}</span></td></tr>`;
+      }).join("")+`</table>`;
+    if(tg.why.length)
+      h+=`<p class="note">${tg.why.map(w=>"· "+w).join("<br>")}</p>`;
+  }
+
+  // ⑤ 컵 결과와 다음 배치 제안
+  if(r.cup&&(r.cup.sum||r.cup.total||r.cup.note)){
+    h+=`<p class="tagline" style="margin-top:12px">컵 결과</p>`;
+    h+=`<p class="lead" style="margin:0">${r.cup.total!=null?`<b>${r.cup.total}점</b>`:""}
+      ${r.cup.sum?`${r.cup.total!=null?"· ":""}합계 ${r.cup.sum}/72`:""}
+      ${r.cup.flavors&&r.cup.flavors.length?`<br>향미 — ${r.cup.flavors.map(lbFlavor).join(", ")}`:""}
+      ${r.cup.note?`<br><span class="note">${lbEsc(r.cup.note)}</span>`:""}</p>`;
+    const {acts,seen}=nextAdvice(r,b);
+    h+=`<p class="tagline" style="margin-top:12px">다음 배치에 무엇을 바꿀까</p>`;
+    h+=`<p class="note">${seen.map(x=>"· "+x).join("<br>")}</p>`;
+    h+= acts.length
+      ? `<p class="lead" style="margin:0">${acts.map(a=>`<span class="pill warn">${a}</span>`).join(" ")}</p>`
+      : `<p class="lead" style="margin:0"><span class="pill ok">고칠 것 없음</span> 이 조합을 그대로 유지하세요.</p>`;
+  }else{
+    h+=`<p class="tagline" style="margin-top:12px">컵 결과</p>
+        <p class="note">아직 비어 있습니다. 커핑 탭에서 채우면 <b>다음 배치 제안</b>이 나옵니다.</p>`;
+  }
+  out.innerHTML=h; box.hidden=false;
+  box.scrollIntoView({behavior:"smooth",block:"start"});
+};
 function renderRoasts(){
   $("r_count").textContent=DB.roasts.length+"건";
   $("r_table").innerHTML=`<tr><th class="tight">날짜</th><th>생두</th><th class="tight">기종</th><th>프로파일</th>
@@ -3565,7 +3762,8 @@ function renderRoasts(){
         <td class="num tight">${r.drop?.toFixed(1)??""}</td><td class="num tight">${r.dur?fmt(r.dur):""}</td>
         <td class="num tight">${r.dtr?.toFixed(1)??""}</td><td class="num tight">${r.loss?.toFixed(1)??""}</td>
         <td class="num tight">${r.cost?r.cost.toLocaleString()+"원":""}</td>
-        <td class="tight">${cup}</td><td class="tight"><button class="ghost sm" onclick="editRoast(${i})">수정</button>
+        <td class="tight">${cup}</td><td class="tight"><button class="ghost sm" onclick="roastReport('${r.id}')">리포트</button>
+        <button class="ghost sm" onclick="editRoast(${i})">수정</button>
         <button class="ghost sm" onclick="delRoast(${i})">삭제</button></td></tr>`;
     }).join(""):`<tr><td colspan="11" style="color:var(--muted)">아직 없습니다</td></tr>`);
 }
@@ -4457,6 +4655,7 @@ function ikHandleFrame(raw){
 }
 let ikSent=null, ikNow=0;              // 마지막으로 보낸 프로파일 / 현재 경과 시각
 function ikOnProfileBack(pf){
+  ikRef={name:pf.name,pts:pf.pts};      // 해설의 기준 곡선
   const end=pf.pts.length?fmt(pf.pts[pf.pts.length-1][0]):"?";
   const drop=pf.pts.length?pf.pts[pf.pts.length-1][1].toFixed(1):"?";
   ikLog(`◎ 머신에 들어 있는 프로파일: "${pf.name}" · 점 ${pf.pts.length}개 · 총 ${end} · 배출 ${drop}℃`);
@@ -4526,8 +4725,21 @@ function ikRenderLive(st){
       : '<span class="pill">배기 센서만</span> 이 기종은 흡기(인렛) 온도를 보내지 않습니다(Pro V2 계열). '
         +'IKAWA 라이브러리에서 <b>Inlet 프로파일은 쓰지 마세요</b> — 배기 기준 프로파일만 맞습니다.'}</p></div>`;
   $("ik_save").disabled=ikCurve.length<5;
+  const coach=ikCoach();
+  if(coach){
+    $("ik_coachbox").hidden=false;
+    const ico={ok:'<span class="pill ok">정상</span>',
+               warn:'<span class="pill warn">주의</span>',
+               info:'<span class="pill">참고</span>'};
+    $("ik_coach").innerHTML=coach.notes.map(n=>
+      `<p class="lead" style="margin:0 0 7px">${ico[n.lv]||""} <b>${n.t}</b><br>
+       <span class="note" style="margin:0">${n.d}</span></p>`).join("")
+      +(ikRef?`<p class="note" style="margin-top:4px">기준: <b>${ikRef.name}</b></p>`
+             :`<p class="note" style="margin-top:4px">머신의 프로파일을 모르면 구간 판정을 하지 않습니다 —
+                「머신에서 읽어 확인」을 한 번 누르면 기준이 잡힙니다.</p>`);
+  }
   if(ikCurve.length>2){
-    const marks=[];
+    const marks=(coach?coach.marks:[]).slice();
     if(ikMarks.cc!=null)    marks.push({t:ikMarks.cc,   label:"CC",  color:"var(--mark)"});
     if(ikMarks.crack!=null) marks.push({t:ikMarks.crack,label:"1차", color:"var(--actual)"});
     // 설정 곡선이 있으면 그것을 바탕(파랑)으로 깔고 실측(빨강)을 얹는다
@@ -4646,6 +4858,7 @@ async function ikSendProfile(cmdType){
   const id=$("ik_prof").value, p=profById(id);
   if(!p){ $("ik_cmdmsg").textContent="프로파일을 고르세요."; return; }
   ikSent={name:p.name,pts:p.pts};
+  ikRef={name:p.name,pts:p.pts.map(q=>[q[0],q[1]])};   // 보낸 것을 해설 기준으로 삼는다
   $("ik_cmdmsg").innerHTML=`<span class="pill">보내는 중…</span>`;
   /* 보내기부터 되읽기까지를 한 덩어리로 묶어 그 사이에는 상태 요청을 넣지 않는다.
      머신이 프로파일을 받아 저장하는 동안은 조용히 두는 편이 안전하다. */
@@ -4793,7 +5006,7 @@ function ikInit(){
   $("ik_logclear").onclick=()=>{ ikLines=[]; $("ik_log").textContent=""; $("ik_logmsg").textContent=""; };
   $("ik_selftest").onclick=ikSelfTest;
   $("ik_clear").onclick=()=>{ ikCurve=[]; ikPlanCurve=[]; ikFanCurve=[]; ikHeatCurve=[];
-    ikInlet=[]; ikHasInlet=false; ikT0=null; ikNow=0;
+    ikInlet=[]; ikHasInlet=false; ikT0=null; ikNow=0; $("ik_coachbox").hidden=true;
     ikMarks={cc:null,crack:null}; $("ik_chart").innerHTML=""; $("ik_elapsed").textContent="";
     $("ik_save").disabled=true; $("ik_savemsg").textContent="";
     $("ik_undo").disabled=true; $("ik_markmsg").textContent="곡선을 지웠습니다."; };

@@ -255,6 +255,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
   </aside>
 </main>
 
+<script src="theory.js"></script>
 <script>
 /* QR Code Generator for JavaScript — (c) Kazuhiko Arase, MIT */
 //---------------------------------------------------------------------
@@ -3040,14 +3041,16 @@ function seriesMetrics(pts,{isLog}){
   const rorAt=(a,b)=>(at(b)-at(a))/((b-a)/60);
   const crack=isLog?(estimateCrack(arr)||{}).t:null;
   const q=[rorAt(0,dur*0.25),rorAt(dur*0.25,dur*0.5),rorAt(dur*0.5,dur*0.75),rorAt(dur*0.75,dur)];
-  const flaws=[];
-  if(q[3]<1.0) flaws.push("베이킹 위험");
-  if(q[3]>q[2]+0.5) flaws.push("후반 플릭");
-  if(q[3]<0) flaws.push("크래시");
+  /* 결함 판정은 theory.js 의 공용 판정기를 쓴다.
+     예전에는 여기서 4분위로 따로 보느라 기록장과 플릭을 찾는 방식이 달랐다. */
+  const dg=diagnoseCurve(arr.map(x=>[x.t,x.v]));
+  const flaws=dg?dg.flaws.map(f=>f.label):[];
+  const flawSay=dg?dg.flaws.map(f=>f.say):[];
   return { dur, drop:end.v, tp:tp.t, crack,
            crackPct: crack?crack/dur*100:null,
            dtr: crack?(dur-crack)/dur*100:null,
-           ror4:q[3], ror3:q[2], flaws };
+           ror4:q[3], ror3:q[2], flaws, flawSay,
+           band: dropBand(end.v) };
 }
 function renderPhases(){
   const rows=[];
@@ -3061,16 +3064,20 @@ function renderPhases(){
 
   $("phasetbl").innerHTML=
     `<tr><th>곡선</th><th class="num">총시간</th><th class="num">배출℃</th>
-     <th class="num">크랙</th><th class="num">크랙 시점</th><th class="num">DTR</th>
+     <th>배전도</th><th class="num">크랙</th><th class="num">크랙 시점</th><th class="num">DTR</th>
      <th class="num">후반 승온</th><th>진단</th></tr>`+
     rows.map(r=>{
       const m=r.m;
       const flag=m.flaws.length
         ? `<span class="pill bad">${m.flaws.join(" · ")}</span>`
+          +`<br><span class="note">${m.flawSay.join("<br>")}</span>`
         : `<span class="pill good">정상</span>`;
+      const bd=m.band?`${m.band.canon.name}${m.band.out?
+        `<br><span class="pill bad">밴드 ${m.band.out==="over"?"초과":"미만"}</span>`:""}`:"–";
       return `<tr><td style="color:${r.color}">${r.name}</td>
         <td class="num">${fmt(m.dur)}</td>
         <td class="num">${m.drop.toFixed(1)}</td>
+        <td>${bd}</td>
         <td class="num">${m.crack?fmt(m.crack):"–"}</td>
         <td class="num">${m.crackPct?m.crackPct.toFixed(0)+"%":"–"}</td>
         <td class="num">${m.dtr?m.dtr.toFixed(1)+"%":"–"}</td>
@@ -3082,9 +3089,14 @@ function renderPhases(){
     `<b>크랙 시점</b>은 전체 시간의 몇 %에서 1차 크랙이 왔는지입니다. 온도의 절대값과 달리
      <b>기종이 달라도 그대로 비교되는 값</b>이라, 샘플 로스터에서 잡은 감을 큰 로스터로 옮길 때 목표로 씁니다.
      설계 곡선은 크랙을 예측할 수 없어 실측 로그에서만 나옵니다.<br>
-     진단 — <b>베이킹</b>: 후반 승온이 1℃/분 아래로 죽어 단맛이 빠지는 상태.
+     진단 — <b>베이킹</b>: 후반 승온이 ${CANON.flaw.bake}℃/분 아래로 죽어 단맛이 빠지는 상태.
      <b>플릭</b>: 크랙 이후 승온이 다시 올라 향이 무너지는 상태.
-     <b>크래시</b>: 승온이 음수로 꺾인 상태.`;
+     <b>크래시</b>: 승온이 음수로 꺾인 상태.
+     <b>기록장과 같은 판정기</b>를 씁니다 — 여기서 정상이면 볶은 뒤에도 같은 말이 나옵니다.<br>
+     <b>배전도</b>는 배출온도가 교과서 밴드 중 어디에 앉는지입니다
+     (라이트 198~203 · 미디엄 라이트 201~205 · 미디엄 204~208 · 미디엄 다크 207~211℃).<br>
+     용어 — 위 표의 <b>후반</b>은 곡선을 재려고 잡은 <b>측정 창</b>(75~100%)이고,
+     교과서의 <b>발달 구간</b>은 80~100%로 경계가 다릅니다.`;
 }
 
 /* ---------- 레이어 간 차이 ---------- */
@@ -3336,7 +3348,8 @@ renderRefs(); libRender(); showTarget();
 
 /* ---------- 계획의 목표에 맞춰 곡선 자동 보정 ----------
    시간을 목표 길이로 늘리거나 줄이고, 예열·배출을 목표에 맞춘 뒤,
-   초반(0~40%)과 발달(75~100%) 구간의 기울기를 목표에 맞도록 값을 다시 배치한다.
+   측정 창인 초반(0~40%)과 후반(75~100%)의 기울기를 목표에 맞도록 값을 다시 배치한다.
+   (교과서 구간인 「발달」은 80~100%로 정의가 다르다 — theory.js 참고)
    구간 안의 굴곡은 원래 비율을 그대로 유지한다 — 모양은 남기고 높이만 옮기는 방식. */
 function autoFit(pts,g){
   const n=pts.length, curDur=pts[n-1][0]||1;
