@@ -136,6 +136,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <button data-p="profiles">프로파일</button>
     <button data-p="cup">커핑</button>
     <button data-p="label">라벨</button>
+    <button data-p="machine">머신</button>
     <button data-p="data">데이터</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 14px;font-size:14.5px;color:var(--setpoint);text-decoration:none">스튜디오 →</a>
   </nav>
@@ -335,6 +336,25 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     </div>
 
     <div class="extra" style="margin-top:9px">
+      <p class="tagline">로스팅 타이머 — 초를 세지 않아도 됩니다</p>
+      <p class="note" style="margin:0 0 8px">로스터의 <b>시작 버튼을 누르는 순간</b> 같이 「시작」을 누르세요.
+      1차 크랙이 들리면 큰 버튼을 한 번 누르면 그 시각이 아래 <b>1차 크랙 초</b>에 들어가고
+      DTR이 바로 계산됩니다. 잘못 눌렀으면 다시 누르면 덮어씁니다.</p>
+      <div class="row" style="align-items:center">
+        <button id="t_start">시작</button>
+        <span id="t_disp" class="mono" style="font-size:30px;font-weight:600;min-width:104px;
+          letter-spacing:.02em">0:00</span>
+        <button id="t_crack" disabled style="font-size:16px;padding:12px 20px">지금 1차 크랙</button>
+        <button class="ghost" id="t_drop" disabled>배출</button>
+        <button class="ghost" id="t_reset">비우기</button>
+        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:13px;color:var(--ink)">
+          <input type="checkbox" id="t_alarm" style="width:auto" checked> 소리로 알림
+        </label>
+      </div>
+      <p class="note" id="t_msg" style="margin-top:7px"></p>
+    </div>
+
+    <div class="extra" style="margin-top:9px">
       <p class="tagline">로그에서 채워진 값 — 필요하면 고치세요</p>
       <div class="grid g5">
         <div><label>로스터 기종</label><input type="text" id="r_machine" list="machines" placeholder="IKAWA Pro V2">
@@ -457,7 +477,34 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
         <input type="checkbox" id="pf_arch" style="width:auto"> 보관함 포함
       </label>
     </div>
+    <div class="row" style="margin-bottom:8px">
+      <input type="text" id="pf_find" placeholder="이름 · 출처 · 산지 · 품종으로 찾기"
+             style="flex:1;min-width:180px">
+      <button class="ghost sm" id="pf_clear" disabled>지우기</button>
+    </div>
+    <div class="extra" style="margin-bottom:9px">
+      <p class="tagline">거꾸로 찾기 — 쓰려는 생두 쪽에서 프로파일을 고릅니다</p>
+      <div class="row">
+        <select id="pf_country" style="width:auto;min-width:130px"></select>
+        <select id="pf_var" style="width:auto;min-width:130px"></select>
+        <select id="pf_bean" style="width:auto;flex:1;min-width:200px"></select>
+      </div>
+      <p class="note" style="margin-top:7px">국가·품종은 산지 원형으로 옮겨 걸립니다 —
+      예를 들어 <b>파나마</b>를 고르면 게이샤·무산소 원형에 맞는 프로파일이 남습니다.
+      셋을 겹쳐 쓰면 더 좁아지고, 걸린 원형은 「어울리는 생두」 칸 맨 앞에 <b>▸</b>로 표시됩니다.</p>
+    </div>
+    <p class="lead">「어울리는 생두」는 <b>곡선만 보고 되짚은 추정</b>입니다.
+    「로스팅 계획」이 쓰는 <b>생두 → 목표 곡선</b> 계산식을 그대로 뒤집어,
+    산지 원형을 전부 대입해 가장 가까운 것을 고릅니다. <b>근거</b>를 누르면 판정 과정이 다 나옵니다.</p>
     <div class="scrollx"><div class="tbl"><table id="pf_table"></table></div></div>
+  </div>
+
+  <div class="block" id="pf_whybox" hidden>
+    <h2>판정 근거</h2>
+    <div class="extra" id="pf_why"></div>
+    <div class="row" style="margin-top:8px">
+      <button class="ghost" onclick="document.getElementById('pf_whybox').hidden=true">닫기</button>
+    </div>
   </div>
 </section>
 
@@ -564,6 +611,79 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 </section>
 
+<!-- ================= 머신 (블루투스 직접 연결) ================= -->
+<section class="pane" id="p-machine">
+
+  <div class="block">
+    <h2>① IKAWA에 직접 연결 <span id="ik_state" class="pill">끊김</span></h2>
+    <p class="lead">폰의 IKAWA 앱을 거치지 않고 <b>이 앱이 머신과 직접</b> 블루투스로 말합니다.
+    연결되면 온도가 실시간으로 그려지고, 로스팅이 끝나면 기록에 바로 담깁니다.</p>
+    <p class="note" id="ik_support"></p>
+    <div class="row">
+      <button id="ik_connect">머신 연결</button>
+      <button class="ghost" id="ik_disconnect" disabled>끊기</button>
+      <span class="note" id="ik_msg"></span>
+    </div>
+    <p class="note">이 기능은 IKAWA가 공식 지원하는 방식이 아니라, <b>공개된 통신 규격을 읽어 만든 것</b>입니다.
+    펌웨어가 바뀌면 동작하지 않을 수 있고 제조사 보증 대상이 아닙니다.
+    크롬·엣지에서만 되고 <b>아이폰에서는 되지 않습니다</b>(iOS가 웹 블루투스를 지원하지 않음).</p>
+  </div>
+
+  <div class="block" id="ik_livebox" hidden>
+    <h2>② 실시간</h2>
+    <div class="grid g5" id="ik_live"></div>
+    <div id="ik_chart" style="margin-top:10px"></div>
+    <div class="row" style="margin-top:9px">
+      <button id="ik_save" disabled>이 배치를 기록에 담기</button>
+      <button class="ghost" id="ik_clear">곡선 지우기</button>
+      <span class="note" id="ik_savemsg"></span>
+    </div>
+  </div>
+
+  <div class="block" id="ik_sendbox" hidden>
+    <h2>③ 프로파일 보내기</h2>
+    <p class="lead">프로파일을 머신으로 <b>직접</b> 올립니다. 폰이 필요 없습니다.</p>
+    <div class="row" style="margin-bottom:8px">
+      <select id="ik_prof" style="width:auto;flex:1;min-width:220px"></select>
+      <button id="ik_send" disabled>머신으로 보내기</button>
+    </div>
+    <p class="note" style="color:var(--actual)"><b>처음 시도할 때는 원두를 넣지 않은 빈 머신에서 하세요.</b>
+    프로파일 전송 명령 번호가 공개돼 있지 않아 아래에서 찾아야 하는데,
+    그 과정에서 예상 못 한 동작이 나올 수 있습니다. 자리를 비우지 마세요.</p>
+    <div class="extra">
+      <p class="tagline">전송 명령 번호 찾기</p>
+      <p class="note" style="margin:0 0 7px">규격에 프로파일 전송(<span class="mono">profile_set</span>)은 있는데
+      명령 번호만 공개돼 있지 않습니다. 하나씩 넣어 보내보고, 머신이 응답하거나
+      IKAWA 앱에서 프로파일이 바뀌었는지 확인하세요. 상태 요청이 11번인 것은 확인됐습니다.</p>
+      <div class="row">
+        <label style="margin:0">cmd_type</label>
+        <input type="number" id="ik_cmd" value="12" style="width:84px">
+        <button class="ghost sm" id="ik_cmdtry">이 번호로 보내기</button>
+        <span class="note" id="ik_cmdmsg"></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="block">
+    <h2>④ 통신 진단</h2>
+    <p class="lead">모르는 값을 여기서 알아냅니다. 머신 앞에서 한 배치만 돌려보면
+    <b>상태 번호</b>와 <b>필드 배치</b>가 다 드러납니다.</p>
+    <div class="row" style="margin-bottom:8px">
+      <label style="margin:0">CRC 방식</label>
+      <select id="ik_crc" style="width:auto"></select>
+      <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:13px;color:var(--ink)">
+        <input type="checkbox" id="ik_raw" style="width:auto" checked> 원시 필드 보기
+      </label>
+      <button class="ghost sm" id="ik_selftest">자체 시험</button>
+    </div>
+    <div class="scrollx"><div class="tbl"><table id="ik_fields"></table></div></div>
+    <p class="tagline" style="margin-top:12px">통신 기록</p>
+    <pre id="ik_log" class="mono" style="font-size:11.5px;background:#fff;border:1px solid var(--rule);
+      padding:9px;max-height:220px;overflow:auto;margin:0;white-space:pre-wrap"></pre>
+  </div>
+
+</section>
+
 <!-- ================= 데이터 ================= -->
 <section class="pane" id="p-data">
   <div class="block">
@@ -655,6 +775,7 @@ document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
   if(b.dataset.p==="data") stats();
   if(b.dataset.p==="cup"){ renderWaiting(); cmpFill(); }
   if(b.dataset.p==="label") lbOpen();
+  if(b.dataset.p==="machine") ikOpen();
 });
 
 
@@ -1191,7 +1312,7 @@ function parseWithMap(lines,h,map,fname){
   return { prof:fname.replace(/\.csv$/i,"").replace(/^Roast[_ ]?data[:_ ]*/i,"")
              .replace(/^Roasted[_ ]?with[_ ]*/i,"").replace(/_/g," ").trim(),
            pre:all[0].v, drop:end.v, dur:end.t, tp:tp.t, tpv:tp.v,
-           crack:c?Math.round(c.t):null, ror, sp:spThin,
+           crack:c?Math.round(c.t):null, ror, sp:spThin, act:thinCurve(pts,5),
            dryPct:(t150!=null&&end.t)?t150/end.t*100:null };
 }
 
@@ -1259,8 +1380,16 @@ async function ghUp(quiet){
   const bad=ghCheck(c);
   if(bad){ if(!quiet) $("y_msg").innerHTML=`<span class="pill warn">확인</span> ${bad}`; return; }
   if(!quiet) $("y_msg").innerHTML=`<span class="pill">진행 중</span> ${c.repo} / ${c.path}`;
+  if(syncBusy) return;
+  syncBusy=true;
   try{
     const cur=await ghApi(`repos/${c.repo}/contents/${encodeURIComponent(c.path)}`);
+    // 올리기 전에 저장소의 것을 합친다 — 다른 기기가 올린 기록을 덮어쓰지 않기 위해
+    if(cur&&cur.content){
+      try{ const m=mergeInto(JSON.parse(b64dec(cur.content)));
+        if(m&&(m.got.b||m.got.r||m.got.p)) await idbSet("db",JSON.parse(JSON.stringify(DB)));
+      }catch(e){ throw new Error("저장소 내용을 읽지 못해 올리지 않았습니다 — "+e.message); }
+    }
     const body={message:`로스트포인트 ${new Date().toISOString().slice(0,16)} — 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`,
       content:b64enc(JSON.stringify({v:"6.8",at:Date.now(),...dbForExport()}))};
     if(cur&&cur.sha) body.sha=cur.sha;
@@ -1270,6 +1399,7 @@ async function ghUp(quiet){
       생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length} · 프로파일 ${DB.profiles.length}.
       저장소에 커밋이 남았습니다.`;
   }catch(e){ $("y_msg").innerHTML=`<span class="pill warn">실패</span> ${e.message}`; }
+  finally{ syncBusy=false; }
 }
 function syncMode(){ return $("y_mode").value; }
 $("y_mode").addEventListener("change",()=>{
@@ -1308,17 +1438,48 @@ function mergeList(a,b){
   return [...m.values()];
 }
 function syncKey(){ return ($("y_key").value||"").trim(); }
+/* 서버에서 받은 덩어리를 로컬에 합친다 — 올릴 때도 내려받을 때도 같은 규칙을 쓴다.
+   id 기준 합집합, 같은 id면 마지막으로 고친 쪽(mt)이 남는다. */
+function mergeInto(d){
+  if(!d) return null;
+  const was={b:DB.beans.length,r:DB.roasts.length,p:DB.profiles.length};
+  DB.beans=mergeList(DB.beans,d.beans);
+  DB.roasts=mergeList(DB.roasts,d.roasts);
+  DB.profiles=mergeList(DB.profiles,d.profiles);
+  { const st=Object.assign({},d.settings||{}); delete st.g_token; delete st.syncKey;
+    DB.settings=Object.assign({},st,DB.settings); }
+  applySettings(); renderBeans(); renderRoasts(); renderProfiles(); renderWaiting(); stats();
+  return {was, got:{b:DB.beans.length-was.b, r:DB.roasts.length-was.r, p:DB.profiles.length-was.p}};
+}
+let syncBusy=false;
+/* 올리기 = 내려받아 합친 뒤 올리기.
+   예전엔 내 DB를 그대로 PUT 해서, 다른 기기가 방금 올린 기록을 지울 수 있었다.
+   (PC 창을 띄워둔 채 폰에서 저장 → PC에서 아무거나 저장 → 폰 기록 증발) */
 async function syncUp(quiet){
   const k=syncKey();
   if(!k){ if(!quiet) $("y_msg").textContent="동기화 키를 먼저 넣으세요."; return; }
+  if(syncBusy) return;
+  syncBusy=true;
   try{
-    const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{
+    let got=null;
+    try{                                   // ① 먼저 서버 것을 가져와 합친다
+      const pre=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`);
+      if(pre.ok){ const d=await pre.json(); const m=mergeInto(d);
+        if(m&&(m.got.b||m.got.r||m.got.p)){ got=m.got;
+          await idbSet("db",JSON.parse(JSON.stringify(DB))); } }
+    }catch(e){ /* 못 가져오면 덮어쓰기 위험이 있으므로 올리지 않는다 */
+      throw new Error("서버를 먼저 읽지 못해 올리지 않았습니다 — "+e.message); }
+    const r=await fetch(`${SYNC_URL}?key=${encodeURIComponent(k)}`,{   // ② 합친 결과를 올린다
       method:"PUT",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({v:"6.8",at:Date.now(),...dbForExport()})});
     const j=await r.json();
     if(!r.ok) throw new Error(j.error||"실패");
-    if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`;
+    if(!quiet) $("y_msg").textContent=`올렸습니다 — ${(j.size/1024).toFixed(0)}KB`
+      +(got?` · 다른 기기에서 생두 ${got.b} · 로스팅 ${got.r} · 프로파일 ${got.p}건을 먼저 받아 합쳤습니다`:"");
+    else if(got) $("y_msg").textContent=
+      `다른 기기의 기록 ${got.b+got.r+got.p}건을 받아 합친 뒤 올렸습니다.`;
   }catch(e){ $("y_msg").textContent="올리기 실패: "+e.message; }
+  finally{ syncBusy=false; }
 }
 async function syncDown(quiet){
   const k=syncKey();
@@ -1493,10 +1654,42 @@ function profAgg(p){
     dtr:avg(used.filter(r=>r.dtr).map(r=>r.dtr)),
     cup:avg(used.filter(r=>r.cup&&r.cup.sum).map(r=>r.cup.sum)) };
 }
+/* 찾기 낱말 짝 — 프로파일 이름은 대개 영문인데 머릿속은 한글이다.
+   "가리도"로 Garrido를, "게이샤"로 Geisha를 찾을 수 있어야 한다. 양방향으로 넓힌다. */
+const FINDALIAS=[
+  ["게이샤","geisha","gesha"],["파카마라","pacamara"],["마라고지페","maragogype","maragogipe"],
+  ["재래종","heirloom","landrace"],["카투라","caturra"],["카투아이","catuai"],["부르봉","bourbon"],
+  ["티피카","typica"],["카스티요","castillo"],["카티모르","catimor"],["문도노보","mundo novo"],
+  ["에티오피아","ethiopia"],["예가체프","yirgacheffe","yirga"],["구지","guji"],["시다모","sidamo"],
+  ["케냐","kenya"],["콜롬비아","colombia"],["우일라","huila"],["과테말라","guatemala"],
+  ["우에우에테낭고","huehuetenango","huehue"],["안티구아","antigua"],["온두라스","honduras"],
+  ["코스타리카","costa rica"],["엘살바도르","el salvador"],["니카라과","nicaragua"],
+  ["파나마","panama"],["보케테","boquete"],["페루","peru"],["에콰도르","ecuador"],
+  ["브라질","brazil","brasil"],["세하도","cerrado"],["모지아나","mogiana"],
+  ["인도네시아","indonesia"],["수마트라","sumatra"],["만델링","mandheling"],
+  ["워시드","washed"],["내추럴","natural"],["허니","honey"],["무산소","anaerobic"],
+  ["펄프드","pulped"],["가리도","garrido"],["카라벨라","caravela"],["엘 인헤르또","injerto"],
+  ["산타 루시아","santa lucia"],["라이트","light"],["미디엄","medium"],["에스프레소","espresso"]
+];
+function findTerms(q){                    // 입력 낱말 + 짝이 되는 다른 표기들
+  const out=new Set([q]);
+  FINDALIAS.forEach(g=>{ if(g.some(w=>w.includes(q)||q.includes(w))) g.forEach(w=>out.add(w)); });
+  return [...out];
+}
+
+/* 내장 프로파일도 같은 목록에 세운다 — 예전엔 계획 탭 후보로만 쓰여 "어디 있냐"는 질문을 낳았다.
+   id를 붙여야 판정·근거 버튼이 가리킬 수 있고, 지우거나 고칠 수는 없게 builtin 표시를 단다. */
+function allProfiles(){
+  return DB.profiles.concat(
+    BUILTIN.map((p,i)=>({id:"bi"+i, name:p.name, src:p.src||"내장", pts:p.pts,
+                         builtin:true, archived:false, mt:0})));
+}
+function profById(id){ return allProfiles().find(p=>p.id===id)||null; }
+
 function renderProfiles(){
   const showArch=$("pf_arch")&&$("pf_arch").checked;
-  const list=DB.profiles.filter(p=>showArch||!p.archived);
-  $("pf_count").textContent=`${list.length}개${DB.profiles.length!==list.length?` (보관 ${DB.profiles.length-list.length})`:""}`;
+  const list=allProfiles().filter(p=>showArch||!p.archived);
+  const nAll=list.length;
 
   // 계보로 묶는다
   const groups=new Map();
@@ -1519,41 +1712,169 @@ function renderProfiles(){
     sort==="cup" ?b.cup-a.cup :
     sort==="name"?a.root.localeCompare(b.root) : b.mt-a.mt);
 
-  $("pf_table").innerHTML=`<tr><th>계보 · 버전</th><th>출처</th><th class="num">예열</th><th class="num">배출</th>
+  /* 찾기 — 글자로 훑기 + 국가·품종·원형으로 거르기.
+     국가/품종은 원형 묶음으로 번역된다. 예) 파나마 → 게이샤·무산소 원형.
+     거른 뒤에는 "그 원형에 얼마나 맞는가"로 다시 세운다. */
+  const q  =(($("pf_find")&&$("pf_find").value)||"").trim().toLowerCase();
+  const wCo=($("pf_country")&&$("pf_country").value)||"";
+  const wVa=($("pf_var")&&$("pf_var").value)||"";
+  const wK =($("pf_bean")&&$("pf_bean").value)||"";
+  const want=ARCH.filter(a=>(!wCo||a.co.includes(wCo))&&(!wVa||a.va.includes(wVa))&&(!wK||a.k===wK))
+                 .map(a=>a.k);
+  const filtering=!!(wCo||wVa||wK);
+  const fitCache=new Map();
+  const fitFor=p=>{ if(!fitCache.has(p.id)) fitCache.set(p.id,profFit(p)); return fitCache.get(p.id); };
+
+  /* 계보의 모든 버전을 본다 — 대표만 보면 "v1.1이 게이샤 100점인데 계보가 안 걸리는" 일이 생긴다 */
+  let view=rows.map(g=>{
+    const hits=g.ps.map(p=>filtering
+      ? fitFor(p).ranked.findIndex((r,j)=>j<3&&want.includes(r.a.k)) : -1);
+    let at=-1, best=-1;
+    hits.forEach((h,i)=>{ if(h<0) return;
+      const s=fitFor(g.ps[i]).ranked[h].score;
+      if(at<0||s>best){ at=i; best=s; } });
+    return {g,hits,at,best};
+  });
+  if(filtering) view=view.filter(x=>x.at>=0);
+  if(q){
+    const terms=findTerms(q);
+    view=view.filter(x=>{
+      const hay=(x.g.ps.map(p=>`${p.name} ${p.src||""} `
+          +fitFor(p).ranked.slice(0,3).map(r=>`${r.a.n} ${r.a.w} ${r.a.co.join(" ")} ${r.a.va.join(" ")}`).join(" ")
+        ).join(" ")).toLowerCase();
+      return terms.some(t=>hay.includes(t));
+    });
+  }
+  if(filtering) view.sort((a,b)=>b.best-a.best);
+
+  $("pf_count").textContent = (filtering||q)
+    ? `${nAll}개 중 ${view.reduce((n,x)=>n+x.g.ps.length,0)}개`
+    : `${nAll}개${allProfiles().length!==nAll?` (보관 ${allProfiles().length-nAll})`:""}`;
+  if($("pf_clear")) $("pf_clear").disabled=!(filtering||q);
+
+  $("pf_table").innerHTML=`<tr><th>계보 · 버전</th><th style="min-width:190px">어울리는 생두 <span class="pill warn">추정</span></th>
+    <th>출처</th><th class="num">예열</th><th class="num">배출</th>
     <th class="num">시간</th><th class="num">쓴 횟수</th><th class="num">평균 감량</th>
     <th class="num">평균 DTR</th><th class="num">평균 컵</th><th style="width:96px"></th></tr>`+
-    (rows.length?rows.map(g=>{
-      const head=g.ps[0], st=profStat(head.pts), a=profAgg(head);
-      const i0=DB.profiles.indexOf(head);
+    (view.length?view.map(({g,hits,at})=>{
+      const head=g.ps[0];
+      const open=at>0;                       // 걸린 게 아랫버전이면 펼쳐서 보여준다
       const more=g.ps.length>1
-        ? ` <button class="ghost sm" onclick="toggleGroup(this)">버전 ${g.ps.length}개 ▾</button>` : "";
-      let out=`<tr><td><b>${g.root}</b> <span class="pill">${profVer(head.name)||"최신"}</span>${more}</td>
-        <td><span class="pill">${head.src||"—"}</span></td>
-        <td class="num">${st.pre.toFixed(1)}</td><td class="num">${st.drop.toFixed(1)}</td>
-        <td class="num">${fmt(st.dur)}</td><td class="num">${a.used||""}</td>
-        <td class="num">${a.loss!=null?a.loss.toFixed(1)+"%":""}</td>
-        <td class="num">${a.dtr!=null?a.dtr.toFixed(0)+"%":""}</td>
-        <td class="num">${a.cup!=null?a.cup.toFixed(0)+"/72":""}</td>
-        <td style="white-space:nowrap"><button class="ghost sm" onclick="renameProfile(${i0})">이름</button>
-            <button class="ghost sm" onclick="archProfile(${i0})">${head.archived?"복원":"보관"}</button>
-            <button class="ghost sm" onclick="delProfile(${i0})">삭제</button></td></tr>`;
-      g.ps.slice(1).forEach(p=>{
-        const s2=profStat(p.pts), a2=profAgg(p), ix=DB.profiles.indexOf(p);
-        out+=`<tr class="ver-row" hidden style="background:var(--paper-2)">
-          <td style="padding-left:22px">↳ ${profVer(p.name)||p.name}${p.archived?' <span class="pill">보관</span>':''}</td>
-          <td><span class="pill">${p.src||"—"}</span></td>
-          <td class="num">${s2.pre.toFixed(1)}</td><td class="num">${s2.drop.toFixed(1)}</td>
-          <td class="num">${fmt(s2.dur)}</td><td class="num">${a2.used||""}</td>
-          <td class="num">${a2.loss!=null?a2.loss.toFixed(1)+"%":""}</td>
-          <td class="num">${a2.dtr!=null?a2.dtr.toFixed(0)+"%":""}</td>
-          <td class="num">${a2.cup!=null?a2.cup.toFixed(0)+"/72":""}</td>
-          <td style="white-space:nowrap"><button class="ghost sm" onclick="renameProfile(${ix})">이름</button>
-              <button class="ghost sm" onclick="archProfile(${ix})">${p.archived?"복원":"보관"}</button>
-              <button class="ghost sm" onclick="delProfile(${ix})">삭제</button></td></tr>`;
+        ? ` <button class="ghost sm" onclick="toggleGroup(this)">버전 ${g.ps.length}개 ${open?"▴":"▾"}</button>`
+        : "";
+      let out=profRow(head,`<b>${g.root}</b> <span class="pill">${profVer(head.name)||"최신"}</span>${more}`,
+                      want,fitFor(head),hits[0],"");
+      g.ps.slice(1).forEach((p,i)=>{
+        out+=profRow(p,`↳ ${profVer(p.name)||p.name}${p.archived?' <span class="pill">보관</span>':''}`,
+                     want,fitFor(p),hits[i+1],
+                     `class="ver-row" ${open?"":"hidden"} style="background:var(--paper-2)"`,
+                     "padding-left:22px");
       });
       return out;
-    }).join(""):`<tr><td colspan="10" style="color:var(--muted)">아직 없습니다</td></tr>`);
+    }).join("")
+     :`<tr><td colspan="11" style="color:var(--muted)">${
+        // 국가×품종이 실제로 존재하지 않는 조합일 때는 그렇다고 말해야 한다 —
+        // "프로파일이 없다"고 하면 프로파일 탓으로 읽힌다
+        (filtering&&!want.length)
+          ? `<b>${[wCo,wVa].filter(Boolean).join(" × ")}</b> 조합에 해당하는 산지 원형이 없습니다.`
+            +(wCo&&wVa?` ${wCo}에서 나는 품종이 아닙니다 — 둘 중 하나만 고르세요.`:"")
+        :(filtering||q)?"조건에 맞는 프로파일이 없습니다 — 「지우기」로 조건을 풀어보세요"
+        :"아직 없습니다"
+      }</td></tr>`);
 }
+/* 표의 한 줄 — 내장 프로파일은 고치거나 지울 수 없어 버튼 대신 표시만 단다 */
+function profRow(p,title,want,fit,hit,trAttr,tdStyle){
+  const st=profStat(p.pts), a=profAgg(p);
+  const ix=DB.profiles.indexOf(p);
+  const act=p.builtin
+    ? `<span class="pill">내장</span>`
+    : `<button class="ghost sm" onclick="renameProfile(${ix})">이름</button>
+       <button class="ghost sm" onclick="archProfile(${ix})">${p.archived?"복원":"보관"}</button>
+       <button class="ghost sm" onclick="delProfile(${ix})">삭제</button>`;
+  return `<tr ${trAttr||""}>
+    <td style="${tdStyle||""}">${title}</td>
+    <td>${fitCell(p,want,fit,hit)}</td>
+    <td><span class="pill">${p.src||"—"}</span></td>
+    <td class="num">${st.pre.toFixed(1)}</td><td class="num">${st.drop.toFixed(1)}</td>
+    <td class="num">${fmt(st.dur)}</td><td class="num">${a.used||""}</td>
+    <td class="num">${a.loss!=null?a.loss.toFixed(1)+"%":""}</td>
+    <td class="num">${a.dtr!=null?a.dtr.toFixed(0)+"%":""}</td>
+    <td class="num">${a.cup!=null?a.cup.toFixed(0)+"/72":""}</td>
+    <td style="white-space:nowrap">${act}</td></tr>`;
+}
+/* 표 안의 한 칸 — 상위 2개와 배전도, 그리고 근거 버튼.
+   거르는 중이면 걸린 원형을 맨 앞에 세운다. 왜 이 줄이 남았는지가 바로 보여야 한다. */
+function fitCell(p,want,fit,hit){
+  const {band,ranked}=fit||profFit(p);
+  if(!ranked.length) return "—";
+  let show=ranked.slice(0,2);
+  if(hit>=0&&hit<ranked.length){
+    const m=ranked[hit];
+    show=[m].concat(ranked.filter(r=>r!==m).slice(0,1));
+  }
+  const pills=show.map((r,i)=>{
+    const on=hit>=0&&i===0;
+    return `<span class="${fitPill(r.score)}" title="${r.a.w}"${on?' style="font-weight:700"':""}>`
+      +`${on?"▸ ":""}${r.a.n} ${r.score.toFixed(0)}</span>`;
+  }).join(" ");
+  return `${pills} <span class="pill">${LVNAME[band.level]}</span>
+    <button class="ghost sm" onclick="profWhy('${p.id}')">근거</button>`;
+}
+window.profWhy=id=>{
+  const p=profById(id); if(!p) return;
+  const {ch,band,ranked}=profFit(p);
+  const box=$("pf_whybox"), out=$("pf_why");
+  const sg=(v,d)=>{ d=d==null?1:d; const r=+v.toFixed(d)||0; return (r>0?"+":"")+r.toFixed(d); };
+
+  let h=`<p class="tagline">${p.name} — 어떤 생두를 겨냥한 곡선인가</p>`;
+  h+=`<p class="note" style="margin:0 0 10px">곡선만 보고 되짚은 <b>추정</b>입니다.
+      생두 → 곡선을 계산하는 「로스팅 계획」의 식을 그대로 뒤집어,
+      산지 원형 ${ARCH.length}개를 전부 대입해 본 결과입니다.</p>`;
+
+  h+=`<p class="tagline" style="margin-top:12px">1층 · 배전도 판정 <span class="pill">고정</span></p>`;
+  h+=`<p class="lead" style="margin:0">배출 <b>${ch.drop.toFixed(1)}℃</b> →
+    <b>${band.canon.name}</b> 밴드 (${band.canon.dropHint[0]}~${band.canon.dropHint[1]}℃)
+    ${band.also.length?` · 겹침: ${band.also.map(k=>LVNAME[k]).join(", ")}`:""}
+    ${band.out==="over"?' <span class="pill warn">교과서 밴드보다 깊음</span>':""}
+    ${band.out==="under"?' <span class="pill warn">교과서 밴드보다 얕음</span>':""}</p>
+    <p class="note">이 배전도의 목표 밴드 — 감량률 ${band.canon.loss[0]}~${band.canon.loss[1]}% ·
+    DTR ${band.canon.dtr[0]}~${band.canon.dtr[1]}%</p>`;
+
+  h+=`<p class="tagline" style="margin-top:12px">2층 · 곡선이 말하는 열 경로 <span class="pill">물리</span></p>`;
+  h+=`<table><tr><th>항목</th><th class="num">값 (기준 대비)</th><th>읽는 법</th></tr>`+
+    profRead(ch).map(r=>`<tr><td>${r.k}</td><td class="num">${r.v}</td><td>${r.say}</td></tr>`).join("")+`</table>`;
+
+  h+=`<p class="tagline" style="margin-top:12px">3층 · 산지 원형 대조 <span class="pill warn">추정</span></p>`;
+  h+=`<table><tr><th>원형</th><th>대표 산지</th><th>배전도 · 용도</th><th class="num">적합도</th>
+      <th>차이 (배출/시간/초반/발달/예열)</th></tr>`+
+    ranked.slice(0,5).map(r=>{
+      const d=k=>{ const x=r.parts.find(y=>y.k===k); return x?sg(x.diff,k==="dur"?0:1):"–"; };
+      return `<tr><td><b>${r.a.n}</b>${r.soft?' <span class="pill">흔치 않은 용도</span>':""}
+        <br><span class="note">${r.a.note}</span></td>
+        <td class="note">${r.a.w}</td>
+        <td>${LVNAME[r.level]} · ${USENAME[r.use]}</td>
+        <td class="num"><span class="${fitPill(r.score)}">${r.score.toFixed(0)}</span></td>
+        <td class="note">${d("drop")}℃ / ${d("dur")}초 / ${d("rEarly")} / ${d("rDev")} / ${d("pre")}℃
+        ${r.notes.length?"<br>"+r.notes.join(" · "):""}</td></tr>`;
+    }).join("")+`</table>`;
+  h+=`<p class="note">적합도는 배출온도(30) · 발달 기울기(25) · 초반 열량(20) · 총시간(15) · 예열(10)의
+    가중 합이고, 차이는 <b>이 프로파일 − 원형의 목표값</b>입니다. 양수면 프로파일이 더 세거나 길다는 뜻입니다.</p>`;
+
+  const bad=ranked.slice(-3).reverse();
+  h+=`<p class="tagline" style="margin-top:12px">이 곡선으로 피할 생두</p>`;
+  h+=`<p class="lead" style="margin:0">`+bad.map(r=>
+    `<b>${r.a.n}</b> <span class="pill warn">${r.score.toFixed(0)}</span> — ${gapLine(r.parts)}`).join("<br>")+`</p>`;
+
+  h+=devBlock(p);
+
+  if(ranked[0].score<58)
+    h+=`<p class="note" style="color:var(--actual)">가장 높은 적합도가 ${ranked[0].score.toFixed(0)}에 그칩니다 —
+      교과서 경로에서 꽤 벗어난 곡선이라 어느 원형에도 딱 맞지 않습니다.
+      실험용이거나, 기록의 곡선이 실측 로그(설정값이 아닌 실제 온도)일 수 있습니다.</p>`;
+
+  out.innerHTML=h; box.hidden=false;
+  box.scrollIntoView({behavior:"smooth",block:"start"});
+};
 window.toggleGroup=btn=>{
   let tr=btn.closest("tr").nextElementSibling;
   const open=btn.textContent.includes("▾");
@@ -1572,7 +1893,13 @@ window.archProfile=i=>{
 };
 window.delProfile=i=>{ if(confirm("삭제할까요? 기록은 남습니다.")){ DB.profiles.splice(i,1); renderProfiles(); persist(); } };
 
-["pf_sort","pf_arch"].forEach(id=>{ const e=$(id); if(e) e.addEventListener("change",renderProfiles); });
+["pf_sort","pf_arch","pf_bean","pf_country","pf_var"].forEach(id=>{
+  const e=$(id); if(e) e.addEventListener("change",renderProfiles); });
+if($("pf_find")) $("pf_find").addEventListener("input",renderProfiles);
+if($("pf_clear")) $("pf_clear").onclick=()=>{
+  ["pf_find","pf_country","pf_var","pf_bean"].forEach(id=>{ if($(id)) $(id).value=""; });
+  renderProfiles();
+};
 
 /* ---------- 장비 설정 ---------- */
 const SF=["s_machine","s_model","s_serial","s_batch"];
@@ -1627,6 +1954,19 @@ function decodeIkawaLink(text){
 }
 
 /* ---------- 로그 파싱 ---------- */
+/* 실측 곡선을 일정 간격으로 솎는다. 원본은 초당 여러 점이라 그대로 두면
+   저장소와 동기화 용량을 잡아먹는다. 5초 간격이면 구간별 이탈을 보기에 충분하다. */
+function thinCurve(pts,step){
+  if(!pts||pts.length<3) return null;
+  const out=[]; let next=-1;
+  pts.forEach((p,i)=>{
+    if(!isFinite(p.t)||!isFinite(p.v)) return;
+    if(i===0||i===pts.length-1||p.t>=next){
+      out.push([Math.round(p.t),Math.round(p.v*10)/10]); next=p.t+(step||5);
+    }
+  });
+  return out.length>=3?out:null;
+}
 function estimateCrack(pts){
   const r=[];
   for(let i=1;i<pts.length;i++){
@@ -1687,7 +2027,7 @@ function readLog(text,fname){
   return { prof:fname.replace(/\.csv$/i,"").replace(/^Roast[_ ]?data[:_ ]*/i,"")
              .replace(/^Roasted[_ ]?with[_ ]*/i,"").replace(/_/g," ").trim(),
            pre:all[0].v, drop:end.v, dur:end.t, tp:tp.t, tpv:tp.v,
-           crack:c?Math.round(c.t):null, ror, sp:spThin,
+           crack:c?Math.round(c.t):null, ror, sp:spThin, act:thinCurve(pts,5),
            dryPct:(t150!=null&&end.t)?t150/end.t*100:null };
 }
 let pendingProfileId=null;
@@ -1758,7 +2098,11 @@ function parseAlog(text){
   const tx=d.timex||[], bt=d.temp2||d.temp1||[], et=d.temp1||[];
   const ti=d.timeindex||[];
   const idx=(i)=>(ti[i]&&ti[i]>0)?ti[i]:null;
-  const iCharge=ti[0]||0, iFC=idx(2), iDrop=idx(6)||tx.length-1;
+  // timeindex 는 timex 의 첨자다. 범위를 넘는 값이 들어오면(잘린 파일 등)
+  // dur 이 null 이 되면서 뒤의 계산이 통째로 무너지므로 배열 안으로 묶어둔다.
+  const last=Math.max(0,tx.length-1);
+  const iCharge=Math.min(ti[0]||0,last), iFC=idx(2)!=null?Math.min(idx(2),last):null;
+  const iDrop=Math.min(idx(6)||last,last);
   const t0=+tx[iCharge]||0;
   const at=i=>(i!=null&&tx[i]!=null)?+tx[i]-t0:null;
   const bat=i=>(i!=null&&bt[i]!=null)?+bt[i]:null;
@@ -1772,6 +2116,30 @@ function parseAlog(text){
   const q4=pts.filter(q=>q.t>=dur*0.75);
   const ror=q4.length>1?(q4[q4.length-1].v-q4[0].v)/((q4[q4.length-1].t-q4[0].t)/60):null;
 
+  /* 아티산은 IKAWA의 설정온도(setpoint)를 보조 채널에 담는다.
+     그걸 찾아내면 .alog 하나로 계획 곡선과 실측 곡선이 모두 들어와
+     「계획 vs 실측」 구간 분석이 파일 한 개로 완성된다. */
+  const sp=(()=>{
+    const names=[d.extraname1||[],d.extraname2||[]];
+    const vals =[d.extratemp1||[],d.extratemp2||[]];
+    const xt=d.extratimex||[];
+    for(let ch=0;ch<2;ch++){
+      for(let i=0;i<names[ch].length;i++){
+        if(!/set\s*point|setpoint|\bsp\b|목표|설정/i.test(String(names[ch][i]||""))) continue;
+        const V=vals[ch][i]||[], X=xt[i]||tx;
+        const end=dur||((+tx[last]||0)-t0);            // dur 이 없어도 곡선은 건진다
+        const q=[];
+        for(let j=0;j<V.length&&j<X.length;j++){
+          const t=+X[j]-t0, v=+V[j];
+          if(t>=0&&t<=end&&isFinite(v)&&v>0) q.push({t,v});
+        }
+        const c=thinCurve(q,10);
+        if(c&&c.length>2) return c;
+      }
+    }
+    return null;
+  })();
+
   const w=d.weight||[]; const unit=(w[2]||"g").toString().toLowerCase();
   const k=unit==="kg"?1000:unit==="lb"?453.592:unit==="oz"?28.3495:1;
   return {
@@ -1780,13 +2148,16 @@ function parseAlog(text){
     beans:(d.beans||"").toString(),
     date:(d.roastdate||"").toString(),
     pre:bat(iCharge), drop:bat(iDrop), dur, crack,
-    tp:tp?tp.t:null, ror,
+    tp:tp?tp.t:null, ror, act:thinCurve(pts,5), sp,
     inG:w[0]?+w[0]*k:null, outG:w[1]?+w[1]*k:null,
     moisture:d.moisture_greens||null, density:d.density?(+d.density[0]||null):null,
     notes:[(d.roastingnotes||""),(d.cuppingnotes||"")].filter(Boolean).join("\n").trim()
   };
 }
 function applyAlog(A){
+  pendingLog=A;                                   // 실측 곡선을 저장에서 집어가도록
+  // 설정온도 채널이 잡혔으면 그것이 이 배치의 계획 곡선이다 — 프로파일로 세워 둔다
+  pendingProfileId = (A.sp&&A.sp.length>2) ? addProfile(A.prof,A.sp,"아티산") : null;
   $("r_prof").value=A.prof; if(A.machine) $("r_machine").value=A.machine;
   if(A.date&&/^\d{4}-\d{2}-\d{2}/.test(A.date)) $("r_date").value=A.date.slice(0,10);
   else if(!$("r_date").value) $("r_date").value=new Date().toISOString().slice(0,10);
@@ -1812,7 +2183,11 @@ function applyAlog(A){
   recalc(); applyContext();
   $("logmsg").innerHTML=`<b>${A.prof}</b> — ${A.dur?fmt(A.dur):"?"} · 배출 ${A.drop!=null?A.drop.toFixed(1):"?"}℃`+
     (A.crack!=null?` · 크랙 ${fmt(A.crack)}`:"")+
-    (A.inG?` · 투입 ${A.inG.toFixed(0)}g`:"")+`　<span class="pill ok">아티산에서 불러옴</span>`;
+    (A.inG?` · 투입 ${A.inG.toFixed(0)}g`:"")+`　<span class="pill ok">아티산에서 불러옴</span>`
+    +(A.act?`<br><span class="pill ok">실측 곡선 ${A.act.length}점</span>`:
+             `<br><span class="pill warn">실측 곡선 없음</span>`)
+    +(A.sp?` <span class="pill ok">설정 곡선 ${A.sp.length}점</span> — 프로파일 탭의 「근거」에서 겹쳐 볼 수 있습니다`
+          :` <span class="pill warn">설정 곡선 없음</span> — 아티산에서 IKAWA의 <b>SP(설정온도)</b>를 보조 채널로 켜두면 계획과 겹쳐 볼 수 있습니다`);
 }
 
 /* ---------- 계산 ---------- */
@@ -1832,6 +2207,81 @@ function recalc(){
   if(typeof crackCheck==="function") crackCheck();
 }
 ["r_in","r_out","r_dur","r_crack"].forEach(id=>$(id).addEventListener("input",recalc));
+
+/* ---------- 로스팅 타이머 ----------
+   IKAWA는 팬 소리가 커서 1차 크랙을 초로 세기가 어렵다. 들리는 순간 버튼만 누르면 된다.
+   시작 시각만 저장하므로 새로고침하거나 탭을 옮겨도 이어진다. */
+const TKEY="roastTimerT0";
+let tTick=null, tBeeped={};
+function tElapsed(){ const t0=+localStorage.getItem(TKEY)||0; return t0?(Date.now()-t0)/1000:0; }
+function tBeep(n){
+  if(!$("t_alarm").checked) return;
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    const ac=new AC();
+    for(let i=0;i<(n||1);i++){
+      const o=ac.createOscillator(), g=ac.createGain();
+      o.connect(g); g.connect(ac.destination);
+      o.frequency.value=880; o.type="sine";
+      const t=ac.currentTime+i*0.28;
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.25,t+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.22);
+      o.start(t); o.stop(t+0.24);
+    }
+    setTimeout(()=>ac.close(),1500);
+  }catch(e){}
+}
+function tRender(){
+  const s=tElapsed(), on=s>0;
+  $("t_disp").textContent=on?fmt(s):"0:00";
+  $("t_crack").disabled=!on; $("t_drop").disabled=!on;
+  $("t_start").textContent=on?"진행 중":"시작"; $("t_start").disabled=on;
+  if(!on) return;
+  // 계획 총시간이 있으면 30초 전과 도달 시점에 알린다 — PC에 앉아 있어도 놓치지 않게
+  const goal=+$("r_dur").value||(window.__target&&window.__target.dur)||0;
+  if(goal>0){
+    if(s>=goal-30&&s<goal&&!tBeeped.pre){ tBeeped.pre=1; tBeep(1);
+      $("t_msg").innerHTML=`<span class="pill warn">30초 전</span> 곧 목표 ${fmt(goal)}입니다.`; }
+    if(s>=goal&&!tBeeped.done){ tBeeped.done=1; tBeep(3);
+      $("t_msg").innerHTML=`<span class="pill warn">목표 도달</span> ${fmt(goal)} — 배출할 시각입니다.`;
+      document.title="⏰ 배출 — 로스트포인트"; }
+  }
+}
+$("t_start").onclick=()=>{
+  localStorage.setItem(TKEY,String(Date.now())); tBeeped={};
+  $("t_msg").innerHTML=`<span class="pill ok">시작</span> 1차 크랙이 들리면 큰 버튼을 누르세요.`;
+  clearInterval(tTick); tTick=setInterval(tRender,250); tRender();
+  tBeep(1);                                   // 소리 권한을 여기서 얻어둔다
+};
+$("t_crack").onclick=()=>{
+  const s=Math.round(tElapsed()); if(!s) return;
+  $("r_crack").value=s; recalc();
+  const d=+$("r_dtr").value;
+  $("t_msg").innerHTML=`<span class="pill ok">1차 크랙 ${fmt(s)}</span> 기록했습니다`
+    +(d?` — DTR ${$("r_dtr").value}%`:` — 총시간을 넣으면 DTR이 계산됩니다`)
+    +`. 잘못 눌렀으면 다시 누르세요.`;
+  tBeep(1);
+};
+$("t_drop").onclick=()=>{
+  const s=Math.round(tElapsed()); if(!s) return;
+  $("r_dur").value=s; recalc();
+  clearInterval(tTick); tTick=null; localStorage.removeItem(TKEY);
+  $("t_disp").textContent=fmt(s);
+  $("t_start").disabled=false; $("t_start").textContent="시작";
+  $("t_crack").disabled=true; $("t_drop").disabled=true;
+  document.title="로스트포인트 — 로스팅 기록장";
+  $("t_msg").innerHTML=`<span class="pill ok">배출 ${fmt(s)}</span> 총시간에 넣었습니다`
+    +($("r_dtr").value?` — DTR ${$("r_dtr").value}%`:"")+`. 투입·배출 중량을 채우고 저장하세요.`;
+};
+$("t_reset").onclick=()=>{
+  clearInterval(tTick); tTick=null; localStorage.removeItem(TKEY); tBeeped={};
+  document.title="로스트포인트 — 로스팅 기록장";
+  $("t_msg").textContent=""; tRender();
+};
+if(tElapsed()>0){ tTick=setInterval(tRender,250);      // 새로고침해도 이어서 돈다
+  $("t_msg").innerHTML=`<span class="pill">이어서 재는 중</span> 새로고침 전에 시작한 타이머입니다.`; }
+tRender();
 
 /* ---------- 컵 평가 ---------- */
 /* ---------- SCA CVA 정동 평가 8항목 ---------- */
@@ -1930,6 +2380,10 @@ const BUILTIN=[
   pts:[[0,145],[60,163],[120,178],[180,189],[240,195.5],[300,199.5],[360,202],[380,202.5]]},
  {name:"Garrido Geisha Washed v1.0", src:"설계",
   pts:[[0,148],[60,166],[120,180],[180,189],[240,195],[300,199],[360,202],[390,203]]},
+ /* v1.1 — v1.0은 발달 기울기가 목표(1.9)보다 0.9 서 있어 게이샤의 휘발성 향이 날아간다.
+    예열을 낮추고(148→143) 30초 늘리고(6:30→7:00) 마지막 25%를 눕혔다(2.8→1.8℃/분). */
+ {name:"Garrido Geisha Washed v1.1", src:"설계",
+  pts:[[0,143],[45,158],[90,171],[140,182],[180,188.5],[240,194.5],[300,198.2],[360,200.6],[420,202]]},
  {name:"Santa Lucia PN v1.0 (라떼)", src:"설계",
   pts:[[0,145],[60,165],[120,180],[180,190],[240,197],[300,202],[360,205.5],[400,207]]},
  {name:"Typica Natural v1.0", src:"설계",
@@ -2092,6 +2546,24 @@ function targetFor(b,use,level){
 
   // 배전도 밴드를 벗어나지 않게 잡아둔다 — 1층이 상한이다
   t.drop=Math.min(canon.dropHint[1]+1.5,Math.max(canon.dropHint[0]-1.5,t.drop));
+
+  /* 기하 정합성 — 보정들이 서로 싸우는 걸 여기서 끊는다.
+     예열↑·초반 열량↑·총시간↑ 이 함께 붙으면 "초반에 써야 할 상승폭"이
+     예열→배출 사이의 전체 상승폭을 넘어버린다. 그러면 중간 구간이 음수가 되어
+     그릴 수 없는 목표가 되고, 화면은 닫을 수 없는 간격을 두고 "고치라"고 말하게 된다.
+     배출온도는 1층(배전도)이라 못 건드리므로, 초반 열량을 그릴 수 있는 상한으로 깎는다.
+     상한 = 중간 구간 승온율이 발달 기울기보다 확실히 큰(=승온율이 끝까지 감소하는) 최대치. */
+  const dE=t.dur*0.40/60, dM=t.dur*0.35/60, dD=t.dur*0.25/60;
+  const rise=t.drop-t.pre;
+  const cap=(rise - t.rDev*dD - t.rDev*1.15*dM)/dE;
+  if(t.rEarly>cap){
+    const was=t.rEarly;
+    t.rEarly=Math.max(6,+cap.toFixed(1));
+    why.push(`초반 열량은 ${t.rEarly.toFixed(1)}℃/분이 상한입니다 — `
+      +`예열 ${t.pre.toFixed(0)}℃에서 배출 ${t.drop.toFixed(1)}℃까지 오를 폭이 ${rise.toFixed(0)}℃뿐인데 `
+      +`총시간이 ${fmt(Math.round(t.dur))}이라, ${was.toFixed(1)}℃/분을 넣으면 중간 구간에서 온도가 내려가야 합니다. `
+      +`고밀도·대립종에 열을 더 주는 몫은 <b>시간</b>으로 이미 나갔습니다`);
+  }
   const fit=FIT[use]||FIT.filter;
   let advice=null;
   if(!fit.best.includes(level)&&!fit.ok.includes(level)){
@@ -2101,7 +2573,7 @@ function targetFor(b,use,level){
   }else if(!fit.best.includes(level)){
     advice = "쓸 수는 있지만 흔한 조합은 아닙니다.";
   }
-  return {t,canon,canonWhy,why,advice,fitBest:fit.best,
+  return {t,canon,canonWhy,why,advice,fitBest:fit.best,fitOk:fit.ok,
     phase:{ dry:Math.round(t.dur*CANON.phase.dry/100),
             mai:Math.round(t.dur*CANON.phase.maillard/100),
             dev:Math.round(t.dur*CANON.phase.dev/100) }};
@@ -2115,7 +2587,7 @@ const DIMS=[
   ["dur",   "총시간",     60,  15],
   ["pre",   "예열",       14,  10]
 ];
-function matchScore(ch,t,prof,bean){
+function matchScore(ch,t,prof,bean,noHist){
   const parts=DIMS.map(([k,label,tol,w])=>{
     const d=Math.abs(ch[k]-t[k]);
     const fit=Math.exp(-Math.pow(d/tol,2));           // 허용폭 안이면 완만하게 감점
@@ -2135,7 +2607,9 @@ function matchScore(ch,t,prof,bean){
   if(/cupping|커핑|analytic/i.test(nm)){ score-=3; notes.push("커핑 평가용이라 음용 목적과 다름 −3"); }
 
   // 실제로 볶아본 결과 — 이론보다 무겁게 본다
-  if(prof.id){
+  // (역방향 판정에서는 뺀다. 프로파일마다 같은 값이 더해져 원형 사이 순위가 흔들리진 않지만,
+  //  "이 곡선이 어떤 생두를 겨냥했나"는 곡선만으로 답해야 하는 질문이다.)
+  if(prof.id&&!noHist){
     const used=DB.roasts.filter(r=>r.profileId===prof.id);
     const cups=used.filter(r=>r.cup&&r.cup.sum).map(r=>r.cup.sum);
     if(cups.length){
@@ -2147,6 +2621,288 @@ function matchScore(ch,t,prof,bean){
   }
   return {score:Math.max(0,Math.min(100,score)),parts,notes};
 }
+/* ── 4층 : 곡선 → 생두 (2층의 역방향) ───────────────────────────
+   2층 targetFor 는 "생두 → 목표 곡선"이다. 그 함수에 해석적 역함수는 없다.
+   (밀도·품종·가공이 같은 방향으로 겹쳐 들어가므로 곡선 하나에서 생두를 유일하게 되짚을 수 없다.)
+   그래서 산지 원형을 정방향으로 전부 대입해 보고, 어느 원형의 목표 곡선이
+   이 프로파일과 가장 가까운지를 본다 — 판정 근거가 2층과 완전히 같은 식이 된다.
+
+   원형의 고도·밀도·수분은 산지별로 통용되는 범위의 중앙값이다.
+   밀도는 targetFor 의 임계(850 이상 고밀도 / 700 미만 저밀도)를 기준으로 읽히므로,
+   원형마다 실제 측정에서 흔히 나오는 값을 넣었다. */
+const ARCH=[
+  {k:"ethw", co:["에티오피아"], va:["재래종"], n:"에티오피아 워시드", w:"예가체프 · 코케 · 시다모 · 구지",
+   b:{proc:"워시드",alt:"1950",dens:"855",var:"재래종 heirloom",moist:"10.5"},
+   note:"고지대·고밀도·소립 재래종. 초반에 열을 세게 넣어도 견디고, 알이 작아 총시간은 짧다."},
+  {k:"ethn", co:["에티오피아"], va:["재래종"], n:"에티오피아 내추럴", w:"구지 함벨라 · 시다모 · 예가체프",
+   b:{proc:"내추럴",alt:"2000",dens:"850",var:"재래종 heirloom",moist:"10.8"},
+   note:"고밀도지만 표면 잔여당이 많다. 예열을 낮추고 후반을 눕혀야 탄맛이 안 붙는다."},
+  {k:"ken", co:["케냐"], va:["SL28 · SL34"],  n:"케냐 워시드 SL", w:"니에리 · 키리냐가 · 엠부",
+   b:{proc:"워시드",alt:"1750",dens:"860",var:"SL28 SL34",moist:"10.5"},
+   note:"대립·최고밀도. 초반 열량이 가장 많이 필요한 쪽이다."},
+  {k:"colw", co:["콜롬비아"], va:["카투라"], n:"콜롬비아·중미 워시드", w:"우일라 · 나리뇨 · 안티오키아",
+   b:{proc:"워시드",alt:"1750",dens:"810",var:"카투라",moist:"11"},
+   note:"중밀도 워시드. 교과서 기준값에 가장 가까운 표준 경로."},
+  {k:"gua", co:["과테말라","온두라스"], va:["부르봉"],  n:"과테말라·온두라스 워시드", w:"안티구아 · 우에우에테낭고 · 마르칼라",
+   b:{proc:"워시드",alt:"1650",dens:"820",var:"부르봉",moist:"10.8"},
+   note:"중밀도 부르봉계. 단맛 축이라 발달을 조금 더 준다."},
+  {k:"anae", co:["콜롬비아","코스타리카","파나마"], va:["카스티요"], n:"무산소 발효 · 특수가공", w:"콜롬비아 · 코스타리카 · 파나마",
+   b:{proc:"무산소 발효",alt:"1800",dens:"800",var:"카스티요",moist:"11.5"},
+   note:"가공에서 붙은 향이 주인공이라 후반을 눕히고 얕게 끊는 경로가 어울린다."},
+  {k:"hon", co:["코스타리카","온두라스","브라질"], va:["카투아이"],  n:"허니 · 펄프드 내추럴", w:"코스타리카 따라주 · 온두라스 · 브라질",
+   b:{proc:"허니",alt:"1600",dens:"800",var:"카투아이",moist:"10.8"},
+   note:"워시드와 내추럴의 중간. 점액질이 남아 있어 예열을 조금 낮춘다."},
+  {k:"ges", co:["파나마","콜롬비아","에티오피아"], va:["게이샤"],  n:"게이샤 · 향 중심 희소종", w:"파나마 보케테 · 콜롬비아 · 에티오피아",
+   b:{proc:"워시드",alt:"1650",dens:"780",var:"게이샤",moist:"10.5"},
+   note:"납작하고 휘발성 향이 잘 날아간다. 발달을 확실히 눕히고 얕게 끊는 곡선이라야 한다."},
+  {k:"pac", co:["엘살바도르","과테말라","니카라과"], va:["파카마라"],  n:"파카마라 · 대립종", w:"엘살바도르 · 과테말라 · 니카라과",
+   b:{proc:"워시드",alt:"1500",dens:"750",var:"파카마라",moist:"11"},
+   note:"알이 커서 속까지 열이 가는 데 오래 걸린다 — 총시간이 긴 곡선이 필요하다."},
+  {k:"peru", co:["페루","에콰도르"], va:["티피카"], n:"중고도 워시드 (페루·에콰도르)", w:"카하마르카 · 쿠스코 · 로하",
+   b:{proc:"워시드",alt:"1500",dens:"780",var:"티피카",moist:"10.8"},
+   note:"밀도가 중간이라 보정이 거의 없다. 무난한 기준 경로."},
+  {k:"brpn", co:["브라질"], va:["카투아이"], n:"브라질 펄프드 내추럴", w:"세하도 · 술 지 미나스",
+   b:{proc:"펄프드 내추럴",alt:"1100",dens:"700",var:"옐로우 카투아이",moist:"10.5"},
+   note:"저지대 저밀도. 견과·초콜릿 축이라 깊은 배전도와 잘 맞는다."},
+  {k:"brn", co:["브라질"], va:["문도노보"],  n:"브라질 내추럴", w:"모지아나 · 세하도",
+   b:{proc:"내추럴",alt:"1050",dens:"690",var:"문도노보",moist:"10.5"},
+   note:"저밀도 + 표면 잔여당. 초반을 눌러야 표면이 타지 않는다 — 가장 약한 열 경로."},
+  {k:"sum", co:["인도네시아"], va:["카티모르"],  n:"인도네시아 길링바사", w:"수마트라 만델링 · 아체 · 토라자",
+   b:{proc:"펄프드 내추럴",alt:"1300",dens:"680",var:"카티모르",moist:"12.5"},
+   note:"반습식이라 밀도가 낮고 수분이 많다. 낮은 열로 길게 가는 경로."}
+];
+const LVNAME={light:"라이트",mlight:"미디엄 라이트",medium:"미디엄",mdark:"미디엄 다크"};
+const USENAME={filter:"필터",espresso:"에스프레소",latte:"라떼"};
+if($("pf_bean")){
+  const uniq=k=>[...new Set(ARCH.flatMap(a=>a[k]))];
+  $("pf_bean").innerHTML=`<option value="">원형 — 전체</option>`+
+    ARCH.map(a=>`<option value="${a.k}">${a.n} — ${a.w}</option>`).join("");
+  $("pf_country").innerHTML=`<option value="">국가 — 전체</option>`+
+    uniq("co").map(c=>`<option value="${c}">${c}</option>`).join("");
+  $("pf_var").innerHTML=`<option value="">품종 — 전체</option>`+
+    uniq("va").map(v=>`<option value="${v}">${v}</option>`).join("");
+}
+
+let ARCHT=null;
+function archTargets(){                    // 원형 × 배전도 × 용도 → 목표 곡선 (한 번만 만든다)
+  if(ARCHT) return ARCHT;
+  ARCHT=[];
+  ARCH.forEach(a=>{
+    Object.keys(CANON.level).forEach(level=>{
+      ["filter","espresso","latte"].forEach(use=>{
+        const r=targetFor(a.b,use,level);
+        const best=r.fitBest.includes(level), ok=r.fitOk.includes(level);
+        if(!best&&!ok) return;             // 교과서가 말리는 조합은 애초에 후보가 아니다
+        ARCHT.push({a,level,use,t:r.t,soft:!best});
+      });
+    });
+  });
+  return ARCHT;
+}
+/* 배출온도가 어느 배전도 밴드에 앉는가 — 밴드는 겹치므로 가까운 쪽을 고르고 이웃을 같이 알린다 */
+function dropBand(drop){
+  const ks=Object.keys(CANON.level);
+  const d=k=>{ const [lo,hi]=CANON.level[k].dropHint;
+    return drop<lo?lo-drop:(drop>hi?drop-hi:0); };
+  const inb=ks.filter(k=>d(k)===0);
+  const best=ks.slice().sort((x,y)=>d(x)-d(y)||
+    Math.abs(drop-(CANON.level[x].dropHint[0]+CANON.level[x].dropHint[1])/2)
+   -Math.abs(drop-(CANON.level[y].dropHint[0]+CANON.level[y].dropHint[1])/2))[0];
+  return {level:best, canon:CANON.level[best], also:inb.filter(k=>k!==best),
+          out:d(best)>0?(drop<CANON.level[best].dropHint[0]?"under":"over"):null};
+}
+/* 곡선을 교과서 기준값과 견줘 말로 옮긴다 — 2층 보정 규칙을 그대로 뒤집은 문장이다 */
+const BASE={rEarly:14.5,rDev:2.8,dur:400,pre:143};
+function profRead(ch){
+  const out=[];
+  const dE=ch.rEarly-BASE.rEarly, dD=ch.rDev-BASE.rDev, dU=ch.dur-BASE.dur, dP=ch.pre-BASE.pre;
+  const sg=v=>{ const r=+v.toFixed(1)||0; return (r>0?"+":"")+r.toFixed(1); };
+  out.push({k:"초반 열량", v:`${ch.rEarly.toFixed(1)}℃/분 (${sg(dE)})`,
+    say: dE>=2  ? "건조에 열을 많이 넣는다 — 고밀도·고지대·워시드 생두를 겨냥한 경로"
+       : dE<=-2 ? "초반을 눌러 표면을 보호한다 — 저밀도·저지대·내추럴에 맞는 경로"
+       : "교과서 기준에 가까운 표준 건조"});
+  out.push({k:"발달 기울기", v:`${ch.rDev.toFixed(1)}℃/분 (${sg(dD)})`,
+    say: dD<=-0.5 ? "크랙 뒤를 확실히 눕힌다 — 휘발성 향을 살리는 쪽 (게이샤·내추럴·무산소)"
+       : dD>=0.5  ? "크랙 뒤에도 열을 유지한다 — 단맛·바디를 쌓는 쪽 (에스프레소·저밀도 단맛 축)"
+       : "표준 발달"});
+  out.push({k:"총시간", v:`${fmt(ch.dur)} (${dU>=0?"+":"−"}${Math.abs(Math.round(dU))}초)`,
+    say: dU>=40  ? "길게 간다 — 대립종·고밀도·수분 많은 크롭에 여유"
+       : dU<=-40 ? "짧게 끊는다 — 소립 재래종·마른 크롭 쪽"
+       : "표준 길이"});
+  out.push({k:"예열", v:`${ch.pre.toFixed(0)}℃ (${sg(dP)})`,
+    say: dP>=4  ? "높게 받는다 — 표면이 잘 타지 않는 워시드·고밀도"
+       : dP<=-4 ? "낮게 받는다 — 표면 당분이 많은 내추럴·허니·저밀도"
+       : "표준 예열"});
+  /* 건조 비중은 150℃ 도달 시점으로 잡는데, IKAWA 프로파일은 공기 설정온도라
+     시작부터 150℃ 근처인 경우가 많다. 그때의 값은 콩 온도의 건조 종료와 무관하므로 내보내지 않는다. */
+  if(ch.dryPct!=null&&ch.dryPct>=30&&ch.dryPct<=70)
+    out.push({k:"건조 비중", v:`${ch.dryPct.toFixed(0)}% (교과서 ${CANON.phase.dry}%)`,
+    say: (ch.dryPct>=57 ? "건조를 길게 잡아 뒤가 짧다 — 수분 많은 생두에 유리"
+       : ch.dryPct<=43 ? "건조를 빨리 끝내고 뒤를 길게 쓴다 — 마른 크롭·소립종"
+       : "교과서 비율에 가깝다")+" (콩 온도 실측 곡선일 때만 유효)"});
+  return out;
+}
+/* 왜 이 원형이 안 맞는가 — 가장 크게 벌어진 항목으로 한 줄 */
+const GAPSAY={
+  drop:  [d=>`배출이 ${Math.abs(d).toFixed(1)}℃ 낮아 이 생두엔 설익기 쉽다`,
+          d=>`배출이 ${Math.abs(d).toFixed(1)}℃ 높아 이 생두엔 과하다`],
+  rDev:  [d=>`발달이 ${Math.abs(d).toFixed(1)}℃/분 눕어 단맛이 덜 쌓인다`,
+          d=>`발달이 ${Math.abs(d).toFixed(1)}℃/분 세서 향이 날아간다`],
+  rEarly:[d=>`초반 열량이 ${Math.abs(d).toFixed(1)}℃/분 모자라 속이 덜 익는다`,
+          d=>`초반 열량이 ${Math.abs(d).toFixed(1)}℃/분 세서 표면이 탄다`],
+  dur:   [d=>`${Math.abs(d).toFixed(0)}초 짧아 속까지 열이 못 간다`,
+          d=>`${Math.abs(d).toFixed(0)}초 길어 향이 빠진다`],
+  pre:   [d=>`예열이 ${Math.abs(d).toFixed(0)}℃ 낮다`,
+          d=>`예열이 ${Math.abs(d).toFixed(0)}℃ 높아 투입 직후 표면이 상한다`]
+};
+function gapLine(parts){
+  const worst=parts.slice().sort((a,b)=>(b.max-b.pts)-(a.max-a.pts))[0];
+  if(!worst) return "";
+  const f=GAPSAY[worst.k]; if(!f) return "";
+  return f[worst.diff<0?0:1](worst.diff);
+}
+/* 프로파일 하나를 원형 전부와 대조한다 */
+function profFit(p){
+  const ch=profChar(p.pts);
+  const band=dropBand(ch.drop);
+  const best=new Map();
+  archTargets().forEach(({a,level,use,t,soft})=>{
+    const m=matchScore(ch,t,p,a.b,true);
+    const score=m.score-(soft?5:0);
+    const cur=best.get(a.k);
+    if(!cur||score>cur.score) best.set(a.k,{a,level,use,soft,score,parts:m.parts,notes:m.notes});
+  });
+  const ranked=[...best.values()].sort((x,y)=>y.score-x.score);
+  return {ch,band,ranked};
+}
+const fitPill=s=>s>=72?"pill ok":(s>=58?"pill":"pill warn");
+
+/* ── 5층 : 계획 곡선 vs 실제로 그려진 곡선 ──────────────────────
+   IKAWA 로그의 setpoint 와 temp above 는 같은 센서를 가리키므로 그대로 견줄 수 있다.
+   지금까지는 배출·총시간 같은 끝점만 봤는데, 맛을 가르는 건 중간 경로다.
+   설정을 못 따라간 구간이 있으면 끝점이 맞아도 다른 커피가 나온다. */
+function curveAt(c,x){                       // 곡선을 시각 x에서 선형 보간
+  if(!c||!c.length) return null;
+  if(x<=c[0][0]) return c[0][1];
+  for(let i=1;i<c.length;i++){
+    const a=c[i-1],b=c[i];
+    if(x<=b[0]) return b[0]===a[0]?b[1]:a[1]+(b[1]-a[1])*(x-a[0])/(b[0]-a[0]);
+  }
+  return c[c.length-1][1];
+}
+/* 교과서 구간(건조 50% · 메일라아드 30% · 발달 20%)별로 편차를 접는다 */
+function phaseDev(plan,act){
+  if(!plan||!act) return null;
+  const end=Math.min(plan[plan.length-1][0],act[act.length-1][0]);
+  if(!(end>0)) return null;
+  const P=CANON.phase, b1=P.dry/100, b2=(P.dry+P.maillard)/100;
+  const segs=[["건조",0,b1],["메일라아드",b1,b2],["발달",b2,1]];
+  return segs.map(([name,f0,f1])=>{
+    const d=[];
+    for(let k=0;k<=12;k++){
+      const x=end*(f0+(f1-f0)*k/12);
+      const p=curveAt(plan,x), a=curveAt(act,x);
+      if(p!=null&&a!=null) d.push(a-p);
+    }
+    if(!d.length) return {name,avg:0,max:0,n:0};
+    const avg=d.reduce((s,v)=>s+v,0)/d.length;
+    const max=d.reduce((m,v)=>Math.abs(v)>Math.abs(m)?v:m,0);
+    return {name,avg,max,n:d.length,
+      from:Math.round(end*f0),to:Math.round(end*f1)};
+  });
+}
+/* 편차가 무엇을 뜻하는지 — 구간마다 결과가 다르다 */
+const DEVSAY={
+  "건조":  ["설정보다 차갑게 지나감 — 수분이 덜 빠져 뒤에서 몰아쳐야 한다",
+           "설정보다 뜨겁게 지나감 — 겉만 마르고 속에 수분이 남을 수 있다"],
+  "메일라아드":["설정보다 차갑게 지나감 — 단맛·갈변이 덜 쌓인다",
+           "설정보다 뜨겁게 지나감 — 향이 거칠어지고 탄내가 붙을 수 있다"],
+  "발달":  ["설정보다 차갑게 지나감 — 발달이 모자라 풋내가 남는다",
+           "설정보다 뜨겁게 지나감 — 과발달로 향이 눌린다"]
+};
+const DEVOK=1.5;                              // ±1.5℃ 안이면 따라간 것으로 본다
+/* 계획(파랑)과 실측(빨강)을 한 축에 겹쳐 그린다 */
+function curveSvg(plan,acts){
+  const W=640,H=190,L=36,R=8,T=10,B=20;
+  const all=plan.concat(...acts);
+  const tMax=Math.max(...all.map(p=>p[0]))||1;
+  let vMin=Math.min(...all.map(p=>p[1])), vMax=Math.max(...all.map(p=>p[1]));
+  const pad=Math.max(3,(vMax-vMin)*0.08); vMin-=pad; vMax+=pad;
+  const X=t=>L+(W-L-R)*t/tMax, Y=v=>H-B-(H-T-B)*(v-vMin)/(vMax-vMin);
+  const path=c=>c.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1)).join(" ");
+  const P=CANON.phase;
+  const bars=[P.dry,P.dry+P.maillard].map(f=>{
+    const x=X(tMax*f/100).toFixed(1);
+    return `<line x1="${x}" y1="${T}" x2="${x}" y2="${H-B}" stroke="var(--rule)" stroke-dasharray="3 3"/>`;
+  }).join("");
+  const ticks=[vMin+pad,(vMin+vMax)/2,vMax-pad].map(v=>
+    `<text x="4" y="${(Y(v)+4).toFixed(1)}" font-size="10" fill="var(--muted)">${v.toFixed(0)}</text>
+     <line x1="${L}" y1="${Y(v).toFixed(1)}" x2="${W-R}" y2="${Y(v).toFixed(1)}"
+       stroke="var(--rule)" stroke-width=".5"/>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:#fff;
+      border:1px solid var(--rule)" role="img" aria-label="계획 곡선과 실측 곡선 비교">
+    ${ticks}${bars}
+    <path d="${path(plan)}" fill="none" stroke="var(--setpoint)" stroke-width="2"/>
+    ${acts.map(a=>`<path d="${path(a)}" fill="none" stroke="var(--actual)"
+       stroke-width="1.6" opacity="${acts.length>1?0.65:1}"/>`).join("")}
+    <text x="${L+4}" y="${H-6}" font-size="10" fill="var(--muted)">0:00</text>
+    <text x="${W-R-30}" y="${H-6}" font-size="10" fill="var(--muted)">${fmt(tMax)}</text>
+    <text x="${X(tMax*0.25).toFixed(0)}" y="${T+10}" font-size="10" fill="var(--muted)">건조</text>
+    <text x="${X(tMax*0.64).toFixed(0)}" y="${T+10}" font-size="10" fill="var(--muted)">메일라아드</text>
+    <text x="${X(tMax*0.89).toFixed(0)}" y="${T+10}" font-size="10" fill="var(--muted)">발달</text>
+  </svg>`;
+}
+/* 이 프로파일로 볶은 배치들의 실측 곡선 */
+function actsFor(p){
+  return DB.roasts.filter(r=>r.profileId===p.id&&r.act&&r.act.length>2);
+}
+function devBlock(p){
+  const rs=actsFor(p);
+  let h=`<p class="tagline" style="margin-top:14px">계획 vs 실측
+    ${rs.length?`<span class="pill">${rs.length}배치</span>`:""}</p>`;
+  if(!rs.length)
+    return h+`<p class="note">이 프로파일로 볶은 <b>로스트 로그</b>가 아직 없습니다.
+      로그를 공유하면 실제로 그려진 곡선이 여기 겹쳐지고, 설정을 못 따라간 구간을 짚어드립니다.
+      지금까지는 배출·총시간 같은 <b>끝점</b>만 보고 있어서 중간 경로는 사각지대입니다.</p>`;
+
+  h+=curveSvg(p.pts,rs.map(r=>r.act));
+  h+=`<p class="note" style="margin-top:5px">
+    <span style="color:var(--setpoint)">━</span> 계획(설정값) ·
+    <span style="color:var(--actual)">━</span> 실측 ${rs.length>1?`${rs.length}회`:""} ·
+    세로 점선은 교과서 구간 경계(건조 ${CANON.phase.dry}% · 메일라아드 ${CANON.phase.maillard}%)</p>`;
+
+  // 배치별 구간 편차를 평균한다 — 한 번 벗어난 건 우연이지만 매번이면 프로파일 문제다
+  const rows=CANON.phase&&["건조","메일라아드","발달"].map(name=>{
+    const ds=rs.map(r=>(phaseDev(p.pts,r.act)||[]).find(x=>x.name===name)).filter(Boolean);
+    if(!ds.length) return null;
+    const avg=ds.reduce((s,x)=>s+x.avg,0)/ds.length;
+    const max=ds.reduce((m,x)=>Math.abs(x.max)>Math.abs(m)?x.max:m,0);
+    const off=ds.filter(x=>Math.abs(x.avg)>DEVOK).length;
+    return {name,avg,max,off,n:ds.length};
+  }).filter(Boolean);
+
+  h+=`<table><tr><th>구간</th><th class="num">평균 편차</th><th class="num">최대</th>
+      <th class="num">벗어난 배치</th><th>읽는 법</th></tr>`+
+    rows.map(x=>{
+      const ok=Math.abs(x.avg)<=DEVOK;
+      const say=ok?"설정을 잘 따라갔습니다":DEVSAY[x.name][x.avg<0?0:1];
+      return `<tr><td>${x.name}</td>
+        <td class="num"><span class="${ok?"pill ok":"pill warn"}">${x.avg>0?"+":""}${x.avg.toFixed(1)}℃</span></td>
+        <td class="num">${x.max>0?"+":""}${x.max.toFixed(1)}℃</td>
+        <td class="num">${x.off}/${x.n}</td>
+        <td class="note">${say}</td></tr>`;
+    }).join("")+`</table>`;
+
+  const worst=rows.slice().sort((a,b)=>Math.abs(b.avg)-Math.abs(a.avg))[0];
+  h+=`<p class="note">편차는 <b>실측 − 계획</b>이고 ±${DEVOK}℃ 안이면 따라간 것으로 봅니다.
+    ${Math.abs(worst.avg)<=DEVOK
+      ? "세 구간 모두 설정대로 갔습니다 — 이 프로파일의 결과는 곡선 그대로 읽어도 됩니다."
+      : `<b>${worst.name}</b> 구간이 가장 벌어졌습니다(${worst.avg>0?"+":""}${worst.avg.toFixed(1)}℃). `
+        +`배출온도와 총시간이 맞아도 이 구간이 다르면 <b>다른 커피가 나옵니다</b> — `
+        +`컵 결과가 예상과 어긋난다면 여기를 먼저 보세요.`}</p>`;
+  return h;
+}
+
 const RECLIB=[];   // 예전 파일 불러오기 잔재 — 이제 프로파일 탭이 후보를 제공한다
 function showRec(){
   const b=DB.beans.find(x=>x.id===$("r_bean").value);
@@ -2194,17 +2950,21 @@ function showRec(){
   const top=ranked.slice(0,5);
   const sign=x=>(x>0?"+":"")+x.toFixed(x>=10||x<=-10?0:1);
   html+=`<p class="tagline" style="margin-top:12px">3층 · 후보 ${ranked.length}개 중 상위 5 <span class="pill warn">추정</span></p>`;
-  html+=`<table><tr><th>프로파일</th><th>출처</th><th class="num">점수</th>
+  html+=`<table><tr><th>프로파일</th><th>출처</th><th>쓸 수 있나</th><th class="num">점수</th>
     <th class="num">배출</th><th class="num">시간</th><th class="num">초반</th><th class="num">발달</th>
     <th>목표와의 차이</th></tr>`+
     top.map((r,i)=>{
       const gaps=r.parts.filter(x=>Math.abs(x.diff)>=(x.k==="dur"?30:x.k==="pre"?8:x.k==="rEarly"?2:1))
         .map(x=>`${x.label} ${sign(x.diff)}`);
+      /* 고르기 전에 보여야 한다 — 점수 1위가 손봐야 하고 2위가 그대로 쓸 수 있는 일이 흔하다 */
+      const gt=pickGate(r);
       return `<tr class="pickrow" data-row="${i}">
         <td style="text-align:center"><input type="radio" name="pickprof" value="${i}"
           data-pick="${i}" style="width:20px;height:20px;cursor:pointer"></td>
         <td>${r.p.name}${i===0?' <span class="pill ok">추천</span>':''}</td>
         <td><span class="pill">${r.p.src||"—"}</span></td>
+        <td>${gt.ok?'<span class="pill ok">그대로</span>'
+                   :`<span class="pill warn">손보기 ${gt.gaps.length}</span>`}</td>
         <td class="num"><b>${r.score.toFixed(0)}</b></td>
         <td class="num">${r.ch.drop.toFixed(1)}</td><td class="num">${fmt(r.ch.dur)}</td>
         <td class="num">${r.ch.rEarly.toFixed(1)}</td><td class="num">${r.ch.rDev.toFixed(1)}</td>
@@ -2237,7 +2997,10 @@ function viEnc(n){ const o=[]; n=Math.max(0,Math.round(n));
   while(true){ let b=n&0x7f; n=Math.floor(n/128); o.push(b|(n?0x80:0)); if(!n) return o; } }
 function pbMsgEnc(f,p){ return [...viEnc((f<<3)|2),...viEnc(p.length),...p]; }
 function pbPtEnc(t,v){ return [...viEnc(8),...viEnc(t),...viEnc(16),...viEnc(v)]; }
-function makeIkawaLink(name,temps,fans,cool){
+/* RoastProfile 메시지 본문 — 공유 링크와 블루투스 전송이 똑같이 이걸 쓴다.
+   IkawaCmd.proto 의 RoastProfile 과 필드 번호가 일치한다:
+   1 schema · 2 id · 3 name · 4 temp_points · 5 fan_points · 6 temp_sensor · 7 cooldown_fan */
+function ikProfileBytes(name,temps,fans,cool){
   const id=new Uint8Array(16); crypto.getRandomValues(id);
   let o=[...viEnc(8),...viEnc(1)];
   o=o.concat(pbMsgEnc(2,[...id]));
@@ -2246,6 +3009,10 @@ function makeIkawaLink(name,temps,fans,cool){
   (fans||[]).forEach(([t,v])=>o=o.concat(pbMsgEnc(5,pbPtEnc(Math.round(t*10),Math.round(v/100*255)))));
   o=o.concat([...viEnc(48),...viEnc(0)]);
   (cool||[]).forEach(([t,v])=>o=o.concat(pbMsgEnc(7,pbPtEnc(Math.round(t*10),Math.round(v*10)))));
+  return o;
+}
+function makeIkawaLink(name,temps,fans,cool){
+  const o=ikProfileBytes(name,temps,fans,cool);
   let bin=""; o.forEach(b=>bin+=String.fromCharCode(b));
   return "https://share.ikawa.support/profile/?"+btoa(bin);
 }
@@ -2291,21 +3058,47 @@ window.pickProfile=i=>{
     const rb=tr.querySelector('input[type=radio]'); if(rb) rb.checked=on;
   });
   $("p_pick").scrollIntoView({behavior:"smooth",block:"center"});
-  /* 판단 기준: 항목 점수가 만점의 75% 아래로 떨어지면 '고쳐야 함'.
-     허용폭(tol)으로 환산하면 아래 숫자가 된다 — 화면에 그대로 보여준다. */
-  const CUT={drop:1.1,rDev:0.6,rEarly:1.6,dur:32,pre:7.5};
-  const gaps=r.parts.filter(x=>x.pts<x.max*0.75)
-    .map(x=>`${x.label} ${x.diff>0?"+":""}${x.diff.toFixed(x.k==="dur"?0:1)}${x.k==="dur"?"초":""} (허용 ±${CUT[x.k]}${x.k==="dur"?"초":""})`);
-  const close=gaps.length===0;
-  $("p_pick").innerHTML=`고름: <b>${r.p.name}</b> — 배출 ${r.ch.drop.toFixed(1)}℃ ·
-    총 ${fmt(r.ch.dur)} · 점수 ${r.score.toFixed(0)}<br>`+
-    (close
-      ? `<span class="pill ok">목표에 거의 맞습니다</span> 그대로 <b>바로 앱으로 보내기</b>를 눌러도 됩니다.`
-      : `<span class="pill warn">차이 있음</span><br>${gaps.map(g=>"· "+g).join("<br>")}<br>
-         <b>스튜디오에서 고치고 보내기</b>를 권합니다.`)
-    +`<br><span class="note">판단 기준 — 배출 ±1.1℃ · 발달 기울기 ±0.6℃/분 · 초반 열량 ±1.6℃/분 ·
-      총시간 ±32초 · 예열 ±7.5℃ 안이면 그대로 씁니다. 하나라도 벗어나면 손보기를 권합니다.</span>`;
+  const g=pickGate(r);
+  /* 결론은 하나만 — 점수(평균)와 게이트(최악 축)를 한 문장으로 합치고,
+     권하는 쪽 버튼을 진하게 만든다. 예전엔 "93점 추천"과 "차이 있음, 고치세요"가
+     나란히 떠 있고 강조된 버튼이 권고와 반대여서 무엇을 누를지 알 수 없었다. */
+  $("p_direct").classList.toggle("ghost",!g.ok);
+  $("p_send").classList.toggle("ghost",g.ok);
+  $("p_pick").innerHTML=`고름: <b>${r.p.name}</b> — 배출 ${r.ch.drop.toFixed(1)}℃ · 총 ${fmt(r.ch.dur)}<br>`+
+    (g.ok
+      ? `<span class="pill ok">${r.score.toFixed(0)}점 · 그대로 보내기</span>
+         모든 축이 허용폭 안입니다. <b>바로 앱으로 보내기</b>를 누르세요.`
+      : `<span class="pill warn">${r.score.toFixed(0)}점 · 손보기 필요</span>
+         평균은 ${r.score.toFixed(0)}점이지만 ${g.gaps.length}개 축이 치우쳤습니다 —
+         <b>스튜디오에서 고치고 보내기</b>로 아래를 맞추세요.
+         <table style="margin-top:7px"><tr><th>고칠 것</th><th>지금</th><th>이렇게</th><th>안 고치면</th></tr>`
+        +g.gaps.map(x=>`<tr><td>${x.label}</td><td class="num">${x.now}</td>
+           <td class="num"><b>${x.to}</b></td><td class="note">${x.risk}</td></tr>`).join("")
+        +`</table>`)
+    +`<br><span class="note">점수는 다섯 축의 평균이라 한 축이 치우쳐도 높게 나올 수 있습니다.
+      그래서 축마다 따로 봅니다 — 배출 ±1.1℃ · 발달 기울기 ±0.6℃/분 · 초반 열량 ±1.6℃/분 ·
+      총시간 ±32초 · 예열 ±7.5℃.</span>`;
 };
+/* 고를 수 있는 상태인가 — 축마다 따로 본다. 평균이 아니라 최악의 축이 결정한다. */
+const GATECUT={drop:1.1,rDev:0.6,rEarly:1.6,dur:32,pre:7.5};
+const GATERISK={
+  drop:  ["얕게 끊겨 풋내·신맛이 앞섭니다","깊게 가 쓴맛이 앞섭니다"],
+  rDev:  ["단맛이 덜 쌓입니다","향이 날아갑니다"],
+  rEarly:["속이 덜 익습니다","표면이 탑니다"],
+  dur:   ["대립·고밀도는 속까지 열이 못 갑니다","향이 빠지고 밋밋해집니다"],
+  pre:   ["투입 직후 열이 모자랍니다","투입 직후 표면이 상합니다"]
+};
+function pickGate(r){
+  const t=window.__target||{};
+  const unit=k=>k==="dur"?"초":(k==="drop"||k==="pre"?"℃":"");
+  const fmtv=(k,v)=>k==="dur"?fmt(Math.round(v)):v.toFixed(1)+unit(k);
+  const gaps=r.parts.filter(x=>Math.abs(x.diff)>GATECUT[x.k]).map(x=>({
+    label:x.label, now:fmtv(x.k,r.ch[x.k]),
+    to:t[x.k]!=null?fmtv(x.k,t[x.k]):"—",
+    risk:GATERISK[x.k][x.diff<0?0:1]
+  }));
+  return {ok:gaps.length===0, gaps};
+}
 $("p_send").onclick=async()=>{
   if(!picked) return;
   try{
@@ -2616,6 +3409,9 @@ $("r_save").onclick=()=>{
     time:$("r_time").value||null, amb:+$("r_amb").value||null, hum:+$("r_hum").value||null,
     cc:+$("r_cc").value||null, agt:+$("r_agt").value||null, agtg:+$("r_agtg").value||null,
     note:$("r_note").value.trim()||null,
+    // 실제로 그려진 곡선 — 계획과 겹쳐 봐야 중간 구간의 이탈이 보인다.
+    // 수정 저장일 때 로그가 없으면 이미 있던 것을 지우지 않는다.
+    act:(pendingLog&&pendingLog.act)||(editingId?(DB.roasts.find(x=>x.id===editingId)||{}).act:null)||null,
     cup:Object.keys(cup).length?cup:null,
     cost:(()=>{ const b=DB.beans.find(x=>x.id===$("r_bean").value);
       const up=b?unitPrice(b):null, g=+$("r_in").value;
@@ -2657,7 +3453,8 @@ function renderRoasts(){
                     :`<span class="pill warn">미기입</span>`;
       const when=(r.date||"")+(r.time?` <span style="color:var(--muted)">${r.time}</span>`:"");
       return `<tr><td class="tight">${when}</td><td class="name">${beanName(r.beanId)}</td>
-        <td class="tight">${r.machine||""}</td><td class="name">${r.prof||""}</td>
+        <td class="tight">${r.machine||""}</td><td class="name">${r.prof||""}${
+          r.act&&r.act.length>2?' <span class="pill ok" title="실측 곡선이 있습니다 — 프로파일 탭 「근거」에서 계획과 겹쳐 볼 수 있습니다">실측</span>':""}</td>
         <td class="num tight">${r.drop?.toFixed(1)??""}</td><td class="num tight">${r.dur?fmt(r.dur):""}</td>
         <td class="num tight">${r.dtr?.toFixed(1)??""}</td><td class="num tight">${r.loss?.toFixed(1)??""}</td>
         <td class="num tight">${r.cost?r.cost.toLocaleString()+"원":""}</td>
@@ -3267,6 +4064,354 @@ function lbOpen(){
   lbScope(); lbTable(); lbRender();
 }
 window.addEventListener("afterprint",()=>{ $("printroot").innerHTML=""; });
+
+/* ================= IKAWA 직접 연결 (Web Bluetooth) =================
+   근거 — 아티산(오픈소스)의 IKAWA 드라이버와 IKAWA가 공개한 IkawaCmd.proto.
+     · 서비스/알림/쓰기 특성 UUID
+     · 프레임: 0x7E 로 감싸고 0x7D 로 이스케이프, 끝에 CRC-16, 안쪽은 protobuf
+     · 요청 Message{1:cmd_type, 2:seq, 4:profile_set}
+     · 상태 요청 cmd_type = 11 (MACH_STATUS_GET_ALL)
+   모르는 것 — CRC 종류, 상태 응답의 필드 번호, 상태 값(예열/로스팅/냉각) 번호,
+   프로파일 전송의 cmd_type. 추측해서 박아넣지 않고 여기서 찾아내도록 만들었다. */
+const IK={
+  SERVICE:"c92a6046-6c8d-4116-9d1d-d20a8f6a245f",
+  NOTIFY :"948c5059-7f00-46d9-ac55-bf090ae066e3",
+  WRITE  :"851a4582-19c1-4e6c-ab37-e7a03766ba16",
+  STATUS_GET:11
+};
+/* HDLC 계열 프레이밍이라 X-25가 가장 유력하지만, 응답이 올 때까지 순서대로 시도한다 */
+const CRCV=[
+  {n:"X-25 (HDLC)",  poly:0x8408, init:0xFFFF, xor:0xFFFF, ref:true,  le:true },
+  {n:"CCITT-FALSE",  poly:0x1021, init:0xFFFF, xor:0,      ref:false, le:false},
+  {n:"XMODEM",       poly:0x1021, init:0,      xor:0,      ref:false, le:false},
+  {n:"MODBUS",       poly:0xA001, init:0xFFFF, xor:0,      ref:true,  le:true },
+  {n:"CCITT (0 init, LE)", poly:0x1021, init:0, xor:0,     ref:false, le:true }
+];
+function crc16(bytes,v){
+  let c=v.init;
+  for(const b of bytes){
+    if(v.ref){ c^=b; for(let i=0;i<8;i++) c=(c&1)?((c>>>1)^v.poly):(c>>>1); }
+    else     { c^=(b<<8); for(let i=0;i<8;i++) c=(c&0x8000)?(((c<<1)^v.poly)&0xFFFF):((c<<1)&0xFFFF); }
+    c&=0xFFFF;
+  }
+  return (c^v.xor)&0xFFFF;
+}
+function ikFrame(payload,v){                    // payload → 보낼 바이트열
+  const c=crc16(payload,v);
+  const body=payload.concat(v.le?[c&0xFF,(c>>8)&0xFF]:[(c>>8)&0xFF,c&0xFF]);
+  const out=[0x7e];
+  body.forEach(b=>{ if(b===0x7e||b===0x7d){ out.push(0x7d,b^0x20); } else out.push(b); });
+  out.push(0x7e);
+  return new Uint8Array(out);
+}
+function ikUnescape(bytes){
+  const out=[]; let esc=false;
+  for(const b of bytes){
+    if(esc){ out.push(b^0x20); esc=false; }
+    else if(b===0x7d) esc=true;
+    else out.push(b);
+  }
+  return out;
+}
+function ikCheckCrc(frameBody,v){               // [payload..., crc0, crc1] → payload | null
+  if(frameBody.length<3) return null;
+  const p=frameBody.slice(0,-2), a=frameBody[frameBody.length-2], b=frameBody[frameBody.length-1];
+  const got=v.le?(a|(b<<8)):((a<<8)|b);
+  return crc16(p,v)===got?p:null;
+}
+function ikMsg(cmdType,seq,extra){              // Message{1:cmd_type, 2:seq, [4:profile_set]}
+  let o=[...viEnc(8),...viEnc(cmdType),...viEnc(16),...viEnc(seq)];
+  return extra?o.concat(extra):o;
+}
+/* 상태 응답의 필드 이름 — IkawaCmd_pb2.pyi 의 선언 순서.
+   protobuf 는 보통 1번부터 선언 순서대로 번호가 붙는다. 원시 표에서 확인할 수 있게 해뒀다. */
+const IKF=["time","temp_above","temp_below","fan","fan_measured","state","heater",
+  "p","i","d","j","setpoint","board_temp","fan_rpm_measured","fan_rpm_setpoint",
+  "fan_p","fan_i","fan_d","fan_power","relay_state","pid_sensor",
+  "temp_above_filtered","temp_below_filtered","ror_above","ror_below",
+  "humidity_abs","humidity_roc","humidity_roc_direction","pressure_amb"];
+/* 아티산이 쓰는 환산 */
+const IKSCALE={temp_above:v=>v/10, temp_below:v=>v/10, setpoint:v=>v/10, board_temp:v=>v/10,
+  temp_above_filtered:v=>v/10, temp_below_filtered:v=>v/10, ror_above:v=>v/10, ror_below:v=>v/10,
+  fan_measured:v=>(v/12)*60, heater:v=>v*2, fan:v=>Math.round(v/2.55),
+  humidity_abs:v=>v/100, humidity_roc:v=>v/10};
+/* 응답 안에서 상태 메시지를 찾아낸다 — 감싸는 필드 번호를 모르므로
+   "varint 필드가 가장 많은 하위 메시지"를 상태로 본다. 상태는 29개 필드라 압도적이다. */
+function ikFindStatus(payload){
+  let best=null;
+  /* pbFieldsR 은 하위 메시지를 잘라낼 때 Uint8Array 를 전제한다.
+     플레인 배열이 들어오면 조용히 예외가 나 아무것도 못 찾으므로 여기서 맞춰준다. */
+  const u8=b=>(b instanceof Uint8Array)?b:new Uint8Array(b);
+  const walk=(raw,depth)=>{
+    const buf=u8(raw);
+    let fs; try{ fs=pbFieldsR(buf); }catch(e){ return; }
+    if(!fs||!fs.length) return;
+    /* protobuf 는 값이 0인 필드를 아예 보내지 않는다 — 대기 중인 머신은 필드가 몇 개뿐일 수 있어
+       임계를 낮게 잡는다. 잘못 짚어도 원시 필드 표에 그대로 나오므로 눈으로 걸러낼 수 있다. */
+    const vs=fs.filter(f=>f[2]===0);
+    if(vs.length>=3&&(!best||vs.length>best.length)) best=vs;
+    if(depth<4) fs.forEach(f=>{ if(f[2]===2&&f[1]&&f[1].length>2) walk(f[1],depth+1); });
+  };
+  walk(payload,0);
+  if(!best) return null;
+  const o={_raw:{}};
+  best.forEach(([num,val])=>{
+    o._raw[num]=val;
+    const name=IKF[num-1];
+    if(name) o[name]=IKSCALE[name]?IKSCALE[name](val):val;
+  });
+  return o;
+}
+
+let ikDev=null, ikChr=null, ikBuf=[], ikSeq=1, ikPoll=null, ikCrc=CRCV[0];
+let ikCurve=[], ikT0=null, ikLastState=null, ikNegot=null;
+const ikLog=(s)=>{ const e=$("ik_log"); if(!e) return;
+  const t=new Date(); const hh=String(t.getHours()).padStart(2,"0"),
+        mm=String(t.getMinutes()).padStart(2,"0"), ss=String(t.getSeconds()).padStart(2,"0");
+  e.textContent=`${hh}:${mm}:${ss}  ${s}\n`+e.textContent.split("\n").slice(0,220).join("\n"); };
+const hex=a=>[...a].map(b=>b.toString(16).padStart(2,"0")).join(" ");
+
+function ikSetState(txt,cls){ const e=$("ik_state"); e.textContent=txt; e.className=cls||"pill"; }
+async function ikSend(payload,why){
+  if(!ikChr) return false;
+  const f=ikFrame(payload,ikCrc);
+  try{
+    if(ikChr.writeValueWithoutResponse) await ikChr.writeValueWithoutResponse(f);
+    else await ikChr.writeValue(f);
+    ikLog(`→ ${why||""} [${ikCrc.n}] ${hex(f).slice(0,90)}`);
+    return true;
+  }catch(e){ ikLog("→ 실패: "+e.message); return false; }
+}
+function ikOnPacket(bytes){                      // 알림으로 들어온 조각을 모아 프레임 단위로 자른다
+  for(const b of bytes){
+    if(b===0x7e){
+      if(ikBuf.length){ ikHandleFrame(ikBuf.slice()); ikBuf=[]; }
+    } else ikBuf.push(b);
+  }
+  if(ikBuf.length>4096) ikBuf=[];
+}
+function ikHandleFrame(raw){
+  const body=ikUnescape(raw);
+  // CRC 종류를 아직 모르면 여기서 확정한다 — 머신이 보낸 프레임이 정답을 알려준다
+  let payload=ikCheckCrc(body,ikCrc), used=ikCrc;
+  if(!payload){
+    for(const v of CRCV){ const p=ikCheckCrc(body,v); if(p){ payload=p; used=v; break; } }
+    if(payload&&used!==ikCrc){
+      ikCrc=used; $("ik_crc").value=CRCV.indexOf(used);
+      ikLog(`✓ CRC 방식 확정 — ${used.n}`);
+    }
+  }
+  if(!payload){ ikLog(`← CRC 불일치 (${body.length}B) ${hex(body).slice(0,60)}`); payload=body.slice(0,-2); }
+  else ikLog(`← ${payload.length}B`);
+  if(ikNegot){ clearTimeout(ikNegot); ikNegot=null; }
+  const st=ikFindStatus(payload);
+  if(st) ikOnStatus(st);
+  else ikLog("  (상태 메시지를 찾지 못함 — 원시 필드 표를 보세요)");
+}
+function ikOnStatus(st){
+  ikSetState("연결됨","pill ok");
+  // 곡선 쌓기 — 머신이 주는 time 이 있으면 그걸, 없으면 우리 시계를 쓴다
+  const now=Date.now();
+  if(ikT0==null) ikT0=now;
+  const t=st.time!=null?st.time/10:(now-ikT0)/1000;
+  const v=st.temp_above!=null?st.temp_above:null;
+  if(v!=null&&isFinite(v)&&v>0){
+    const last=ikCurve[ikCurve.length-1];
+    if(!last||t-last[0]>=1) ikCurve.push([Math.round(t),Math.round(v*10)/10]);
+  }
+  if(st.state!==ikLastState){
+    ikLog(`■ 머신 상태 값 = ${st.state}  (예열/로스팅/냉각 중 무엇인지 지금 화면을 보고 적어두세요)`);
+    ikLastState=st.state;
+  }
+  ikRenderLive(st);
+}
+function ikRenderLive(st){
+  $("ik_livebox").hidden=false; $("ik_sendbox").hidden=false;
+  const row=(k,label,unit,dec)=>st[k]==null?"":
+    `<div><label>${label}</label><input type="text" readonly value="${
+      (typeof st[k]==="number"?st[k].toFixed(dec==null?1:dec):st[k])+(unit||"")}"></div>`;
+  $("ik_live").innerHTML=
+    row("temp_above","원두온도","℃")+row("temp_below","배기온도","℃")+
+    row("setpoint","설정온도","℃")+row("ror_above","승온율","℃/분")+
+    row("fan","팬","%",0)+row("fan_measured","팬 RPM","",0)+
+    row("heater","히터","",0)+row("humidity_abs","절대습도","",2)+
+    (st.state!=null?`<div><label>머신 상태 (원시값)</label>
+      <input type="text" readonly value="${st.state}"></div>`:"")+
+    `<div><label>모은 점</label><input type="text" readonly value="${ikCurve.length}개"></div>`;
+  $("ik_save").disabled=ikCurve.length<5;
+  if(ikCurve.length>2) $("ik_chart").innerHTML=curveSvg(ikCurve,[]);
+  if($("ik_raw").checked&&st._raw){
+    $("ik_fields").innerHTML=`<tr><th class="num">번호</th><th>추정 이름</th>
+      <th class="num">원시값</th><th class="num">환산</th></tr>`+
+      Object.keys(st._raw).map(n=>{
+        const name=IKF[n-1]||"—", sc=IKSCALE[name];
+        return `<tr><td class="num">${n}</td><td>${name}</td>
+          <td class="num">${st._raw[n]}</td>
+          <td class="num">${sc?(+sc(st._raw[n])).toFixed(2):""}</td></tr>`;
+      }).join("");
+  }
+}
+async function ikConnect(){
+  if(!navigator.bluetooth){ $("ik_msg").innerHTML=
+    `<span class="pill warn">불가</span> 이 브라우저는 웹 블루투스를 지원하지 않습니다.`; return; }
+  try{
+    $("ik_msg").innerHTML=`<span class="pill">기기 선택 중…</span>`;
+    ikDev=await navigator.bluetooth.requestDevice({
+      filters:[{services:[IK.SERVICE]}], optionalServices:[IK.SERVICE]});
+    ikDev.addEventListener("gattserverdisconnected",()=>{
+      ikSetState("끊김","pill warn"); clearInterval(ikPoll); ikPoll=null;
+      $("ik_connect").disabled=false; $("ik_disconnect").disabled=true;
+      $("ik_send").disabled=true; ikLog("연결이 끊겼습니다.");
+    });
+    ikLog("기기: "+(ikDev.name||"(이름 없음)"));
+    const server=await ikDev.gatt.connect();
+    const svc=await server.getPrimaryService(IK.SERVICE);
+    const notify=await svc.getCharacteristic(IK.NOTIFY);
+    ikChr=await svc.getCharacteristic(IK.WRITE);
+    await notify.startNotifications();
+    notify.addEventListener("characteristicvaluechanged",e=>
+      ikOnPacket(new Uint8Array(e.target.value.buffer)));
+    ikSetState("연결됨 · 응답 대기","pill");
+    $("ik_connect").disabled=true; $("ik_disconnect").disabled=false;
+    $("ik_send").disabled=false; $("ik_msg").innerHTML=
+      `<span class="pill ok">연결됨</span> 상태를 요청합니다.`;
+    ikNegotiate(0);
+    ikPoll=setInterval(()=>ikSend(ikMsg(IK.STATUS_GET,ikSeq++&0x7fff),"상태 요청"),1000);
+  }catch(e){
+    $("ik_msg").innerHTML=`<span class="pill warn">실패</span> ${e.message}`;
+    ikLog("연결 실패: "+e.message);
+  }
+}
+/* 응답이 없으면 CRC 방식을 바꿔가며 다시 물어본다 — 같은 상태 요청이라 안전하다 */
+function ikNegotiate(i){
+  if(i>=CRCV.length){ ikLog("✗ 다섯 가지 CRC 모두 응답 없음 — 진단 기록을 확인하세요"); return; }
+  ikCrc=CRCV[i]; $("ik_crc").value=i;
+  ikLog(`CRC ${ikCrc.n} 로 시도`);
+  ikSend(ikMsg(IK.STATUS_GET,ikSeq++&0x7fff),"상태 요청(교섭)");
+  ikNegot=setTimeout(()=>ikNegotiate(i+1),1600);
+}
+function ikDisconnect(){
+  clearInterval(ikPoll); ikPoll=null;
+  if(ikNegot){ clearTimeout(ikNegot); ikNegot=null; }
+  try{ if(ikDev&&ikDev.gatt.connected) ikDev.gatt.disconnect(); }catch(e){}
+  ikSetState("끊김"); $("ik_connect").disabled=false; $("ik_disconnect").disabled=true;
+  $("ik_send").disabled=true;
+}
+/* 프로파일 보내기 — Message{1:cmd_type, 2:seq, 4:CmdProfileSet{1:RoastProfile}} */
+function ikProfileMsg(cmdType,p){
+  const T=p.pts.map(q=>[q[0],q[1]]);
+  const end=T[T.length-1][0];
+  const prof=ikProfileBytes(p.name,T,[[0,80],[end*0.5,70],[end,64]],[[end+130,21]]);
+  return ikMsg(cmdType,ikSeq++&0x7fff,pbMsgEnc(4,pbMsgEnc(1,prof)));
+}
+async function ikSendProfile(cmdType){
+  const id=$("ik_prof").value, p=profById(id);
+  if(!p){ $("ik_cmdmsg").textContent="프로파일을 고르세요."; return; }
+  const ok=await ikSend(ikProfileMsg(cmdType,p),`프로파일 전송 cmd_type=${cmdType} (${p.name})`);
+  const m=ok?`<span class="pill">보냈습니다</span> cmd_type ${cmdType} — 머신이나 IKAWA 앱에서
+    프로파일이 바뀌었는지 확인하세요. 아무 반응이 없으면 다른 번호로 시도하세요.`
+    :`<span class="pill warn">전송 실패</span>`;
+  $("ik_cmdmsg").innerHTML=m; $("ik_savemsg").innerHTML="";
+}
+/* 실기가 없어도 논리는 검증한다 — 만든 프레임을 도로 풀어 같은 값이 나오는지 본다 */
+function ikSelfTest(){
+  const out=[];
+  CRCV.forEach(v=>{
+    const payload=ikMsg(IK.STATUS_GET,1234);
+    const f=ikFrame(payload,v);
+    const body=ikUnescape([...f].slice(1,-1));
+    const back=ikCheckCrc(body,v);
+    out.push(`${v.n}: 프레임 ${f.length}B · 왕복 ${back&&back.join()===payload.join()?"일치":"불일치"}`);
+  });
+  // 0x7e / 0x7d 가 들어간 페이로드도 안전한가
+  const tricky=[0x7e,0x7d,0x00,0x7e,0x7d,0x41];
+  const f2=ikFrame(tricky,CRCV[0]);
+  const b2=ikCheckCrc(ikUnescape([...f2].slice(1,-1)),CRCV[0]);
+  out.push(`이스케이프: ${b2&&b2.join()===tricky.join()?"통과":"실패"} (내부 0x7E·0x7D ${f2.length}B로 확장)`);
+  // 가짜 상태 응답 — 로스팅 중(필드 많음)과 대기 중(필드 적음) 둘 다 해독되는지
+  const mkfake=vals=>{ const f=[];
+    Object.entries(vals).forEach(([n,v])=>f.push(...viEnc((+n<<3)|0),...viEnc(v))); return f; };
+  const busy=mkfake({1:1234,2:2015,3:1880,4:180,5:2400,6:3,7:45,12:2030,13:410,
+    22:2014,23:1879,24:31,25:28,26:850,29:10132});
+  const idle=mkfake({2:250,6:1,29:10130});          // 대기 중 — 필드 3개뿐
+  [["로스팅 중",busy],["대기 중",idle]].forEach(([k,f])=>{
+    const wrapped=pbMsgEnc(13,pbMsgEnc(2,f));       // 두 겹으로 감싸도 찾아내는지
+    const st=ikFindStatus(wrapped);
+    out.push(`상태 해독(${k}): ${st?`원두 ${st.temp_above??"–"}℃ · 배기 ${st.temp_below??"–"}℃ · `
+      +`설정 ${st.setpoint??"–"}℃ · 승온 ${st.ror_above??"–"} · 상태값 ${st.state} · 필드 ${Object.keys(st._raw).length}개`
+      :"실패"}`);
+  });
+  // 프로파일 메시지가 규격대로 만들어지는지
+  const p={name:"시험",pts:[[0,143],[200,190],[420,202]]};
+  const msg=ikProfileMsg(12,p);
+  const fs=pbFieldsR(new Uint8Array(msg));
+  const ps=fs.find(f=>f[0]===4);
+  let deep="없음";
+  if(ps){ const inner=pbFieldsR(ps[1]).find(f=>f[0]===1);
+    if(inner){ const rp=pbFieldsR(inner[1]);
+      deep=`schema=${(rp.find(f=>f[0]===1)||[])[1]} · 이름 ${(rp.filter(f=>f[0]===3)||[]).length}개 · `
+        +`온도점 ${rp.filter(f=>f[0]===4).length}개 · 팬점 ${rp.filter(f=>f[0]===5).length}개`; } }
+  out.push(`프로파일 메시지: cmd_type=${(fs.find(f=>f[0]===1)||[])[1]} · profile_set → ${deep}`);
+  ikLog("── 자체 시험 ──\n"+out.join("\n"));
+  $("ik_msg").innerHTML=`<span class="pill ok">자체 시험 완료</span> 아래 기록을 보세요.`;
+  return out;
+}
+/* 연결해 둔 채 기다리면 로스팅 전 대기 온도까지 곡선에 쌓인다.
+   그대로 저장하면 예열이 실온으로 잡히므로, 온도가 확 뛰는 지점(투입/예열 시작) 앞을 잘라낸다.
+   자른 양은 화면에 알려서 잘못 잘랐을 때 알아챌 수 있게 한다. */
+function ikTrim(c){
+  if(c.length<6) return {c,cut:0};
+  const look=Math.max(1,Math.floor(c.length*0.4));
+  let at=0, best=0;
+  for(let i=1;i<look;i++){
+    const jump=c[i][1]-c[i-1][1];
+    if(jump>best&&jump>=15){ best=jump; at=i; }
+  }
+  return at?{c:c.slice(at),cut:at}:{c,cut:0};
+}
+function ikSaveBatch(){
+  if(ikCurve.length<5) return;
+  const {c,cut}=ikTrim(ikCurve);
+  const t0=c[0][0];
+  c.forEach(p=>p[0]-=t0);                    // 자른 뒤 시각을 0부터 다시 센다
+  const dur=c[c.length-1][0], drop=c[c.length-1][1];
+  $("r_dur").value=Math.round(dur); $("r_drop").value=drop.toFixed(1);
+  $("r_pre").value=c[0][1].toFixed(1);
+  if(!$("r_date").value) $("r_date").value=new Date().toISOString().slice(0,10);
+  pendingLog={act:c};                       // 저장할 때 실측 곡선으로 집어간다
+  recalc();
+  $("ik_savemsg").innerHTML=`<span class="pill ok">옮겼습니다</span> 로스팅 기록 탭에서
+    생두와 중량을 채우고 저장하세요. 실측 곡선 ${c.length}점이 함께 담깁니다.`
+    +(cut?`<br><span class="note">앞의 ${cut}점은 로스팅 전 대기 구간으로 보고 잘랐습니다
+      — 예열이 ${c[0][1].toFixed(1)}℃로 잡혔습니다. 아니면 「곡선 지우기」 후 다시 받으세요.</span>`:"");
+  document.querySelector('nav button[data-p="roasts"]').click();
+}
+function ikInit(){
+  $("ik_crc").innerHTML=CRCV.map((v,i)=>`<option value="${i}">${v.n}</option>`).join("");
+  $("ik_crc").addEventListener("change",()=>{ ikCrc=CRCV[+$("ik_crc").value];
+    ikLog("CRC 방식을 손으로 바꿨습니다 — "+ikCrc.n); });
+  $("ik_support").innerHTML = navigator.bluetooth
+    ? `<span class="pill ok">사용 가능</span> 이 브라우저는 웹 블루투스를 지원합니다.
+       머신을 켜고 <b>IKAWA 앱과의 연결을 끊은 뒤</b> 연결하세요 — 동시에 붙으면 불안정할 수 있습니다.`
+    : `<span class="pill warn">사용 불가</span> 이 브라우저는 웹 블루투스를 지원하지 않습니다.
+       <b>PC의 크롬이나 엣지</b>에서 열어주세요. 아이폰·사파리는 지원하지 않습니다.`;
+  $("ik_connect").onclick=ikConnect;
+  $("ik_disconnect").onclick=ikDisconnect;
+  $("ik_selftest").onclick=ikSelfTest;
+  $("ik_clear").onclick=()=>{ ikCurve=[]; ikT0=null; $("ik_chart").innerHTML="";
+    $("ik_save").disabled=true; $("ik_savemsg").textContent=""; };
+  $("ik_save").onclick=ikSaveBatch;
+  $("ik_send").onclick=()=>ikSendProfile(+$("ik_cmd").value||12);
+  $("ik_cmdtry").onclick=()=>ikSendProfile(+$("ik_cmd").value||12);
+}
+function ikOpen(){
+  if(!ikInit.done){ ikInit(); ikInit.done=true; }
+  const list=allProfiles().filter(p=>!p.archived);
+  const keep=$("ik_prof").value;
+  $("ik_prof").innerHTML=list.map(p=>
+    `<option value="${p.id}">${p.name} — 배출 ${profStat(p.pts).drop.toFixed(1)}℃ · ${fmt(profStat(p.pts).dur)}</option>`).join("");
+  if(keep) $("ik_prof").value=keep;
+}
 
 restore();
 </script>
