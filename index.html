@@ -2893,6 +2893,67 @@ function curveSvg(plan,acts,marks){
     <text x="${X(tMax*0.89).toFixed(0)}" y="${T+10}" font-size="10" fill="var(--muted)">발달</text>
   </svg>`;
 }
+/* 곡선 → 승온율(℃/분) 계열. 창을 두고 기울기를 재야 잡음에 흔들리지 않는다.
+   교과서 규칙이 "승온율은 끝까지 감소해야 한다"이므로 이 곡선이 로스팅의 핵심 지표다. */
+function rorSeries(c,win){
+  if(!c||c.length<4) return [];
+  const W=win||30, out=[];
+  for(let i=0;i<c.length;i++){
+    const t=c[i][0];
+    let j=i; while(j>0&&t-c[j][0]<W) j--;
+    const dt=t-c[j][0];
+    if(dt>=Math.min(W*0.5,10)) out.push([t,+(((c[i][1]-c[j][1])/dt)*60).toFixed(2)]);
+  }
+  return out;
+}
+/* 마지막 25% 구간의 승온율 — 기록에 남기는 「후반 승온」. 로그 경로와 같은 정의를 쓴다. */
+function rorTail(c){
+  if(!c||c.length<4) return null;
+  const end=c[c.length-1][0];
+  const q=c.filter(p=>p[0]>=end*0.75);
+  if(q.length<2) return null;
+  const dt=(q[q.length-1][0]-q[0][0])/60;
+  return dt>0?(q[q.length-1][1]-q[0][1])/dt:null;
+}
+/* 승온율 곡선 그리기 — 0선을 기준으로 두고 감소 추세를 본다 */
+function rorSvg(series){
+  if(!series||series.length<3) return "";
+  const W=640,H=110,L=36,R=8,T=8,B=16;
+  const tMax=Math.max(...series.map(p=>p[0]))||1;
+  let lo=Math.min(0,...series.map(p=>p[1])), hi=Math.max(...series.map(p=>p[1]));
+  if(hi-lo<2) hi=lo+2;
+  const pad=(hi-lo)*0.1; lo-=pad; hi+=pad;
+  const X=t=>L+(W-L-R)*t/tMax, Y=v=>H-B-(H-T-B)*(v-lo)/(hi-lo);
+  const d=series.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1)).join(" ");
+  const zero=(lo<0&&hi>0)?`<line x1="${L}" y1="${Y(0).toFixed(1)}" x2="${W-R}" y2="${Y(0).toFixed(1)}"
+      stroke="var(--actual)" stroke-width=".8" stroke-dasharray="4 3"/>`:"";
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:#fff;
+      border:1px solid var(--rule);border-top:0" role="img" aria-label="승온율">
+    <text x="4" y="${(Y(hi-pad)+4).toFixed(1)}" font-size="10" fill="var(--muted)">${(hi-pad).toFixed(1)}</text>
+    <text x="4" y="${(Y(lo+pad)+4).toFixed(1)}" font-size="10" fill="var(--muted)">${(lo+pad).toFixed(1)}</text>
+    ${zero}<path d="${d}" fill="none" stroke="var(--mark)" stroke-width="1.6"/>
+    <text x="${L+4}" y="${T+10}" font-size="10" fill="var(--muted)">승온율 ℃/분 — 끝까지 내려가야 정상</text>
+  </svg>`;
+}
+/* 팬(%)과 히터(%)를 한 축에 그린다. 온도가 왜 그렇게 움직였는지는 여기 있다. */
+function powerSvg(fan,heat,tMaxIn){
+  if((!fan||fan.length<3)&&(!heat||heat.length<3)) return "";
+  const W=640,H=96,L=36,R=8,T=8,B=14;
+  const all=(fan||[]).concat(heat||[]);
+  const tMax=tMaxIn||Math.max(...all.map(p=>p[0]))||1;
+  const hi=Math.max(100,...all.map(p=>p[1]));
+  const X=t=>L+(W-L-R)*t/tMax, Y=v=>H-B-(H-T-B)*v/hi;
+  const path=c=>(c&&c.length>1)?c.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1)).join(" "):"";
+  const line=(c,col)=>path(c)?`<path d="${path(c)}" fill="none" stroke="${col}" stroke-width="1.5"/>`:"";
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:#fff;
+      border:1px solid var(--rule);border-top:0" role="img" aria-label="팬과 히터">
+    <text x="4" y="${(Y(hi)+9).toFixed(1)}" font-size="10" fill="var(--muted)">${hi}</text>
+    <text x="4" y="${(Y(0)).toFixed(1)}" font-size="10" fill="var(--muted)">0</text>
+    ${line(fan,"var(--setpoint)")}${line(heat,"var(--actual)")}
+    <text x="${L+4}" y="${T+9}" font-size="10" fill="var(--muted)">
+      <tspan fill="var(--setpoint)">━ 팬</tspan>  <tspan fill="var(--actual)">━ 히터</tspan>  %</text>
+  </svg>`;
+}
 /* 이 프로파일로 볶은 배치들의 실측 곡선 */
 function actsFor(p){
   return DB.roasts.filter(r=>r.profileId===p.id&&r.act&&r.act.length>2);
@@ -4275,7 +4336,8 @@ function ikFindProfile(payload){
     fans:g.filter(f=>f[0]===5).length, schema:(g.find(f=>f[0]===1)||[])[1]};
 }
 let ikDev=null, ikChr=null, ikBuf=[], ikSeq=1, ikPoll=null, ikCrc=CRCV[0];
-let ikCurve=[], ikPlanCurve=[], ikMarks={cc:null,crack:null};
+let ikCurve=[], ikPlanCurve=[], ikFanCurve=[], ikHeatCurve=[], ikInlet=[];
+let ikHasInlet=false, ikMarks={cc:null,crack:null};
 let ikT0=null, ikLastState=null, ikNegot=null, ikRx=0;
 /* 화면이 계속 흐르면 폰에서 글자를 잡아 복사할 수가 없다.
    그래서 기록은 배열에 따로 쌓고, 화면 갱신만 멈출 수 있게 한다 — 멈춰도 수집은 계속된다. */
@@ -4422,6 +4484,13 @@ function ikOnStatus(st){
       // 머신이 주는 설정온도도 같이 쌓는다 — 로스팅 중에 계획과 실측을 겹쳐 볼 수 있다
       if(st.setpoint!=null&&isFinite(st.setpoint)&&st.setpoint>0)
         ikPlanCurve.push([Math.round(t),Math.round(st.setpoint*10)/10]);
+      // 팬·히터도 매초 온다 — 온도만 봐서는 "왜 그렇게 됐는지"를 알 수 없다
+      if(st.fan!=null&&isFinite(st.fan))    ikFanCurve.push([Math.round(t),st.fan]);
+      if(st.heater!=null&&isFinite(st.heater)) ikHeatCurve.push([Math.round(t),st.heater]);
+      // 흡기 센서는 Pro V3 에만 있다. 값이 오면 그때부터 함께 그린다.
+      if(st.temp_below!=null&&isFinite(st.temp_below)&&st.temp_below>0){
+        ikHasInlet=true; ikInlet.push([Math.round(t),Math.round(st.temp_below*10)/10]);
+      }
     }
   }
   ikNow=t;                                   // 마커를 찍을 때 쓸 현재 시각
@@ -4443,22 +4512,33 @@ function ikRenderLive(st){
     `<div><label>${label}</label><input type="text" readonly value="${
       (typeof st[k]==="number"?st[k].toFixed(dec==null?1:dec):st[k])+(unit||"")}"></div>`;
   $("ik_live").innerHTML=
-    row("temp_above","원두온도","℃")+row("temp_below","배기온도","℃")+
+    row("temp_above","배기온도 (원두 위)","℃")+
+    (ikHasInlet?row("temp_below","흡기온도 (원두 아래)","℃"):"")+
     row("setpoint","설정온도","℃")+row("ror_above","승온율","℃/분")+
     row("fan","팬","%",0)+row("fan_measured","팬 RPM","",0)+
     row("heater","히터","",0)+row("humidity_abs","절대습도","",2)+
     (st.state!=null?`<div><label>머신 상태</label>
       <input type="text" readonly value="${(IKSTATE[st.state]||"?")+" ("+st.state+")"}"></div>`:"")+
-    `<div><label>모은 점</label><input type="text" readonly value="${ikCurve.length}개"></div>`;
+    `<div><label>모은 점</label><input type="text" readonly value="${ikCurve.length}개"></div>`
+    +`<div class="wide"><p class="note" style="margin:0">${ikHasInlet
+      ? '<span class="pill ok">흡기 센서 있음</span> 두 센서를 다 보내는 기종입니다(Pro V3 계열). '
+        +'그래프에 배기와 흡기가 함께 그려집니다.'
+      : '<span class="pill">배기 센서만</span> 이 기종은 흡기(인렛) 온도를 보내지 않습니다(Pro V2 계열). '
+        +'IKAWA 라이브러리에서 <b>Inlet 프로파일은 쓰지 마세요</b> — 배기 기준 프로파일만 맞습니다.'}</p></div>`;
   $("ik_save").disabled=ikCurve.length<5;
   if(ikCurve.length>2){
     const marks=[];
     if(ikMarks.cc!=null)    marks.push({t:ikMarks.cc,   label:"CC",  color:"var(--mark)"});
     if(ikMarks.crack!=null) marks.push({t:ikMarks.crack,label:"1차", color:"var(--actual)"});
     // 설정 곡선이 있으면 그것을 바탕(파랑)으로 깔고 실측(빨강)을 얹는다
-    $("ik_chart").innerHTML=ikPlanCurve.length>2
-      ? curveSvg(ikPlanCurve,[ikCurve],marks)
-      : curveSvg(ikCurve,[],marks);
+    const tMax=ikCurve[ikCurve.length-1][0];
+    // 흡기 센서가 있는 기종이면 배기와 함께 두 줄로 그린다
+    const acts=ikHasInlet&&ikInlet.length>2?[ikCurve,ikInlet]:[ikCurve];
+    $("ik_chart").innerHTML=(ikPlanCurve.length>2
+      ? curveSvg(ikPlanCurve,acts,marks)
+      : curveSvg(ikCurve,ikHasInlet&&ikInlet.length>2?[ikInlet]:[],marks))
+      + rorSvg(rorSeries(ikCurve,30))
+      + powerSvg(ikFanCurve,ikHeatCurve,tMax);
   }
   $("ik_elapsed").textContent=ikCurve.length?fmt(ikNow):"";
   $("ik_cc").disabled=$("ik_crack").disabled=ikCurve.length<2;
@@ -4654,11 +4734,16 @@ function ikSaveBatch(){
   };
   if(ikMarks.crack!=null) put(Math.round(ikMarks.crack-t0),"r_crack","1차 크랙");
   if(ikMarks.cc!=null)    put(Math.round(ikMarks.cc-t0),"r_cc","컬러 변환");
+  const rt=rorTail(c);
+  if(rt!=null) $("r_ror").value=rt.toFixed(1);
   pendingLog={act:c};                       // 저장할 때 실측 곡선으로 집어간다
   recalc();
   $("ik_savemsg").innerHTML=`<span class="pill ok">옮겼습니다</span> 로스팅 기록 탭에서
     생두와 중량을 채우고 저장하세요. 실측 곡선 ${c.length}점${mk}이 함께 담깁니다.`
-    +($("r_dtr").value?`<br><span class="note">DTR ${$("r_dtr").value}% 로 계산됐습니다.</span>`:"")
+    +($("r_dtr").value?`<br><span class="note">DTR ${$("r_dtr").value}%`
+      +($("r_ror").value?` · 후반 승온 ${$("r_ror").value}℃/분`
+        +(parseFloat($("r_ror").value)<1?' <span class="pill warn">베이킹 위험</span>':""):"")
+      +` 로 계산됐습니다.</span>`:"")
     +(dropped?`<br><span class="pill warn">범위 밖</span> <span class="note">${dropped} 은(는)
       곡선 구간을 벗어나 넣지 않았습니다.</span>`:"")
     +(cut?`<br><span class="note">앞의 ${cut}점은 로스팅 전 대기 구간으로 보고 잘랐습니다
@@ -4707,7 +4792,8 @@ function ikInit(){
   };
   $("ik_logclear").onclick=()=>{ ikLines=[]; $("ik_log").textContent=""; $("ik_logmsg").textContent=""; };
   $("ik_selftest").onclick=ikSelfTest;
-  $("ik_clear").onclick=()=>{ ikCurve=[]; ikPlanCurve=[]; ikT0=null; ikNow=0;
+  $("ik_clear").onclick=()=>{ ikCurve=[]; ikPlanCurve=[]; ikFanCurve=[]; ikHeatCurve=[];
+    ikInlet=[]; ikHasInlet=false; ikT0=null; ikNow=0;
     ikMarks={cc:null,crack:null}; $("ik_chart").innerHTML=""; $("ik_elapsed").textContent="";
     $("ik_save").disabled=true; $("ik_savemsg").textContent="";
     $("ik_undo").disabled=true; $("ik_markmsg").textContent="곡선을 지웠습니다."; };
