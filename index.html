@@ -4305,6 +4305,15 @@ function ikSetState(txt,cls){ const e=$("ik_state"); e.textContent=txt; e.classN
    상태 요청은 8B 라 한 번에 나가지만 프로파일은 150B 가 넘어 통째로 쓰면
    GATT Error 로 튕긴다 — 잘라서 순서대로 보낸다. */
 let ikMTU=20;
+/* 블루투스는 한 번에 한 가지 작업만 한다.
+   1초마다 도는 상태 요청이 프로파일 전송(8조각) 사이를 파고들면
+   "GATT operation already in progress" 로 양쪽 다 깨진다 — 한 줄로 세워 차례로 보낸다. */
+let ikGate=Promise.resolve(), ikSending=false;
+function ikSerial(fn){
+  const run=ikGate.then(fn,fn);
+  ikGate=run.then(()=>{},()=>{});
+  return run;
+}
 async function ikWriteRaw(bytes){
   for(let i=0;i<bytes.length;i+=ikMTU){
     const part=bytes.slice(i,i+ikMTU);
@@ -4316,7 +4325,7 @@ async function ikSend(payload,why){
   if(!ikChr) return false;
   const f=ikFrame(payload,ikCrc);
   try{
-    await ikWriteRaw(f);
+    await ikSerial(()=>ikWriteRaw(f));
     if(!ikQuiet) ikLog(`→ ${why||""} [${ikCrc.n}] ${f.length}B`
       +(f.length>ikMTU?` (${Math.ceil(f.length/ikMTU)}조각)`:"")+`  ${hex(f).slice(0,60)}`);
     return true;
@@ -4345,12 +4354,18 @@ function ikHandleFrame(raw){
   else ikLog(`← ${payload.length}B`);
   if(ikNegot){ clearTimeout(ikNegot); ikNegot=null; ikQuiet=false;
     ikLog("✓ 응답 도착 — CRC 탐색을 멈춥니다");
-    ikPoll=setInterval(()=>ikSend(ikMsg(IK.STATUS_GET,ikSeq++&0x7fff),"상태 요청"),1000); }
+    ikPoll=setInterval(()=>{ if(!ikSending) ikSend(ikMsg(IK.STATUS_GET,ikSeq++&0x7fff),"상태 요청"); },1000); }
   const pf=ikFindProfile(payload);
   if(pf){ ikOnProfileBack(pf); return; }
   const st=ikFindStatus(payload);
-  if(st) ikOnStatus(st);
-  else ikLog("  (상태 메시지를 찾지 못함 — 원시 필드 표를 보세요)");
+  if(st){ ikOnStatus(st); return; }
+  // 알맹이 없는 짧은 응답 = 명령을 받았다는 확인. seq 가 우리 것과 맞는지 본다.
+  try{
+    const fs=pbFieldsR(payload instanceof Uint8Array?payload:new Uint8Array(payload));
+    const sq=fs.find(f=>f[0]===1&&f[2]===0), rs=fs.find(f=>f[0]===2&&f[2]===0);
+    if(sq){ ikLog(`✔ 머신 확인 응답 — seq ${sq[1]}${rs?` · resp ${rs[1]}`:""} (명령을 받았습니다)`); return; }
+  }catch(e){}
+  ikLog("  (해석하지 못한 응답 — 원시 필드 표를 보세요)");
 }
 let ikSent=null;                       // 마지막으로 보낸 프로파일 (대조용)
 function ikOnProfileBack(pf){
@@ -4509,11 +4524,19 @@ async function ikSendProfile(cmdType){
   const id=$("ik_prof").value, p=profById(id);
   if(!p){ $("ik_cmdmsg").textContent="프로파일을 고르세요."; return; }
   ikSent={name:p.name,pts:p.pts};
-  const ok=await ikSend(ikProfileMsg(cmdType,p),`프로파일 전송 cmd_type=${cmdType} (${p.name})`);
-  const m=ok?`<span class="pill">보냈습니다</span> cmd_type ${cmdType} — 머신이나 IKAWA 앱에서
-    프로파일이 바뀌었는지 확인하세요. 아무 반응이 없으면 다른 번호로 시도하세요.`
-    :`<span class="pill warn">전송 실패</span>`;
-  $("ik_cmdmsg").innerHTML=m; $("ik_savemsg").innerHTML="";
+  $("ik_cmdmsg").innerHTML=`<span class="pill">보내는 중…</span>`;
+  /* 보내기부터 되읽기까지를 한 덩어리로 묶어 그 사이에는 상태 요청을 넣지 않는다.
+     머신이 프로파일을 받아 저장하는 동안은 조용히 두는 편이 안전하다. */
+  ikSending=true;
+  try{
+    const ok=await ikSend(ikProfileMsg(cmdType,p),`프로파일 전송 cmd_type=${cmdType} (${p.name})`);
+    if(!ok){ $("ik_cmdmsg").innerHTML=`<span class="pill warn">전송 실패</span> 기록을 확인하세요.`; return; }
+    $("ik_cmdmsg").innerHTML=`<span class="pill">보냈습니다</span> 머신에서 되읽어 확인하는 중…`;
+    await new Promise(r=>setTimeout(r,700));       // 머신이 받아 넣을 틈을 준다
+    await ikSend(ikMsg(IK.PROFILE_GET,ikSeq++&0x7fff),"프로파일 읽기(확인)");
+    await new Promise(r=>setTimeout(r,500));       // 응답이 돌아올 틈
+  } finally { ikSending=false; }
+  $("ik_savemsg").innerHTML="";
 }
 /* 실기가 없어도 논리는 검증한다 — 만든 프레임을 도로 풀어 같은 값이 나오는지 본다 */
 function ikSelfTest(){
