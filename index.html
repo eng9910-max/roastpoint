@@ -4266,16 +4266,26 @@ function ikLogText(){
 const hex=a=>[...a].map(b=>b.toString(16).padStart(2,"0")).join(" ");
 
 function ikSetState(txt,cls){ const e=$("ik_state"); e.textContent=txt; e.className=cls||"pill"; }
+/* BLE 한 묶음은 기본 20바이트다. 머신이 보내오는 것도 20B 씩 쪼개져 온다.
+   상태 요청은 8B 라 한 번에 나가지만 프로파일은 150B 가 넘어 통째로 쓰면
+   GATT Error 로 튕긴다 — 잘라서 순서대로 보낸다. */
+let ikMTU=20;
+async function ikWriteRaw(bytes){
+  for(let i=0;i<bytes.length;i+=ikMTU){
+    const part=bytes.slice(i,i+ikMTU);
+    if(ikChr.writeValueWithResponse) await ikChr.writeValueWithResponse(part);
+    else await ikChr.writeValue(part);
+  }
+}
 async function ikSend(payload,why){
   if(!ikChr) return false;
   const f=ikFrame(payload,ikCrc);
   try{
-    // 아티산은 response=True 로 보낸다 — 응답 없는 쓰기는 머신이 무시할 수 있다
-    if(ikChr.writeValueWithResponse) await ikChr.writeValueWithResponse(f);
-    else await ikChr.writeValue(f);
-    if(!ikQuiet) ikLog(`→ ${why||""} [${ikCrc.n}] ${hex(f).slice(0,90)}`);
+    await ikWriteRaw(f);
+    if(!ikQuiet) ikLog(`→ ${why||""} [${ikCrc.n}] ${f.length}B`
+      +(f.length>ikMTU?` (${Math.ceil(f.length/ikMTU)}조각)`:"")+`  ${hex(f).slice(0,60)}`);
     return true;
-  }catch(e){ ikLog("→ 실패: "+e.message); return false; }
+  }catch(e){ ikLog(`→ 실패 (${f.length}B): ${e.message}`); return false; }
 }
 function ikOnPacket(bytes){                      // 알림으로 들어온 조각을 모아 프레임 단위로 자른다
   for(const b of bytes){
@@ -4377,12 +4387,18 @@ async function ikConnect(all){
     try{
       const all=await svc.getCharacteristics();
       ikLog(`서비스 특성 ${all.length}개:`);
-      all.forEach(c=>ikLog(`   ${c.uuid}  [${Object.keys(c.properties||{})
-        .filter(k=>c.properties[k]).join(",")}]`));
+      const P=["broadcast","read","writeWithoutResponse","write","notify","indicate",
+               "authenticatedSignedWrites","reliableWrite","writableAuxiliaries"];
+      all.forEach(c=>ikLog(`   ${c.uuid}  [${P.filter(k=>{
+        try{ return c.properties&&c.properties[k]; }catch(e){ return false; }}).join(",")||"?"}]`));
     }catch(e){ ikLog("특성 목록을 읽지 못함: "+e.message); }
     const notify=await svc.getCharacteristic(IK.NOTIFY);
     ikChr=await svc.getCharacteristic(IK.WRITE);
-    const pr=c=>Object.keys(c.properties||{}).filter(k=>c.properties[k]).join(",");
+    // BluetoothCharacteristicProperties 는 프로토타입 게터라 Object.keys 로는 빈 배열이 나온다
+    const PROPS=["broadcast","read","writeWithoutResponse","write","notify","indicate",
+                 "authenticatedSignedWrites","reliableWrite","writableAuxiliaries"];
+    const pr=c=>{ try{ return PROPS.filter(k=>c.properties&&c.properties[k]).join(",")||"(없음)"; }
+                  catch(e){ return "(읽기 실패)"; } };
     ikLog(`알림 특성: ${pr(notify)}`);
     ikLog(`쓰기 특성: ${pr(ikChr)}`);
     await notify.startNotifications();
