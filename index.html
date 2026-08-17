@@ -637,6 +637,14 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <h2>② 실시간</h2>
     <div class="grid g5" id="ik_live"></div>
     <div id="ik_chart" style="margin-top:10px"></div>
+    <div class="row" style="margin-top:10px;align-items:center">
+      <span class="mono" id="ik_elapsed" style="font-size:26px;font-weight:600;min-width:92px"></span>
+      <button id="ik_cc" disabled style="font-size:15px;padding:10px 16px">컬러 변환 (CC)</button>
+      <button id="ik_crack" disabled style="font-size:16px;padding:12px 20px">지금 1차 크랙</button>
+      <button class="ghost sm" id="ik_undo" disabled>마커 지우기</button>
+    </div>
+    <p class="note" id="ik_markmsg" style="margin-top:6px">로스팅 중에 들리는 순간 누르세요.
+    그 시각이 곡선에 표시되고, 기록에 담을 때 <b>1차 크랙 초</b>와 <b>컬러 변환 초</b>로 들어갑니다.</p>
     <div class="row" style="margin-top:9px">
       <button id="ik_save" disabled>이 배치를 기록에 담기</button>
       <button class="ghost" id="ik_clear">곡선 지우기</button>
@@ -2849,7 +2857,7 @@ const DEVSAY={
 };
 const DEVOK=1.5;                              // ±1.5℃ 안이면 따라간 것으로 본다
 /* 계획(파랑)과 실측(빨강)을 한 축에 겹쳐 그린다 */
-function curveSvg(plan,acts){
+function curveSvg(plan,acts,marks){
   const W=640,H=190,L=36,R=8,T=10,B=20;
   const all=plan.concat(...acts);
   const tMax=Math.max(...all.map(p=>p[0]))||1;
@@ -2866,9 +2874,15 @@ function curveSvg(plan,acts){
     `<text x="4" y="${(Y(v)+4).toFixed(1)}" font-size="10" fill="var(--muted)">${v.toFixed(0)}</text>
      <line x1="${L}" y1="${Y(v).toFixed(1)}" x2="${W-R}" y2="${Y(v).toFixed(1)}"
        stroke="var(--rule)" stroke-width=".5"/>`).join("");
+  const mk=(marks||[]).filter(m=>m&&m.t!=null&&m.t<=tMax).map(m=>{
+    const x=X(m.t).toFixed(1);
+    return `<line x1="${x}" y1="${T}" x2="${x}" y2="${H-B}" stroke="${m.color||'var(--mark)'}"
+      stroke-width="1.4" stroke-dasharray="5 3"/>
+      <text x="${(+x+3).toFixed(1)}" y="${T+22}" font-size="10" fill="${m.color||'var(--mark)'}">${m.label}</text>`;
+  }).join("");
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:#fff;
       border:1px solid var(--rule)" role="img" aria-label="계획 곡선과 실측 곡선 비교">
-    ${ticks}${bars}
+    ${ticks}${bars}${mk}
     <path d="${path(plan)}" fill="none" stroke="var(--setpoint)" stroke-width="2"/>
     ${acts.map(a=>`<path d="${path(a)}" fill="none" stroke="var(--actual)"
        stroke-width="1.6" opacity="${acts.length>1?0.65:1}"/>`).join("")}
@@ -4261,7 +4275,8 @@ function ikFindProfile(payload){
     fans:g.filter(f=>f[0]===5).length, schema:(g.find(f=>f[0]===1)||[])[1]};
 }
 let ikDev=null, ikChr=null, ikBuf=[], ikSeq=1, ikPoll=null, ikCrc=CRCV[0];
-let ikCurve=[], ikT0=null, ikLastState=null, ikNegot=null, ikRx=0;
+let ikCurve=[], ikPlanCurve=[], ikMarks={cc:null,crack:null};
+let ikT0=null, ikLastState=null, ikNegot=null, ikRx=0;
 /* 화면이 계속 흐르면 폰에서 글자를 잡아 복사할 수가 없다.
    그래서 기록은 배열에 따로 쌓고, 화면 갱신만 멈출 수 있게 한다 — 멈춰도 수집은 계속된다. */
 let ikLines=[], ikFrozen=false, ikQuiet=false;
@@ -4378,7 +4393,7 @@ function ikHandleFrame(raw){
   }catch(e){}
   ikLog("  (해석하지 못한 응답 — 원시 필드 표를 보세요)");
 }
-let ikSent=null;                       // 마지막으로 보낸 프로파일 (대조용)
+let ikSent=null, ikNow=0;              // 마지막으로 보낸 프로파일 / 현재 경과 시각
 function ikOnProfileBack(pf){
   const end=pf.pts.length?fmt(pf.pts[pf.pts.length-1][0]):"?";
   const drop=pf.pts.length?pf.pts[pf.pts.length-1][1].toFixed(1):"?";
@@ -4402,8 +4417,14 @@ function ikOnStatus(st){
   const v=st.temp_above!=null?st.temp_above:null;
   if(v!=null&&isFinite(v)&&v>0){
     const last=ikCurve[ikCurve.length-1];
-    if(!last||t-last[0]>=1) ikCurve.push([Math.round(t),Math.round(v*10)/10]);
+    if(!last||t-last[0]>=1){
+      ikCurve.push([Math.round(t),Math.round(v*10)/10]);
+      // 머신이 주는 설정온도도 같이 쌓는다 — 로스팅 중에 계획과 실측을 겹쳐 볼 수 있다
+      if(st.setpoint!=null&&isFinite(st.setpoint)&&st.setpoint>0)
+        ikPlanCurve.push([Math.round(t),Math.round(st.setpoint*10)/10]);
+    }
   }
+  ikNow=t;                                   // 마커를 찍을 때 쓸 현재 시각
   if(st.state!==ikLastState){
     const nm=IKSTATE[st.state]||`알 수 없음(${st.state})`;
     ikLog(`■ 머신 상태 → ${nm}  [값 ${st.state}]`);
@@ -4430,7 +4451,17 @@ function ikRenderLive(st){
       <input type="text" readonly value="${(IKSTATE[st.state]||"?")+" ("+st.state+")"}"></div>`:"")+
     `<div><label>모은 점</label><input type="text" readonly value="${ikCurve.length}개"></div>`;
   $("ik_save").disabled=ikCurve.length<5;
-  if(ikCurve.length>2) $("ik_chart").innerHTML=curveSvg(ikCurve,[]);
+  if(ikCurve.length>2){
+    const marks=[];
+    if(ikMarks.cc!=null)    marks.push({t:ikMarks.cc,   label:"CC",  color:"var(--mark)"});
+    if(ikMarks.crack!=null) marks.push({t:ikMarks.crack,label:"1차", color:"var(--actual)"});
+    // 설정 곡선이 있으면 그것을 바탕(파랑)으로 깔고 실측(빨강)을 얹는다
+    $("ik_chart").innerHTML=ikPlanCurve.length>2
+      ? curveSvg(ikPlanCurve,[ikCurve],marks)
+      : curveSvg(ikCurve,[],marks);
+  }
+  $("ik_elapsed").textContent=ikCurve.length?fmt(ikNow):"";
+  $("ik_cc").disabled=$("ik_crack").disabled=ikCurve.length<2;
   if($("ik_raw").checked&&st._raw){
     $("ik_fields").innerHTML=`<tr><th class="num">번호</th><th>추정 이름</th>
       <th class="num">원시값</th><th class="num">환산</th></tr>`+
@@ -4614,10 +4645,22 @@ function ikSaveBatch(){
   $("r_dur").value=Math.round(dur); $("r_drop").value=drop.toFixed(1);
   $("r_pre").value=c[0][1].toFixed(1);
   if(!$("r_date").value) $("r_date").value=new Date().toISOString().slice(0,10);
+  // 마커도 같은 만큼 당겨서 넣는다
+  // 경계를 포함해서 넣는다. 예전엔 크랙 시각이 총시간과 같으면 조용히 버려졌다.
+  let mk="", dropped="";
+  const put=(v,id,label)=>{
+    if(v>0&&v<=dur){ $(id).value=v; mk+=` · ${label} ${fmt(v)}`; }
+    else dropped+=` ${label}(${fmt(v)})`;
+  };
+  if(ikMarks.crack!=null) put(Math.round(ikMarks.crack-t0),"r_crack","1차 크랙");
+  if(ikMarks.cc!=null)    put(Math.round(ikMarks.cc-t0),"r_cc","컬러 변환");
   pendingLog={act:c};                       // 저장할 때 실측 곡선으로 집어간다
   recalc();
   $("ik_savemsg").innerHTML=`<span class="pill ok">옮겼습니다</span> 로스팅 기록 탭에서
-    생두와 중량을 채우고 저장하세요. 실측 곡선 ${c.length}점이 함께 담깁니다.`
+    생두와 중량을 채우고 저장하세요. 실측 곡선 ${c.length}점${mk}이 함께 담깁니다.`
+    +($("r_dtr").value?`<br><span class="note">DTR ${$("r_dtr").value}% 로 계산됐습니다.</span>`:"")
+    +(dropped?`<br><span class="pill warn">범위 밖</span> <span class="note">${dropped} 은(는)
+      곡선 구간을 벗어나 넣지 않았습니다.</span>`:"")
     +(cut?`<br><span class="note">앞의 ${cut}점은 로스팅 전 대기 구간으로 보고 잘랐습니다
       — 예열이 ${c[0][1].toFixed(1)}℃로 잡혔습니다. 아니면 「곡선 지우기」 후 다시 받으세요.</span>`:"");
   document.querySelector('nav button[data-p="roasts"]').click();
@@ -4664,8 +4707,26 @@ function ikInit(){
   };
   $("ik_logclear").onclick=()=>{ ikLines=[]; $("ik_log").textContent=""; $("ik_logmsg").textContent=""; };
   $("ik_selftest").onclick=ikSelfTest;
-  $("ik_clear").onclick=()=>{ ikCurve=[]; ikT0=null; $("ik_chart").innerHTML="";
-    $("ik_save").disabled=true; $("ik_savemsg").textContent=""; };
+  $("ik_clear").onclick=()=>{ ikCurve=[]; ikPlanCurve=[]; ikT0=null; ikNow=0;
+    ikMarks={cc:null,crack:null}; $("ik_chart").innerHTML=""; $("ik_elapsed").textContent="";
+    $("ik_save").disabled=true; $("ik_savemsg").textContent="";
+    $("ik_undo").disabled=true; $("ik_markmsg").textContent="곡선을 지웠습니다."; };
+  const mark=(k,label)=>{
+    ikMarks[k]=Math.round(ikNow);
+    const t=$("r_dur").value?"":"";
+    tBeep(1);
+    $("ik_undo").disabled=false;
+    $("ik_markmsg").innerHTML=`<span class="pill ok">${label} ${fmt(ikMarks[k])}</span> 표시했습니다`
+      +(ikMarks.crack!=null&&ikMarks.cc!=null
+        ? ` — CC ${fmt(ikMarks.cc)} · 1차 크랙 ${fmt(ikMarks.crack)}`:"")
+      +`. 다시 누르면 그 시각으로 바뀝니다.`;
+    ikLog(`▼ ${label} ${fmt(ikMarks[k])}`);
+    if(ikCurve.length>2) ikRenderLive({});
+  };
+  $("ik_cc").onclick=()=>mark("cc","컬러 변환");
+  $("ik_crack").onclick=()=>mark("crack","1차 크랙");
+  $("ik_undo").onclick=()=>{ ikMarks={cc:null,crack:null}; $("ik_undo").disabled=true;
+    $("ik_markmsg").textContent="마커를 지웠습니다."; if(ikCurve.length>2) ikRenderLive({}); };
   $("ik_save").onclick=ikSaveBatch;
   $("ik_send").onclick=()=>ikSendProfile(IK.PROFILE_SET);
   $("ik_readback").onclick=async()=>{
