@@ -650,7 +650,12 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <div class="row" style="margin-bottom:8px">
       <select id="ik_prof" style="width:auto;flex:1;min-width:220px"></select>
       <button id="ik_send" disabled>머신으로 보내기</button>
+      <button class="ghost" id="ik_readback" disabled>머신에서 읽어 확인</button>
     </div>
+    <p class="note" style="margin:0 0 8px"><b>보낸 게 들어갔는지 확인하는 법</b> —
+    보낸 뒤 <b>「머신에서 읽어 확인」</b>을 누르면 머신이 지금 갖고 있는 프로파일의
+    <b>이름·제어점·배출온도</b>를 돌려줍니다. 방금 보낸 것과 자동으로 대조해 알려드립니다.
+    IKAWA 앱을 열 필요가 없습니다.</p>
     <p class="note" style="color:var(--actual)"><b>처음 시도할 때는 원두를 넣지 않은 빈 머신에서 하세요.</b>
     자리를 비우지 마시고, 머신이 어떻게 반응하는지 보세요.</p>
     <div class="extra">
@@ -3020,21 +3025,26 @@ function viEnc(n){ const o=[]; n=Math.max(0,Math.round(n));
 function pbMsgEnc(f,p){ return [...viEnc((f<<3)|2),...viEnc(p.length),...p]; }
 function pbPtEnc(t,v){ return [...viEnc(8),...viEnc(t),...viEnc(16),...viEnc(v)]; }
 /* RoastProfile 메시지 본문 — 공유 링크와 블루투스 전송이 똑같이 이걸 쓴다.
-   IkawaCmd.proto 의 RoastProfile 과 필드 번호가 일치한다:
-   1 schema · 2 id · 3 name · 4 temp_points · 5 fan_points · 6 temp_sensor · 7 cooldown_fan */
-function ikProfileBytes(name,temps,fans,cool){
+   IkawaCmd.proto 의 RoastProfile:
+     1 schema · 2 id · 3 name · 4 temp_points · 5 fan_points · 6 temp_sensor
+     7 cooldown_fan · 8 coffee_name · 9 user_id · 10 coffee_id · 11 coffee_web_url · 12 profile_type
+   8~12 는 proto2 의 required 라 비어 있더라도 반드시 들어가야 한다.
+   빠지면 엄격한 파서는 메시지를 통째로 버린다 — 머신이 조용히 무시하던 원인일 수 있다.
+   full=false 면 예전처럼 최소 구성만 만든다(공유 링크 호환 확인용). */
+function ikProfileBytes(name,temps,fans,cool,full){
   const id=new Uint8Array(16); crypto.getRandomValues(id);
   let o=[...viEnc(8),...viEnc(1)];
   o=o.concat(pbMsgEnc(2,[...id]));
   o=o.concat(pbMsgEnc(3,[...new TextEncoder().encode(name)]));
   temps.forEach(([t,v])=>o=o.concat(pbMsgEnc(4,pbPtEnc(Math.round(t*10),Math.round(v*10)))));
   (fans||[]).forEach(([t,v])=>o=o.concat(pbMsgEnc(5,pbPtEnc(Math.round(t*10),Math.round(v/100*255)))));
-  o=o.concat([...viEnc(48),...viEnc(0)]);
+  o=o.concat([...viEnc(48),...viEnc(0)]);                      // 6: temp_sensor = 0
   (cool||[]).forEach(([t,v])=>o=o.concat(pbMsgEnc(7,pbPtEnc(Math.round(t*10),Math.round(v*10)))));
+  if(full!==false) [8,9,10,11,12].forEach(f=>o=o.concat(pbMsgEnc(f,[])));  // 빈 문자열로 채운다
   return o;
 }
 function makeIkawaLink(name,temps,fans,cool){
-  const o=ikProfileBytes(name,temps,fans,cool);
+  const o=ikProfileBytes(name,temps,fans,cool,false);   // 링크는 지금까지 되던 구성 그대로
   let bin=""; o.forEach(b=>bin+=String.fromCharCode(b));
   return "https://share.ikawa.support/profile/?"+btoa(bin);
 }
@@ -4185,13 +4195,17 @@ function ikMsg(cmdType,seq,extra){              // Message{1:cmd_type, 2:seq, [4
   let o=[...viEnc(8),...viEnc(cmdType),...viEnc(16),...viEnc(seq)];
   return extra?o.concat(extra):o;
 }
-/* 상태 응답의 필드 이름 — IkawaCmd_pb2.pyi 의 선언 순서.
-   protobuf 는 보통 1번부터 선언 순서대로 번호가 붙는다. 원시 표에서 확인할 수 있게 해뒀다. */
-const IKF=["time","temp_above","temp_below","fan","fan_measured","state","heater",
-  "p","i","d","j","setpoint","board_temp","fan_rpm_measured","fan_rpm_setpoint",
-  "fan_p","fan_i","fan_d","fan_power","relay_state","pid_sensor",
-  "temp_above_filtered","temp_below_filtered","ror_above","ror_below",
-  "humidity_abs","humidity_roc","humidity_roc_direction","pressure_amb"];
+/* 상태 응답의 필드 번호 — IkawaCmd.proto 원본에서 확인한 실제 값.
+   선언 순서와 번호가 다르다(temp_below 는 12, state 는 4, setpoint 는 9). 순서로 짐작하면 틀린다. */
+const IKF={1:"time",2:"temp_above",3:"fan",4:"state",5:"heater",6:"p",7:"i",8:"d",
+  9:"setpoint",10:"fan_measured",11:"board_temp",12:"temp_below",13:"fan_rpm_measured",
+  14:"fan_rpm_setpoint",15:"fan_p",16:"fan_i",17:"fan_d",18:"fan_power",19:"j",
+  20:"relay_state",21:"pid_sensor",22:"temp_above_filtered",23:"temp_below_filtered",
+  24:"ror_above",25:"ror_below",26:"humidity_abs",27:"humidity_roc",
+  28:"humidity_roc_direction",29:"pressure_amb"};
+/* proto2 의 sint32 는 지그재그 부호화라 그냥 읽으면 음수가 양수로 보인다 */
+const IKSINT=new Set(["j","fan_p","fan_i","fan_d","ror_above","ror_below","humidity_roc"]);
+const zz=n=>((n>>>1)^-(n&1));
 /* 아티산이 쓰는 환산 */
 const IKSCALE={temp_above:v=>v/10, temp_below:v=>v/10, setpoint:v=>v/10, board_temp:v=>v/10,
   temp_above_filtered:v=>v/10, temp_below_filtered:v=>v/10, ror_above:v=>v/10, ror_below:v=>v/10,
@@ -4219,12 +4233,33 @@ function ikFindStatus(payload){
   const o={_raw:{}};
   best.forEach(([num,val])=>{
     o._raw[num]=val;
-    const name=IKF[num-1];
-    if(name) o[name]=IKSCALE[name]?IKSCALE[name](val):val;
+    const name=IKF[num];
+    if(!name) return;
+    const v=IKSINT.has(name)?zz(val):val;
+    o[name]=IKSCALE[name]?IKSCALE[name](v):v;
   });
   return o;
 }
 
+/* 머신이 돌려준 프로파일(RespProfileGet)을 읽어낸다 — 보낸 게 실제로 들어갔는지 확인하는 유일한 길.
+   IkawaResponse{1:seq, 2:resp, 16:resp_profile_get{1:RoastProfile}} */
+function ikFindProfile(payload){
+  const u8=b=>(b instanceof Uint8Array)?b:new Uint8Array(b);
+  let fs; try{ fs=pbFieldsR(u8(payload)); }catch(e){ return null; }
+  const rp=fs.find(f=>f[0]===16&&f[2]===2); if(!rp) return null;
+  let inner; try{ inner=pbFieldsR(u8(rp[1])); }catch(e){ return null; }
+  const pf=inner.find(f=>f[0]===1&&f[2]===2); if(!pf) return null;
+  let g; try{ g=pbFieldsR(u8(pf[1])); }catch(e){ return null; }
+  const txt=b=>{ try{ return new TextDecoder().decode(u8(b)); }catch(e){ return ""; } };
+  const pts=[];
+  g.filter(f=>f[0]===4&&f[2]===2).forEach(f=>{
+    const d={}; try{ pbFieldsR(u8(f[1])).forEach(([a,b,c])=>{ if(c===0) d[a]=b; }); }catch(e){}
+    pts.push([(d[1]||0)/10,(d[2]||0)/10]);
+  });
+  const nm=g.find(f=>f[0]===3&&f[2]===2);
+  return {name:nm?txt(nm[1]):"(이름 없음)", pts,
+    fans:g.filter(f=>f[0]===5).length, schema:(g.find(f=>f[0]===1)||[])[1]};
+}
 let ikDev=null, ikChr=null, ikBuf=[], ikSeq=1, ikPoll=null, ikCrc=CRCV[0];
 let ikCurve=[], ikT0=null, ikLastState=null, ikNegot=null, ikRx=0;
 /* 화면이 계속 흐르면 폰에서 글자를 잡아 복사할 수가 없다.
@@ -4311,9 +4346,26 @@ function ikHandleFrame(raw){
   if(ikNegot){ clearTimeout(ikNegot); ikNegot=null; ikQuiet=false;
     ikLog("✓ 응답 도착 — CRC 탐색을 멈춥니다");
     ikPoll=setInterval(()=>ikSend(ikMsg(IK.STATUS_GET,ikSeq++&0x7fff),"상태 요청"),1000); }
+  const pf=ikFindProfile(payload);
+  if(pf){ ikOnProfileBack(pf); return; }
   const st=ikFindStatus(payload);
   if(st) ikOnStatus(st);
   else ikLog("  (상태 메시지를 찾지 못함 — 원시 필드 표를 보세요)");
+}
+let ikSent=null;                       // 마지막으로 보낸 프로파일 (대조용)
+function ikOnProfileBack(pf){
+  const end=pf.pts.length?fmt(pf.pts[pf.pts.length-1][0]):"?";
+  const drop=pf.pts.length?pf.pts[pf.pts.length-1][1].toFixed(1):"?";
+  ikLog(`◎ 머신에 들어 있는 프로파일: "${pf.name}" · 점 ${pf.pts.length}개 · 총 ${end} · 배출 ${drop}℃`);
+  let v="";
+  if(ikSent){
+    const same=ikSent.name===pf.name;
+    v=same
+      ? `<span class="pill ok">일치</span> 방금 보낸 <b>${ikSent.name}</b> 이(가) 머신에 들어가 있습니다.`
+      : `<span class="pill warn">다름</span> 보낸 것은 <b>${ikSent.name}</b> 인데 머신에는 <b>${pf.name}</b> 이(가) 있습니다.`;
+    ikLog(same?"  ✓ 보낸 프로파일과 이름이 같습니다":"  ✗ 보낸 것과 다릅니다");
+  }
+  $("ik_cmdmsg").innerHTML=`머신 안: <b>${pf.name}</b> · 점 ${pf.pts.length}개 · 총 ${end} · 배출 ${drop}℃<br>${v}`;
 }
 function ikOnStatus(st){
   ikSetState("연결됨","pill ok");
@@ -4357,7 +4409,7 @@ function ikRenderLive(st){
     $("ik_fields").innerHTML=`<tr><th class="num">번호</th><th>추정 이름</th>
       <th class="num">원시값</th><th class="num">환산</th></tr>`+
       Object.keys(st._raw).map(n=>{
-        const name=IKF[n-1]||"—", sc=IKSCALE[name];
+        const name=IKF[n]||"—", sc=IKSCALE[name];
         return `<tr><td class="num">${n}</td><td>${name}</td>
           <td class="num">${st._raw[n]}</td>
           <td class="num">${sc?(+sc(st._raw[n])).toFixed(2):""}</td></tr>`;
@@ -4411,7 +4463,7 @@ async function ikConnect(all){
     });
     ikSetState("연결됨 · 응답 대기","pill");
     $("ik_connect").disabled=true; $("ik_disconnect").disabled=false;
-    $("ik_send").disabled=false; $("ik_msg").innerHTML=
+    $("ik_send").disabled=false; $("ik_readback").disabled=false; $("ik_msg").innerHTML=
       `<span class="pill ok">연결됨</span> 상태를 요청합니다.`;
     ikNegotiate(0);                       // 응답이 오면 그때 1초 폴링을 시작한다
   }catch(e){
@@ -4456,6 +4508,7 @@ function ikProfileMsg(cmdType,p){
 async function ikSendProfile(cmdType){
   const id=$("ik_prof").value, p=profById(id);
   if(!p){ $("ik_cmdmsg").textContent="프로파일을 고르세요."; return; }
+  ikSent={name:p.name,pts:p.pts};
   const ok=await ikSend(ikProfileMsg(cmdType,p),`프로파일 전송 cmd_type=${cmdType} (${p.name})`);
   const m=ok?`<span class="pill">보냈습니다</span> cmd_type ${cmdType} — 머신이나 IKAWA 앱에서
     프로파일이 바뀌었는지 확인하세요. 아무 반응이 없으면 다른 번호로 시도하세요.`
@@ -4581,6 +4634,10 @@ function ikInit(){
     $("ik_save").disabled=true; $("ik_savemsg").textContent=""; };
   $("ik_save").onclick=ikSaveBatch;
   $("ik_send").onclick=()=>ikSendProfile(IK.PROFILE_SET);
+  $("ik_readback").onclick=async()=>{
+    $("ik_cmdmsg").innerHTML=`<span class="pill">읽는 중…</span>`;
+    await ikSend(ikMsg(IK.PROFILE_GET,ikSeq++&0x7fff),"프로파일 읽기");
+  };
   $("ik_cmdtry").onclick=()=>ikSendProfile(+$("ik_cmd").value||IK.PROFILE_SET);
 }
 /* 동기화로 넘어온 다른 기기의 진단 기록 — 폰에서 잡은 걸 PC에서 파일로 뽑을 수 있다 */
