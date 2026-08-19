@@ -40,15 +40,34 @@ function curveAt(c,x){
   }
   return curvePt(c,n-1).v;
 }
-/* 승온율(℃/분) 계열. 창을 두고 기울기를 재야 잡음에 흔들리지 않는다. */
-function rorSeries(c,win){
+/* 승온율(℃/분) 계열. 창을 두고 기울기를 재야 잡음에 흔들리지 않는다.
+   표본이 G초 넘게 비어 있으면(블루투스가 끊겼던 구간) 그 위로 기울기를 재지 않는다.
+   예전에는 창을 뒤로 훑다가 공백을 그냥 넘어가서, 200초 떨어진 두 점 사이의
+   기울기를 계산했다. 그러면 승온율 그래프에 뜬금없는 수직 스파이크가 생기고
+   세로축이 그 값에 맞춰져 정작 봐야 할 범위가 납작해진다. */
+function rorSeries(c,win,gapMax){
   if(!c||c.length<4) return [];
-  const W=win||30, out=[];
-  for(let i=0;i<c.length;i++){
+  const W=win||30, G=gapMax||15, out=[];
+  for(let i=1;i<c.length;i++){
     const p=curvePt(c,i);
-    let j=i; while(j>0&&p.t-curvePt(c,j).t<W) j--;
+    let j=i;
+    while(j>0){
+      const a=curvePt(c,j-1), b=curvePt(c,j);
+      if(b.t-a.t>G) break;                       // 공백 — 여기서 멈춘다
+      j--;
+      if(p.t-curvePt(c,j).t>=W) break;
+    }
     const q=curvePt(c,j), dt=p.t-q.t;
     if(dt>=Math.min(W*0.5,10)) out.push([p.t,+(((p.v-q.v)/dt)*60).toFixed(2)]);
+  }
+  return out;
+}
+/* 표본이 비어 있는 구간을 찾아낸다 — 그래프를 이어 그리지 않으려고 쓴다 */
+function curveGaps(c,gapMax){
+  const G=gapMax||15, out=[];
+  for(let i=1;i<(c||[]).length;i++){
+    const a=curvePt(c,i-1), b=curvePt(c,i);
+    if(b.t-a.t>G) out.push([a.t,b.t]);
   }
   return out;
 }

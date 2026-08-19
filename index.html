@@ -128,7 +128,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v7.5</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v7.6</span>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 12px;font-size:13.5px;
@@ -3417,6 +3417,13 @@ function curveSvg(plan,acts,marks,tip){
   const pad=Math.max(3,(vMax-vMin)*0.08); vMin-=pad; vMax+=pad;
   const X=t=>L+(W-L-R)*t/tMax, Y=v=>H-B-(H-T-B)*(v-vMin)/(vMax-vMin);
   const path=c=>c.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1)).join(" ");
+  /* 실측 곡선은 표본이 비어 있는 구간(블루투스 끊김)에서 끊어 그린다.
+     이어 그리면 없던 직선이 생겨 「그 사이에도 이렇게 지나갔다」는 거짓말이 된다.
+     계획 곡선은 제어점이 원래 띄엄띄엄하므로 이어 그린다. */
+  const pathBrk=(c,G)=>{ let d="",prev=null;
+    c.forEach(p=>{ const cmd=(prev==null||p[0]-prev>(G||15))?"M":"L";
+      d+=(d?" ":"")+cmd+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1); prev=p[0]; });
+    return d; };
   const P=CANON.phase;
   const bars=[P.dry,P.dry+P.maillard].map(f=>{
     const x=X(tMax*f/100).toFixed(1);
@@ -3456,7 +3463,13 @@ function curveSvg(plan,acts,marks,tip){
       border:1px solid var(--rule)" role="img" aria-label="계획 곡선과 실측 곡선 비교">
     ${ticks}${bars}${mk}
     <path d="${path(plan)}" fill="none" stroke="var(--setpoint)" stroke-width="2"/>
-    ${acts.map(a=>`<path d="${path(a)}" fill="none" stroke="var(--actual)"
+    ${(marks||[]).filter(m=>m&&m.gap&&m.t!=null&&m.t2!=null).map(m=>{
+      const x1=X(m.t),x2=X(Math.min(m.t2,tMax));
+      return `<rect x="${x1.toFixed(1)}" y="${T}" width="${Math.max(1,x2-x1).toFixed(1)}"
+        height="${H-T-B}" fill="var(--rule)" fill-opacity="0.35"/>
+        <text x="${((x1+x2)/2).toFixed(1)}" y="${H-B-6}" font-size="9" text-anchor="middle"
+          fill="var(--muted)">끊김</text>`; }).join("")}
+    ${acts.map(a=>`<path d="${pathBrk(a)}" fill="none" stroke="var(--actual)"
        stroke-width="1.6" opacity="${acts.length>1?0.65:1}"/>`).join("")}
     <text x="${L+4}" y="${H-6}" font-size="10" fill="var(--muted)">0:00</text>
     <text x="${W-R-30}" y="${H-6}" font-size="10" fill="var(--muted)">${fmt(tMax)}</text>
@@ -3468,7 +3481,7 @@ function curveSvg(plan,acts,marks,tip){
 }
 
 /* 승온율 곡선 그리기 — 0선을 기준으로 두고 감소 추세를 본다 */
-function rorSvg(series){
+function rorSvg(series,tip){
   if(!series||series.length<3) return "";
   const W=640,H=150,L=36,R=8,T=8,B=16;
   const tMax=Math.max(...series.map(p=>p[0]))||1;
@@ -3486,7 +3499,10 @@ function rorSvg(series){
   if(hi-lo<2) hi=lo+2;
   const pad=(hi-lo)*0.1; lo-=pad; hi+=pad;
   const X=t=>L+(W-L-R)*t/tMax, Y=v=>H-B-(H-T-B)*(v-lo)/(hi-lo);
-  const d=series.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1)).join(" ");
+  /* 온도 곡선과 같은 이유로 공백에서 끊는다 */
+  let d="",prevT=null;
+  series.forEach(p=>{ const cmd=(prevT==null||p[0]-prevT>15)?"M":"L";
+    d+=(d?" ":"")+cmd+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1); prevT=p[0]; });
   const zero=(lo<0&&hi>0)?`<line x1="${L}" y1="${Y(0).toFixed(1)}" x2="${W-R}" y2="${Y(0).toFixed(1)}"
       stroke="var(--actual)" stroke-width=".8" stroke-dasharray="4 3"/>`:"";
   const cid="rc"+Math.round(tMax*7919%99991);
@@ -3499,6 +3515,18 @@ function rorSvg(series){
     <text x="${L+4}" y="${T+10}" font-size="10" fill="var(--muted)">승온율 ℃/분 — 끝까지 내려가야 정상</text>
     ${off?`<text x="${W-R-4}" y="${T+10}" font-size="10" text-anchor="end" fill="var(--muted)"
       >투입 직후 과도구간은 축 위로 잘림</text>`:""}
+    ${(()=>{ if(!tip||tip.t==null||tip.v==null) return "";
+      /* 지금 승온율은 온도 그래프가 아니라 여기 적는다 — 이 그래프의 값이니까 */
+      const cx=X(tip.t), cy=Y(Math.max(lo,Math.min(hi,tip.v)));
+      const right=cx<W*0.6, bw=104, bh=18;
+      const bx=Math.max(L+2,Math.min(W-R-bw-2, right?cx+9:cx-bw-9));
+      const by=Math.max(T+2,Math.min(H-B-bh-2, cy-bh/2));
+      return `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3.5" fill="var(--mark)"
+          stroke="#fff" stroke-width="1.5"/>
+        <rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${bw}" height="${bh}" rx="4"
+          fill="#fff" fill-opacity="0.94" stroke="var(--rule)"/>
+        <text x="${(bx+7).toFixed(1)}" y="${(by+13).toFixed(1)}" font-size="11"
+          font-weight="600" fill="var(--mark)">${tip.v.toFixed(1)}℃/분</text>`; })()}
   </svg>`;
 }
 /* ── 실시간 해설 ─────────────────────────────────────────
@@ -3511,6 +3539,15 @@ function rorSvg(series){
 let ikRef=null;                     // 기준 프로파일 {name, pts}
 function ikCoach(){
   const c=ikCurve; if(!c||c.length<4) return null;
+  /* 배출한 뒤에는 로스팅 판정을 멈춘다. 냉각 중에 「계획 초과」·「승온율 −152℃/분 하강」이
+     쏟아지는데, 그건 결함이 아니라 식는 중이라는 뜻일 뿐이다. */
+  if(ikDropAt!=null){
+    const zz=ikZero();
+    return {notes:[{lv:"info",c:"phase",k:"cool",t:"로스팅 종료",
+      d:`배출 ${fmt(Math.max(0,Math.round(ikDropAt-zz)))} 이후는 냉각 구간입니다 — `
+       +`판정하지 않습니다. 식으면 「이 배치를 기록에 담기」를 누르세요.`}],
+      marks:[],phase:null,pct:null};
+  }
   const z=ikZero();
   const t=c[c.length-1][0]-z, v=c[c.length-1][1];   // 투입을 0 으로 본 경과 시각
   const out={notes:[],marks:[],phase:null,pct:null};
@@ -3530,7 +3567,8 @@ function ikCoach(){
       메일라아드:"갈변과 단맛이 만들어지는 구간입니다. 여기서 식으면 단맛이 덜 쌓입니다.",
       발달:"1차 크랙 이후 향이 자리잡는 구간입니다. 승온율이 살아 있어야 베이킹을 피합니다.",
       "계획 초과":"계획 총시간을 넘겼습니다. 배출 시점을 지났는지 확인하세요."};
-    out.notes.push({lv:"info",t:`${out.phase} 구간 (${out.pct}%)`,d:say[out.phase]});
+    out.notes.push({lv:"info",c:"phase",k:out.phase,
+      t:`${out.phase} 구간 (${out.pct}%)`,d:say[out.phase]});
   }
 
   /* ② 승온율 — 교과서 규칙은 "끝까지 감소".
@@ -3549,27 +3587,28 @@ function ikCoach(){
     const lowest=late.length>3?Math.min(...late.slice(0,-1).map(x=>x[1])):null;
     const rise=lowest!=null?now-lowest:0;
     if(lowest!=null&&rise>CANON.flaw.flick&&late.length>5){
-      out.notes.push({lv:"warn",t:`승온율 반전 ${now.toFixed(1)}℃/분`,
+      out.notes.push({lv:"warn",c:"ror",k:"flick",t:`승온율 반전 ${now.toFixed(1)}℃/분`,
         d:`후반에 한 번 내려갔다 다시 올랐습니다(최저 ${lowest.toFixed(1)}). `
          +`교과서가 결함으로 보는 <b>플릭</b>입니다 — ${CANON.rule}`});
       out.marks.push({t:z+rs[rs.length-1][0],label:"플릭",color:"var(--actual)"});
     }else if(now<1&&out.phase==="발달"&&(out.pct==null||out.pct<95)){
       // 막바지(95% 이후)에는 승온율이 자연히 낮아진다 — 그때 경고해도 손쓸 시간이 없어 알리지 않는다.
       // 배치가 끝난 뒤의 최종 판정은 저장할 때 「후반 승온」으로 따로 알린다.
-      out.notes.push({lv:"warn",t:`승온율 ${now.toFixed(1)}℃/분`,
+      out.notes.push({lv:"warn",c:"ror",k:"bake",t:`승온율 ${now.toFixed(1)}℃/분`,
         d:"발달 구간인데 온도가 거의 안 오릅니다. <b>베이킹</b> 징후로, 향이 눌리고 밋밋해집니다. "
          +"히터를 올리거나 조금 일찍 배출하세요."});
     }else if(now<CANON.flaw.crash&&mid.length>3){
-      out.notes.push({lv:"warn",t:`승온율 ${now.toFixed(1)}℃/분 (하강)`,
+      out.notes.push({lv:"warn",c:"ror",k:"crash",t:`승온율 ${now.toFixed(1)}℃/분 (하강)`,
         d:"온도가 내려가고 있습니다. <b>크래시</b>입니다 — 열이 모자랍니다."});
       out.marks.push({t:z+rs[rs.length-1][0],label:"크래시",color:"var(--actual)"});
     }else if(now<0){
       /* 투입 직후의 하강은 결함이 아니라 터닝 포인트다 */
-      out.notes.push({lv:"info",t:`승온율 ${now.toFixed(1)}℃/분 (터닝)`,
+      out.notes.push({lv:"info",c:"ror",k:"turn",t:`승온율 ${now.toFixed(1)}℃/분 (터닝)`,
         d:"생두가 들어가 예열 온도가 꺾이는 중입니다. 정상이며, 곧 다시 올라갑니다."});
     }else{
       const dropRate=recent[0][1]-now;
-      out.notes.push({lv:"ok",t:`승온율 ${now.toFixed(1)}℃/분`,
+      out.notes.push({lv:"ok",c:"ror",k:"ok"+(dropRate>=0?"":"-flat"),
+        t:`승온율 ${now.toFixed(1)}℃/분`,
         d:dropRate>=0?"교과서대로 계속 내려가고 있습니다.":"거의 평평합니다 — 계속 지켜보세요."});
     }
   }
@@ -3580,10 +3619,12 @@ function ikCoach(){
     if(want!=null){
       const d=v-want;
       if(Math.abs(d)<=DEVOK)
-        out.notes.push({lv:"ok",t:`계획과 ${d>0?"+":""}${d.toFixed(1)}℃`,d:"설정을 잘 따라가고 있습니다."});
+        out.notes.push({lv:"ok",c:"dev",k:"in",
+          t:`계획과 ${d>0?"+":""}${d.toFixed(1)}℃`,d:"설정을 잘 따라가고 있습니다."});
       else{
         const key=out.phase&&DEVSAY[out.phase]?out.phase:"메일라아드";
-        out.notes.push({lv:"warn",t:`계획과 ${d>0?"+":""}${d.toFixed(1)}℃`,d:DEVSAY[key][d<0?0:1]});
+        out.notes.push({lv:"warn",c:"dev",k:"off"+(d<0?"-":"+"),
+          t:`계획과 ${d>0?"+":""}${d.toFixed(1)}℃`,d:DEVSAY[key][d<0?0:1]});
       }
     }
   }
@@ -3591,7 +3632,7 @@ function ikCoach(){
   // ④ 지금 배출하면 어느 배전도인가
   const band=dropBand(v);
   if(v>190)
-    out.notes.push({lv:"info",t:`지금 배출하면 ${band.canon.name}`,
+    out.notes.push({lv:"info",c:"band",k:band.level,t:`지금 배출하면 ${band.canon.name}`,
       d:`밴드 ${band.canon.dropHint[0]}~${band.canon.dropHint[1]}℃ · `
        +`감량 ${band.canon.loss[0]}~${band.canon.loss[1]}% · DTR ${band.canon.dtr[0]}~${band.canon.dtr[1]}%`
        +(planDrop?` · 계획 배출 ${planDrop.toFixed(1)}℃`:"")});
@@ -4267,6 +4308,8 @@ $("r_save").onclick=()=>{
     // 실제로 그려진 곡선 — 계획과 겹쳐 봐야 중간 구간의 이탈이 보인다.
     // 수정 저장일 때 로그가 없으면 이미 있던 것을 지우지 않는다.
     act:(pendingLog&&pendingLog.act)||(editingId?(DB.roasts.find(x=>x.id===editingId)||{}).act:null)||null,
+    tl:(pendingLog&&pendingLog.tl)||(editingId?(DB.roasts.find(x=>x.id===editingId)||{}).tl:null)||null,
+    gaps:(pendingLog&&pendingLog.gaps)||(editingId?(DB.roasts.find(x=>x.id===editingId)||{}).gaps:null)||null,
     cup:Object.keys(cup).length?cup:null,
     cost:(()=>{ const b=DB.beans.find(x=>x.id===$("r_bean").value);
       const up=b?unitPrice(b):null, g=+$("r_in").value;
@@ -4316,6 +4359,9 @@ window.roastReport=id=>{
     const marks=[];
     if(r.cc)    marks.push({t:r.cc,   label:"CC", color:"var(--mark)"});
     if(r.crack) marks.push({t:r.crack,label:"1차",color:"var(--actual)"});
+    (r.gaps||[]).forEach(g=>marks.push({gap:true,t:g[0],t2:g[1]}));
+    (r.tl||[]).filter(x=>x.lv==="warn").forEach(x=>
+      marks.push({t:x.t,label:"!",color:"var(--actual)"}));
     h+=(prof&&prof.pts?curveSvg(prof.pts,[r.act],marks):curveSvg(r.act,[],marks))
       +rorSvg(rorSeries(r.act,30));
     h+=`<p class="note" style="margin-top:5px">
@@ -4402,7 +4448,31 @@ window.roastReport=id=>{
         <p class="note">아직 비어 있습니다. 커핑 탭에서 채우면 <b>다음 배치 제안</b>이 나옵니다.</p>`;
   }
 
-  // ⑥ 그 제안을 곡선 수정으로 — 어느 점을 얼마나 옮길지
+  // ⑥ 사건 타임라인 — 그때 앱이 무슨 말을 했나 (복기용)
+  if(r.tl&&r.tl.length){
+    const KIND={state:"머신 상태",gap:"연결",link:"연결",mark:"표시"};
+    const LVP={warn:'<span class="pill warn">주의</span>',act:'<span class="pill warn">조작</span>',
+               ok:'<span class="pill ok">정상</span>',info:'<span class="pill">참고</span>'};
+    h+=`<p class="tagline" style="margin-top:14px">그때 무슨 일이 있었나
+      <span class="pill">${r.tl.length}건</span></p>`;
+    h+=`<p class="note" style="margin:0 0 6px">로스팅 중 화면에 떴던 판정을 시각과 함께 그대로 남긴 것입니다.
+      곡선의 어느 지점에서 앱이 무엇을 보고 있었는지 되짚을 수 있습니다.</p>`;
+    h+=`<div class="scrollx"><div class="tbl"><table><tr><th class="num">시각</th><th>구분</th>
+      <th>무슨 일</th><th>설명</th></tr>`+
+      r.tl.map(x=>`<tr><td class="num mono">${x.pre?"투입 전":fmt(x.t)}</td>
+        <td>${LVP[x.lv]||""} ${KIND[x.kind]||(String(x.kind).startsWith("note")?"해설":"")}</td>
+        <td>${x.title}</td><td class="note">${x.detail||""}</td></tr>`).join("")
+      +`</table></div></div>`;
+  }
+  if(r.gaps&&r.gaps.length){
+    const lost=r.gaps.reduce((a,g)=>a+(g[1]-g[0]),0);
+    h+=`<p class="note" style="color:var(--actual)"><span class="pill warn">데이터 공백</span>
+      ${r.gaps.length}곳 · 합계 ${fmt(Math.round(lost))} —
+      ${r.gaps.map(g=>`${fmt(g[0])}~${fmt(g[1])}`).join(" · ")}.
+      블루투스가 끊긴 구간이고, 머신은 지난 기록을 되돌려주지 않으므로 영구히 빈 채로 남습니다.</p>`;
+  }
+
+  // ⑦ 그 제안을 곡선 수정으로 — 어느 점을 얼마나 옮길지
   h+=fixBlock(prof,r,b);
   out.innerHTML=h; box.hidden=false;
   box.scrollIntoView({behavior:"smooth",block:"start"});
@@ -5310,6 +5380,25 @@ let ikTBase=0, ikTPrev=null, ikDropAt=null;
    예전에는 연결한 순간부터 셌다. 그래서 예열에 쓴 시간이 경과 시각과 구간 %에 섞여
    1:22 인데 「건조 18%」처럼 부풀어 나왔다. */
 let ikRoastT0=null, ikLastSt=null;
+/* 연결 품질 — 웹 블루투스는 「연결된」 기기의 전파 세기(RSSI)를 읽을 수 없다.
+   그래서 우리가 실제로 겪는 것으로 대신 잰다: 응답 지연, 놓친 요청, 끊긴 횟수.
+   전파가 약해지면 지연이 먼저 늘고 그다음 응답이 빠지므로, 실용적으로는 RSSI 보다 낫다. */
+let ikQ={lat:[], asked:0, got:0, drops:0, reAt:0, reTry:0, lastAsk:0};
+let ikGaps=[];                        // 표본이 비어 있는 구간 [[t1,t2],…]
+let ikTL=[], ikTLLast={};             // 사건 타임라인 — 복기용
+function ikEvent(kind,title,detail,lv,key){
+  /* 같은 말을 매초 쌓지 않는다.
+     제목으로 가리면 안 된다 — 제목에 숫자가 들어 있어(「승온율 12.5℃/분」) 값이 조금만
+     바뀌어도 새 항목이 되고, 400건이 쌓인다. 그래서 표시할 제목과 별개로
+     「뜻」을 나타내는 열쇠(key)를 받아 그것으로 가린다.
+     남는 것은 값의 나열이 아니라 <b>뜻이 바뀐 순간</b>들이다. */
+  const kk=key==null?title:key;
+  if(ikTLLast[kind]===kk) return;
+  ikTLLast[kind]=kk;
+  ikTL.push({t:Math.max(0,Math.round(ikNow-ikZero())),
+             kind,title,detail:detail||"",lv:lv||"info"});
+  if(ikTL.length>400) ikTL.shift();
+}
 /* 이 연결에서 「로스팅 중」을 실제로 본 적이 있는가.
    냉각 도중에 페이지를 새로 고치면 로스팅 구간을 통째로 놓친 채 냉각만 161점씩 쌓인다.
    그걸 기록으로 옮기면 배출온도가 냉각 끝 온도(50℃ 쯤)로 들어가 배치가 망가진다. */
@@ -5422,8 +5511,11 @@ function ikHandleFrame(raw){
   else ikLog(`← ${payload.length}B`);
   if(ikNegot){ clearTimeout(ikNegot); ikNegot=null; ikQuiet=false;
     ikLog("✓ 응답 도착 — CRC 탐색을 멈춥니다");
-    ikPoll=setInterval(()=>{ if(!ikSending&&!ikInFlight)
-      ikSend(ikMsg(IK.STATUS_GET,ikSeq++&0x7fff),"상태 요청"); },1000); }
+    ikPoll=setInterval(()=>{ if(!ikSending&&!ikInFlight){
+      if(ikQ.lastAsk) ikQ.asked++;              // 앞 요청의 답이 안 왔다 = 놓친 것
+      ikQ.lastAsk=Date.now(); ikQ.asked++;
+      ikSend(ikMsg(IK.STATUS_GET,ikSeq++&0x7fff),"상태 요청");
+    } },1000); }
   const inf=ikFindInfo(payload);
   if(inf){ ikOnInfo(inf); return; }
   const pf=ikFindProfile(payload);
@@ -5456,6 +5548,8 @@ function ikOnProfileBack(pf){
 }
 function ikOnStatus(st){
   ikSetState("연결됨","pill ok");
+  if(ikQ.lastAsk){ const dt=Date.now()-ikQ.lastAsk;
+    ikQ.lat.push(dt); if(ikQ.lat.length>60) ikQ.lat.shift(); ikQ.got++; ikQ.lastAsk=0; }
   // 곡선 쌓기 — 머신이 주는 time 이 있으면 그걸, 없으면 우리 시계를 쓴다
   const now=Date.now();
   if(ikT0==null) ikT0=now;
@@ -5469,6 +5563,19 @@ function ikOnStatus(st){
   }
   ikTPrev=raw;
   const t=raw+ikTBase;
+  /* 표본이 비어 있었다면 기록해 둔다 — 그래프를 이어 그리지 않고, 나중에 복기할 수 있게 */
+  if(ikCurve.length){
+    const pt=ikCurve[ikCurve.length-1][0];
+    if(t-pt>15){
+      ikGaps.push([pt,t]);
+      const z=ikZero();
+      ikLog(`■ 표본 공백 ${fmt(Math.round(pt-z))} ~ ${fmt(Math.round(t-z))}`
+        +` (${Math.round(t-pt)}초) — 그 사이 데이터는 없습니다`);
+      ikEvent("gap",`연결 끊김 ${Math.round(t-pt)}초`,
+        `${fmt(Math.max(0,Math.round(pt-z)))} 부터 ${fmt(Math.max(0,Math.round(t-z)))} 까지 데이터가 없습니다. `
+        +`머신은 지난 기록을 되돌려주지 않으므로 이 구간은 영구히 빈 채로 남습니다.`,"warn");
+    }
+  }
   const v=st.temp_above!=null?st.temp_above:null;
   if(v!=null&&isFinite(v)&&v>0){
     const last=ikCurve[ikCurve.length-1];
@@ -5496,6 +5603,10 @@ function ikOnStatus(st){
     if(st.state===3&&ikRoastT0==null){
       ikRoastT0=Math.round(t);
       ikLog(`■ 투입 — 여기를 0:00 으로 셉니다 (연결 후 ${fmt(ikRoastT0)} 지점)`);
+      /* 여기서 시계의 0 이 바뀐다. 이미 쌓인 항목은 예열 구간의 것이므로
+         「투입 전」으로 표시하고 시각을 0 으로 모은다. 안 그러면 0:15 뒤에 0:00 이 오는
+         뒤죽박죽한 목록이 된다. */
+      ikTL.forEach(x=>{ x.t=0; x.pre=true; });
     }
     if(ikLastState===3&&(st.state===5||st.state===8||st.state===0)&&ikDropAt==null){
       ikDropAt=Math.round(t);
@@ -5508,6 +5619,8 @@ function ikOnStatus(st){
     const TT={1:"🔥 예열 중",2:"☕ 원두를 넣으세요",3:"● 로스팅 중",
               5:"❄ 냉각 중",8:"✔ 배출 준비됨",7:"⚠ 오류"};
     document.title=TT[st.state]?TT[st.state]+" — 로스트포인트":"로스트포인트 — 로스팅 기록장";
+    ikEvent("state",nm,`머신 상태값 ${st.state}`,
+      st.state===7?"warn":(st.state===2||st.state===8)?"act":"info");
     ikLastState=st.state; ikSyncLog(true);
   }
   ikSyncLog(false);
@@ -5529,6 +5642,17 @@ function ikBanner(st){
     if(left>0.5) bits.push(`<b>${left.toFixed(0)}℃</b> 남음`);
   }
   if(ikCurve.length) bits.push(`경과 ${fmt(Math.max(0,ikNow-ikZero()))}`);
+  /* 연결 품질. 웹 블루투스로는 연결된 기기의 전파 세기를 못 읽으므로
+     응답 지연과 놓친 요청으로 대신 보여준다 — 전파가 약해지면 이 둘이 먼저 나빠진다. */
+  if(ikQ.lat.length){
+    const avg=ikQ.lat.reduce((a,b)=>a+b,0)/ikQ.lat.length;
+    const loss=ikQ.asked?Math.max(0,1-ikQ.got/ikQ.asked):0;
+    const bad=avg>600||loss>0.15||ikQ.drops>0;
+    bits.push(`<span style="color:${bad?"var(--actual)":"var(--muted)"}">`
+      +`연결 ${avg<250?"좋음":avg<600?"보통":"약함"} · 응답 ${Math.round(avg)}ms`
+      +(loss>0.02?` · 놓침 ${Math.round(loss*100)}%`:"")
+      +(ikQ.drops?` · 끊김 ${ikQ.drops}회`:"")+`</span>`);
+  }
   $("ik_now").innerHTML=
     `<p class="lead" style="margin:0 0 4px;font-size:22px;color:${col}">${n.t}</p>
      <p class="lead" style="margin:0 0 6px">${n.d}</p>
@@ -5557,6 +5681,8 @@ function ikRenderLive(st){
         +'IKAWA 라이브러리에서 <b>Inlet 프로파일은 쓰지 마세요</b> — 배기 기준 프로파일만 맞습니다.'}</p></div>`;
   $("ik_save").disabled=ikCurve.length<5;
   const coach=ikCoach();
+  if(coach) coach.notes.forEach(nt=>ikEvent("note:"+(nt.c||nt.lv),nt.t,
+    String(nt.d||"").replace(/<[^>]+>/g,""),nt.lv,nt.k));
   if(coach){
     $("ik_coachbox").hidden=false;
     const ico={ok:'<span class="pill ok">정상</span>',
@@ -5580,7 +5706,8 @@ function ikRenderLive(st){
     const t0=ikZero();
     const shift=a=>a.filter(x=>x[0]>=t0).map(x=>[x[0]-t0,x[1]]);
     const vcur=shift(ikCurve), vplan=shift(ikPlanCurve), vin=shift(ikInlet);
-    const vmk=marks.map(m=>({...m,t:m.t-t0})).filter(m=>m.t>=0);
+    const vmk=marks.map(m=>({...m,t:m.t-t0})).filter(m=>m.t>=0)
+      .concat(ikGaps.map(g=>({gap:true,t:g[0]-t0,t2:g[1]-t0})).filter(g=>g.t2>=0));
     const tMax=vcur.length?vcur[vcur.length-1][0]:0;
     /* 말풍선 — 지금 지점에 무슨 일이 벌어지는지 곡선 위에 붙인다 */
     let tip=null;
@@ -5588,18 +5715,23 @@ function ikRenderLive(st){
       const last=vcur[vcur.length-1];
       const pick=coach.notes.filter(n=>n.lv==="warn").concat(coach.notes.filter(n=>n.lv!=="warn"));
       const COL={warn:"var(--actual)",ok:"var(--ok)",info:"var(--ink-2)"};
+      /* 승온율은 아래 승온율 그래프에 적는다 — 그 값은 그쪽 그래프의 것이다.
+         여기에는 시각·온도·구간과 경고만 둔다. */
       tip={t:last[0], v:last[1], lines:[
         {text:`${fmt(Math.round(last[0]))} · ${last[1].toFixed(1)}℃`,bold:true},
         ...(coach.phase?[{text:`${coach.phase} 구간${coach.pct!=null?` (${coach.pct}%)`:""}`,
                           color:"var(--ink-2)"}]:[]),
-        ...pick.slice(0,2).map(n=>({text:n.t,color:COL[n.lv]||"var(--ink)",bold:n.lv==="warn"}))
+        ...pick.filter(n=>!/승온율/.test(n.t)).slice(0,2)
+              .map(n=>({text:n.t,color:COL[n.lv]||"var(--ink)",bold:n.lv==="warn"}))
       ]};
     }
     const acts=ikHasInlet&&vin.length>2?[vcur,vin]:[vcur];
     $("ik_chart").innerHTML=(vplan.length>2
       ? curveSvg(vplan,acts,vmk,tip)
       : curveSvg(vcur,ikHasInlet&&vin.length>2?[vin]:[],vmk,tip))
-      + rorSvg(rorSeries(vcur,30))
+      + (()=>{ const rs=rorSeries(vcur,30);
+          const rt=rs.length?{t:rs[rs.length-1][0],v:rs[rs.length-1][1]}:null;
+          return rorSvg(rs,rt); })()
       + powerSvg(shift(ikFanCurve),shift(ikHeatCurve),tMax);
   }
   $("ik_elapsed").textContent=ikCurve.length?fmt(Math.max(0,ikNow-ikZero())):"";
@@ -5631,10 +5763,27 @@ async function ikConnect(all){
       ikSetState("끊김","pill warn"); clearInterval(ikPoll); ikPoll=null;
       $("ik_connect").disabled=false; $("ik_disconnect").disabled=true;
       $("ik_send").disabled=true; $("ik_readback").disabled=true; $("ik_readinfo").disabled=true;
+      ikQ.drops++; ikQ.lastAsk=0;
       ikLog("연결이 끊겼습니다."); ikSyncLog(true);
+      ikEvent("link","연결 끊김","블루투스가 끊겼습니다. 자동으로 다시 붙습니다.","warn");
+      document.title="⚠ 연결 끊김 — 로스트포인트";
+      tBeep(2);
+      if(!ikUserStop) ikReconnect();          // 사용자가 끊은 게 아니면 스스로 다시 붙는다
     });
     ikLog("기기: "+(ikDev.name||"(이름 없음)"));
+    ikUserStop=false;
     const server=await ikDev.gatt.connect();
+    await ikAttach(server);
+    return;
+  }catch(e){
+    ikLog("연결 실패: "+e.message);
+    $("ik_msg").innerHTML=`<span class="pill warn">연결 실패</span> ${e.message}`;
+    return;
+  }
+}
+/* 서비스·특성을 붙이고 알림을 구독한다. 재연결에서도 이 함수를 그대로 쓴다.
+   실패는 삼키지 않고 그대로 던진다 — 부르는 쪽(첫 연결 / 자동 재연결)이 다르게 처리해야 한다. */
+async function ikAttach(server){
     const svc=await server.getPrimaryService(IK.SERVICE);
     try{
       const all=await svc.getCharacteristics();
@@ -5667,10 +5816,6 @@ async function ikConnect(all){
     $("ik_readinfo").disabled=false; $("ik_msg").innerHTML=
       `<span class="pill ok">연결됨</span> 상태를 요청합니다.`;
     ikNegotiate(0);                       // 응답이 오면 그때 1초 폴링을 시작한다
-  }catch(e){
-    $("ik_msg").innerHTML=`<span class="pill warn">실패</span> ${e.message}`;
-    ikLog("연결 실패: "+e.message);
-  }
 }
 /* 응답이 올 때까지 CRC 후보를 훑는다. 보내는 건 언제나 '상태 알려줘' 하나뿐이라 안전하다.
    화면이 지저분해지지 않게 진행 상황만 위쪽 한 줄로 갱신한다. */
@@ -5692,7 +5837,43 @@ function ikNegotiate(i){
   ikSend(ikMsg(IK.STATUS_GET,ikSeq++&0x7fff),"교섭");
   ikNegot=setTimeout(()=>ikNegotiate(i+1),900);
 }
+/* 자동 재연결 — 전파가 약해 끊기는 일이 잦다. 로스팅 중에 끊기면 그 구간이 영구히 빈다.
+   되붙이는 비용은 거의 없다(GATT 연결 한 번). 다만 무한정 두드리면 배터리·CPU 를 먹으므로
+   간격을 늘려 가며 최대 12번까지만 시도한다. 사용자가 「끊기」를 누른 경우에는 하지 않는다. */
+let ikUserStop=false, ikReTimer=null;
+const IKREWAIT=[1,2,3,5,8,12,15,15,20,20,30,30];   // 초
+function ikReconnect(){
+  if(ikUserStop||!ikDev) return;
+  if(ikReTimer) return;
+  const i=Math.min(ikQ.reTry,IKREWAIT.length-1), wait=IKREWAIT[i];
+  if(ikQ.reTry>=IKREWAIT.length){
+    ikLog("✗ 자동 재연결을 멈춥니다 — 「머신 연결」을 직접 눌러주세요.");
+    $("ik_msg").innerHTML=`<span class="pill warn">재연결 실패</span>
+      ${IKREWAIT.length}번 시도했습니다. 머신을 가까이 옮기고 <b>「머신 연결」</b>을 눌러주세요.`;
+    return;
+  }
+  ikQ.reTry++;
+  ikSetState(`다시 붙는 중 ${ikQ.reTry}회`,"pill warn");
+  ikLog(`↻ ${wait}초 뒤 다시 붙어 봅니다 (${ikQ.reTry}번째)`);
+  ikReTimer=setTimeout(async()=>{
+    ikReTimer=null;
+    if(ikUserStop||!ikDev) return;
+    try{
+      const server=await ikDev.gatt.connect();
+      await ikAttach(server);
+      ikQ.reTry=0;
+      ikLog("✓ 다시 붙었습니다.");
+      ikEvent("link","연결 복구","블루투스가 다시 붙었습니다.","info");
+      tBeep(1);
+    }catch(e){
+      ikLog("↻ 실패: "+e.message);
+      ikReconnect();
+    }
+  },wait*1000);
+}
 function ikDisconnect(){
+  ikUserStop=true;
+  if(ikReTimer){ clearTimeout(ikReTimer); ikReTimer=null; }
   clearInterval(ikPoll); ikPoll=null;
   if(ikNegot){ clearTimeout(ikNegot); ikNegot=null; }
   try{ if(ikDev&&ikDev.gatt.connected) ikDev.gatt.disconnect(); }catch(e){}
@@ -5831,7 +6012,10 @@ function ikSaveBatch(){
   if(ikMarks.cc!=null)    put(Math.round(ikMarks.cc-t0),"r_cc","컬러 변환");
   const rt=rorTail(c);
   if(rt!=null) $("r_ror").value=rt.toFixed(1);
-  pendingLog={act:c};                       // 저장할 때 실측 곡선으로 집어간다
+  /* 사건 타임라인도 함께 담는다 — 나중에 「그때 앱이 무슨 말을 했나」를 되짚으려고 */
+  const z0=ikRoastT0!=null?0:0;
+  pendingLog={act:c, tl:ikTL.filter(x=>x.t<=dur+2).map(x=>({...x})),
+              gaps:ikGaps.map(g=>[Math.round(g[0]-t0),Math.round(g[1]-t0)]).filter(g=>g[1]>=0)};
   recalc();
   $("ik_savemsg").innerHTML=`<span class="pill ok">옮겼습니다</span> 로스팅 기록 탭에서
     생두와 중량을 채우고 저장하세요. 실측 곡선 ${c.length}점${mk}이 함께 담깁니다.`
@@ -5893,6 +6077,7 @@ function ikInit(){
   $("ik_clear").onclick=()=>{ ikCurve=[]; ikPlanCurve=[]; ikFanCurve=[]; ikHeatCurve=[];
     ikInlet=[]; ikHasInlet=false; ikT0=null; ikNow=0; $("ik_coachbox").hidden=true;
     ikTBase=0; ikTPrev=null; ikDropAt=null; ikRoastT0=null; ikSawRoast=false;
+    ikGaps=[]; ikTL=[]; ikTLLast={};
     ikMarks={cc:null,crack:null}; $("ik_chart").innerHTML=""; $("ik_elapsed").textContent="";
     $("ik_save").disabled=true; $("ik_savemsg").textContent="";
     $("ik_undo").disabled=true; $("ik_markmsg").textContent="곡선을 지웠습니다."; };
@@ -5906,6 +6091,7 @@ function ikInit(){
         ? ` — CC ${rel(ikMarks.cc)} · 1차 크랙 ${rel(ikMarks.crack)}`:"")
       +`. 다시 누르면 그 시각으로 바뀝니다.`;
     ikLog(`▼ ${label} ${rel(ikMarks[k])}`);
+    ikEvent("mark",label,"손으로 표시한 지점","act");
     /* 마지막으로 받은 상태를 그대로 다시 그린다 — 빈 객체를 넘기면 안내판이 사라졌다 */
     if(ikCurve.length>2) ikRenderLive(ikLastSt||{});
   };
