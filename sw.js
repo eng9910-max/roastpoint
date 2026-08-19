@@ -4,17 +4,23 @@
    페이지 이동은 네트워크를 먼저 본다. 그래야 새로 올린 파일이 바로 반영되고,
    캐시에 없는 페이지가 막히지 않는다. */
 
-const APP_CACHE   = "roast-app-v82";
+const APP_CACHE   = "roast-app-v84";
 const SHARE_CACHE = "roast-shared";
 const SCOPE       = self.registration.scope;
 const SHARE_KEY   = new URL("__shared__", SCOPE).href;
 
-const SHELL = ["./", "./index.html", "./studio.html", "./theory.js", "./manifest.webmanifest",
+/* theory.js 는 버전을 붙여 부른다. 안 붙이면 캐시 우선 규칙에 걸려 옛 판정 코드가
+   계속 쓰이고, index.html 만 새것이 되는 어긋난 상태가 된다 — 실제로 그랬다.
+   자체 점검이 「승온율 공백」 시험에서 이 어긋남을 잡아냈다. */
+const SHELL = ["./", "./index.html", "./studio.html", "./theory.js?v=7.9", "./manifest.webmanifest",
                "./icons/icon-192.png", "./icons/icon-512.png"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(APP_CACHE)
-    .then(c => Promise.all(SHELL.map(u => c.add(u).catch(() => {}))))
+    /* cache:"reload" 로 받아야 브라우저 HTTP 캐시를 건너뛴다.
+       그냥 add 하면 낡은 사본을 그대로 캐시에 옮겨 담을 수 있다. */
+    .then(c => Promise.all(SHELL.map(u =>
+      c.add(new Request(u, { cache: "reload" })).catch(() => {}))))
     .then(() => self.skipWaiting()));
 });
 

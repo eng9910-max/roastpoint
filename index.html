@@ -128,7 +128,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v7.8</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v7.9</span>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 12px;font-size:13.5px;
@@ -397,6 +397,24 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
   <div class="block">
     <h2>로스팅 기록 <span id="r_count" class="pill"></span></h2>
     <div class="scrollx"><div class="tbl"><table id="r_table"></table></div></div>
+  </div>
+
+  <div class="block">
+    <h2>배치 겹쳐 보기 <span class="pill">비교</span></h2>
+    <p class="lead">두세 배치를 한 그래프에 겹쳐 <b>어디서 갈렸는지</b> 봅니다.
+    같은 프로파일로 두 번 볶았을 때 재현성을 보거나, 고친 프로파일이 실제로 달라졌는지 확인할 때 씁니다.</p>
+    <div class="row" style="margin-bottom:7px">
+      <label style="margin:0">맞추는 기준</label>
+      <select id="ov_align" style="width:auto">
+        <option value="0">투입 시각 (0:00)</option>
+        <option value="1">1차 크랙 시각</option>
+      </select>
+      <button class="ghost sm" id="ov_none">모두 끄기</button>
+      <span class="note" id="ov_msg"></span>
+    </div>
+    <div class="scrollx"><div class="tbl"><table id="ov_pick"></table></div></div>
+    <div id="ov_chart" style="margin-top:10px"></div>
+    <div id="ov_diff"></div>
   </div>
 
   <div class="block" id="rp_box" hidden>
@@ -791,6 +809,21 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
       <input type="file" id="d_file" accept=".json">
       <button class="ghost" id="d_csv">로스팅 기록 CSV</button>
     </div>
+    <div class="extra" style="margin-top:10px">
+      <p class="tagline">되돌림 지점 <span class="pill ok">자동</span></p>
+      <p class="note" style="margin:0 0 7px">하루에 한 번, 저장이 성공할 때 이 기기 안에 사본을 남깁니다
+      (최근 7개). 잘못 지웠거나 불러오기를 잘못했을 때 되돌릴 수 있습니다.
+      <b>기기 자체가 바뀌면 소용없으니</b> 「전체 저장」으로 파일 백업도 가끔 하세요.</p>
+      <div class="scrollx"><div class="tbl"><table id="bk_table"></table></div></div>
+    </div>
+    <div class="extra" style="margin-top:10px">
+      <p class="tagline">자체 점검</p>
+      <p class="note" style="margin:0 0 7px">화면·계산·저장이 제대로 도는지 한 번에 확인합니다.
+      고친 뒤에 눌러 보세요 — 눈에 안 띄는 곳이 깨졌는지 알려줍니다.</p>
+      <div class="row"><button class="ghost" id="st_run">점검 실행</button>
+        <span class="note" id="st_msg"></span></div>
+      <div id="st_out" style="margin-top:7px"></div>
+    </div>
     <p class="note" id="d_msg"></p>
   </div>
   <div class="block">
@@ -872,7 +905,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
-<script src="theory.js"></script>
+<script src="theory.js?v=7.9"></script>
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
@@ -898,7 +931,8 @@ document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll(".pane").forEach(p=>p.classList.toggle("on",p.id==="p-"+b.dataset.p));
   tabSwitched=true;
   try{ localStorage.setItem(TABKEY,b.dataset.p); }catch(e){}
-  if(b.dataset.p==="data") stats();
+  if(b.dataset.p==="data"){ stats(); bkRender(); }
+  if(b.dataset.p==="roasts") ovRender();
   if(b.dataset.p==="cup"){ renderWaiting(); cmpFill(); }
   if(b.dataset.p==="label") lbOpen();
   if(b.dataset.p==="machine") ikOpen();
@@ -1707,6 +1741,82 @@ async function idbGet(k){
     r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
   });
 }
+async function idbKeys(){
+  const db=await idbOpen();
+  return new Promise((res,rej)=>{
+    const t=db.transaction("kv","readonly");
+    const r=t.objectStore("kv").getAllKeys();
+    r.onsuccess=()=>res(r.result||[]); r.onerror=()=>rej(r.error);
+  });
+}
+async function idbDel(k){
+  const db=await idbOpen();
+  return new Promise((res,rej)=>{
+    const t=db.transaction("kv","readwrite");
+    t.objectStore("kv").delete(k);
+    t.oncomplete=()=>res(); t.onerror=()=>rej(t.error);
+  });
+}
+/* ── 되돌림 지점 ─────────────────────────────────────────
+   자동 저장은 늘 같은 자리를 덮어쓴다. 그래서 잘못 지우거나 불러오기를 잘못하면
+   되돌릴 방법이 없었다 — 「지금까지 없던 가장 큰 구멍」이다.
+   하루에 한 번, 저장이 성공한 뒤에 사본을 남기고 최근 7개만 둔다.
+   기기 자체가 바뀌면 소용없으므로 파일 백업을 대신하지는 않는다. */
+const BKKEEP=7;
+async function backupMaybe(){
+  try{
+    const day=new Date().toISOString().slice(0,10);
+    const key="backup:"+day;
+    const keys=(await idbKeys()).filter(k=>String(k).startsWith("backup:"));
+    if(keys.includes(key)) return;                     // 오늘 것은 이미 있다
+    await idbSet(key,{at:Date.now(),db:JSON.parse(JSON.stringify(DB))});
+    const all=keys.concat(key).sort();
+    for(const k of all.slice(0,Math.max(0,all.length-BKKEEP))) await idbDel(k);
+    bkRender();
+  }catch(e){ /* 백업 실패가 본 저장을 막으면 안 된다 */ }
+}
+async function bkRender(){
+  if(!$("bk_table")) return;
+  let keys=[];
+  try{ keys=(await idbKeys()).filter(k=>String(k).startsWith("backup:")).sort().reverse(); }
+  catch(e){ $("bk_table").innerHTML=`<tr><td style="color:var(--actual)">저장 영역을 읽지 못했습니다</td></tr>`; return; }
+  if(!keys.length){ $("bk_table").innerHTML=
+    `<tr><td style="color:var(--muted)">아직 없습니다 — 오늘 무언가를 저장하면 하나 생깁니다</td></tr>`; return; }
+  const rows=[];
+  for(const k of keys){
+    let v=null; try{ v=await idbGet(k); }catch(e){}
+    const d=v&&v.db||{};
+    rows.push(`<tr><td>${String(k).slice(7)}</td>
+      <td class="num">${(d.beans||[]).length}</td><td class="num">${(d.roasts||[]).length}</td>
+      <td class="num">${(d.profiles||[]).length}</td>
+      <td class="num">${v?Math.round(JSON.stringify(v).length/1024):0}KB</td>
+      <td><button class="ghost sm" data-bkrest="${k}">되돌리기</button>
+          <button class="ghost sm" data-bksave="${k}">파일로</button></td></tr>`);
+  }
+  $("bk_table").innerHTML=`<tr><th>날짜</th><th class="num">생두</th><th class="num">로스팅</th>
+    <th class="num">프로파일</th><th class="num">크기</th><th></th></tr>`+rows.join("");
+}
+window.bkRestore=async k=>{
+  const v=await idbGet(k); if(!v||!v.db){ alert("그 사본을 읽지 못했습니다."); return; }
+  const d=v.db;
+  if(!confirm(`${String(k).slice(7)} 시점으로 되돌립니다.\n\n`
+    +`생두 ${(d.beans||[]).length} · 로스팅 ${(d.roasts||[]).length} · 프로파일 ${(d.profiles||[]).length}\n`
+    +`지금: 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length} · 프로파일 ${DB.profiles.length}\n\n`
+    +`지금 상태는 되돌리기 전에 오늘 사본으로 남겨 둡니다.`)) return;
+  try{ await idbSet("backup:되돌리기전-"+new Date().toISOString().slice(0,16).replace(/[:T]/g,""),
+        {at:Date.now(),db:JSON.parse(JSON.stringify(DB))}); }catch(e){}
+  DB.beans=d.beans||[]; DB.roasts=d.roasts||[]; DB.profiles=d.profiles||[];
+  DB.settings=Object.assign({},d.settings||{},{syncKey:DB.settings.syncKey});  // 키는 이 기기 것을 지킨다
+  persist(); renderBeans(); renderRoasts(); renderProfiles(); renderWaiting(); stats(); bkRender();
+  alert("되돌렸습니다.");
+};
+window.bkSave=async k=>{
+  const v=await idbGet(k); if(!v||!v.db) return;
+  const b=new Blob([JSON.stringify(v.db,null,1)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(b);
+  a.download="roastpoint-"+String(k).slice(7)+".json"; a.click(); URL.revokeObjectURL(a.href);
+};
+
 let saveTimer=null;
 function persist(){
   clearTimeout(saveTimer);
@@ -1717,6 +1827,7 @@ function persist(){
       const n=DB.beans.length, m=DB.roasts.length;
       $("savestate").textContent=`저장됨 · 생두 ${n} · 로스팅 ${m}`;
       $("savestate").className="pill ok";
+      backupMaybe();
       if(DB.settings.syncAuto){
         if(syncMode()==="gh") ghUp(true); else if(DB.settings.syncKey) syncUp(true);
       }
@@ -3974,6 +4085,11 @@ document.addEventListener("click",e=>{
   if(row&&row.dataset.row!==undefined) return pickProfile(+row.dataset.row);
   if(t.dataset.ctxclear!==undefined){
     idbSet("context",{}).catch(()=>{}); $("ctxmsg").hidden=true; return; }
+  if(t.dataset.bkrest!==undefined){ bkRestore(t.dataset.bkrest); return; }
+  if(t.dataset.bksave!==undefined){ bkSave(t.dataset.bksave); return; }
+  if(t.dataset.ov!==undefined){
+    if(t.checked) ovSel.add(t.dataset.ov); else ovSel.delete(t.dataset.ov);
+    ovRender(); return; }
   if(t.dataset.gobeans!==undefined){ goTab("beans"); return; }
   if(t.dataset.goplan!==undefined){
     document.querySelector('nav button[data-p="plan"]').click();
@@ -4058,6 +4174,242 @@ $("p_send").onclick=async()=>{
       use:$("r_use")?$("r_use").value:null });
     location.href="studio.html#from=plan";
   }catch(e){ $("p_pick").textContent="넘기지 못했습니다: "+e.message; }
+};
+
+/* ── 배치 겹쳐 보기 ─────────────────────────────────────
+   재생(한 배치를 다시 흘려 보기)보다 이쪽이 배움이 크다. 로스터가 실제로 하는 일은
+   「이번 배치가 지난 배치와 어디서 갈렸나」를 보는 것이기 때문이다.
+   1차 크랙을 기준으로 맞추면 발달 구간만 따로 견줄 수 있다 — 총시간이 달라도 겹쳐진다. */
+const OVCOL=["#C0392B","#2E86C1","#1E8449","#B7950B","#7D3C98"];
+let ovSel=new Set();
+function ovList(){ return DB.roasts.filter(r=>r.act&&r.act.length>4)
+  .sort((a,b)=>String(b.date||"").localeCompare(String(a.date||""))).slice(0,40); }
+function ovRender(){
+  const rs=ovList();
+  if(!rs.length){
+    $("ov_pick").innerHTML=`<tr><td style="color:var(--muted)">실측 곡선이 담긴 배치가 없습니다 —
+      머신에 연결해 볶거나 로그를 올리면 여기 나옵니다</td></tr>`;
+    $("ov_chart").innerHTML=""; $("ov_diff").innerHTML=""; return;
+  }
+  $("ov_pick").innerHTML=`<tr><th style="width:34px"></th><th>볶은 날</th><th>생두</th><th>프로파일</th>
+    <th class="num">배출</th><th class="num">총시간</th><th class="num">크랙</th>
+    <th class="num">DTR</th><th class="num">감량</th><th class="num">컵</th></tr>`+
+    rs.map((r,i)=>{
+      const on=ovSel.has(r.id), c=OVCOL[[...ovSel].indexOf(r.id)%OVCOL.length];
+      return `<tr>
+        <td style="text-align:center"><input type="checkbox" data-ov="${r.id}" ${on?"checked":""}
+          style="width:18px;height:18px;cursor:pointer"></td>
+        <td>${on?`<span style="color:${c};font-weight:700">━</span> `:""}${r.date||""}</td>
+        <td>${beanName(r.beanId)}</td><td>${r.prof||""}</td>
+        <td class="num">${r.drop!=null?r.drop.toFixed(1):""}</td>
+        <td class="num">${r.dur?fmt(r.dur):""}</td>
+        <td class="num">${r.crack?fmt(r.crack):"—"}</td>
+        <td class="num">${r.dtr!=null?r.dtr.toFixed(0)+"%":""}</td>
+        <td class="num">${r.loss!=null?r.loss.toFixed(1)+"%":""}</td>
+        <td class="num">${r.cup&&r.cup.sum?r.cup.sum+"/72":""}</td></tr>`;
+    }).join("");
+
+  const sel=rs.filter(r=>ovSel.has(r.id));
+  if(sel.length<1){ $("ov_chart").innerHTML=""; $("ov_diff").innerHTML="";
+    $("ov_msg").textContent="왼쪽 네모를 눌러 두세 배치를 고르세요."; return; }
+  const byCrack=$("ov_align").value==="1";
+  const miss=byCrack?sel.filter(r=>!r.crack):[];
+  $("ov_msg").innerHTML=`${sel.length}개 겹침`
+    +(miss.length?` <span class="pill warn">크랙 없음 ${miss.length}</span>
+       <span class="note">크랙을 안 찍은 배치는 투입 기준으로 놓입니다</span>`:"");
+
+  const items=sel.map((r,i)=>{
+    const off=byCrack&&r.crack?-r.crack:0;
+    return {r, name:`${r.date||""} ${r.prof||beanName(r.beanId)||""}`.trim(),
+            color:OVCOL[i%OVCOL.length],
+            pts:r.act.map(p=>[p[0]+off,p[1]]),
+            ror:rorSeries(r.act,30).map(p=>[p[0]+off,p[1]])};
+  });
+  $("ov_chart").innerHTML=ovSvg(items,byCrack)+ovRorSvg(items,byCrack);
+
+  /* 무엇이 달랐나 — 첫 번째를 기준으로 견준다 */
+  const base=sel[0];
+  const F=[["배출온도","drop","℃",1],["총시간","dur","초",0],["예열","pre","℃",1],
+           ["1차 크랙","crack","초",0],["DTR","dtr","%",0],["감량률","loss","%",1],
+           ["후반 승온","ror","℃/분",1]];
+  $("ov_diff").innerHTML=sel.length<2?"" :
+    `<p class="tagline" style="margin-top:12px">무엇이 달랐나 — 맨 위 배치 기준</p>
+     <div class="scrollx"><div class="tbl"><table><tr><th>항목</th>`
+    +sel.map((r,i)=>`<th class="num"><span style="color:${OVCOL[i%OVCOL.length]}">━</span>
+        ${r.date||""}</th>`).join("")+`</tr>`
+    +F.map(([lab,k,u,d])=>{
+        if(sel.every(r=>r[k]==null)) return "";
+        return `<tr><td>${lab}</td>`+sel.map((r,i)=>{
+          const v=r[k];
+          if(v==null||isNaN(v)) return `<td class="num">—</td>`;
+          const txt=u==="초"?fmt(Math.round(v)):v.toFixed(d)+u;
+          if(i===0) return `<td class="num">${txt}</td>`;
+          const b=base[k], dv=(b==null||isNaN(b))?null:v-b;
+          return `<td class="num">${txt}${dv==null?"":`
+            <span class="note">(${dv>0?"+":""}${u==="초"?Math.round(dv)+"초":dv.toFixed(d)+u})</span>`}</td>`;
+        }).join("")+`</tr>`;
+      }).join("")
+    +`</table></div></div>
+      <p class="note">같은 프로파일로 두 번 볶았는데 <b>배출온도가 1℃ 넘게</b> 다르거나
+      <b>크랙이 15초 넘게</b> 어긋나면, 그건 프로파일 탓이 아니라 그날의 편차입니다 —
+      프로파일을 고치기 전에 한 번 더 볶아 보세요.</p>`;
+}
+function ovSvg(items,byCrack){
+  const W=640,H=260,L=36,R=8,T=10,B=22;
+  const all=items.flatMap(x=>x.pts);
+  if(all.length<2) return "";
+  const t0=Math.min(...all.map(p=>p[0])), t1=Math.max(...all.map(p=>p[0]));
+  let v0=Math.min(...all.map(p=>p[1])), v1=Math.max(...all.map(p=>p[1]));
+  const pad=Math.max(3,(v1-v0)*0.08); v0-=pad; v1+=pad;
+  const X=t=>L+(W-L-R)*(t-t0)/((t1-t0)||1), Y=v=>H-B-(H-T-B)*(v-v0)/((v1-v0)||1);
+  const line=c=>{ let d="",pt=null;
+    c.forEach(p=>{ const cmd=(pt==null||p[0]-pt>15)?"M":"L";
+      d+=(d?" ":"")+cmd+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1); pt=p[0]; }); return d; };
+  const zero=byCrack?`<line x1="${X(0).toFixed(1)}" y1="${T}" x2="${X(0).toFixed(1)}" y2="${H-B}"
+      stroke="var(--actual)" stroke-width="1.4" stroke-dasharray="5 3"/>
+    <text x="${(X(0)+3).toFixed(1)}" y="${T+12}" font-size="10" fill="var(--actual)">1차 크랙</text>`:"";
+  const ticks=[v0+pad,(v0+v1)/2,v1-pad].map(v=>
+    `<text x="4" y="${(Y(v)+4).toFixed(1)}" font-size="10" fill="var(--muted)">${v.toFixed(0)}</text>
+     <line x1="${L}" y1="${Y(v).toFixed(1)}" x2="${W-R}" y2="${Y(v).toFixed(1)}"
+       stroke="var(--rule)" stroke-width=".5"/>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:#fff;
+      border:1px solid var(--rule)" role="img" aria-label="배치 겹쳐 보기">
+    ${ticks}${zero}
+    ${items.map(x=>`<path d="${line(x.pts)}" fill="none" stroke="${x.color}" stroke-width="1.7"/>`).join("")}
+    <text x="${L+4}" y="${H-6}" font-size="10" fill="var(--muted)">${byCrack?fmt(Math.round(t0)):"0:00"}</text>
+    <text x="${W-R-34}" y="${H-6}" font-size="10" fill="var(--muted)">${fmt(Math.round(t1))}</text>
+    ${items.map((x,i)=>`<text x="${L+6}" y="${T+14+i*13}" font-size="10.5" fill="${x.color}"
+       font-weight="600">━ ${x.name}</text>`).join("")}
+  </svg>`;
+}
+function ovRorSvg(items,byCrack){
+  const all=items.flatMap(x=>x.ror);
+  if(all.length<4) return "";
+  const W=640,H=140,L=36,R=8,T=8,B=16, HICAP=40;
+  const t0=Math.min(...all.map(p=>p[0])), t1=Math.max(...all.map(p=>p[0]));
+  let lo=Math.min(0,...all.map(p=>p[1])), hi=Math.max(...all.map(p=>p[1]));
+  if(hi>HICAP){ const inr=all.filter(p=>p[1]<=HICAP).map(p=>p[1]);
+    hi=inr.length?Math.min(HICAP,Math.max(6,...inr)):HICAP; }
+  if(hi-lo<2) hi=lo+2;
+  const pad=(hi-lo)*0.1; lo-=pad; hi+=pad;
+  const X=t=>L+(W-L-R)*(t-t0)/((t1-t0)||1), Y=v=>H-B-(H-T-B)*(v-lo)/((hi-lo)||1);
+  const cid="ov"+Math.round(Math.abs(t1)*31%9973);
+  const line=c=>{ let d="",pt=null;
+    c.forEach(p=>{ const cmd=(pt==null||p[0]-pt>15)?"M":"L";
+      d+=(d?" ":"")+cmd+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1); pt=p[0]; }); return d; };
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:#fff;
+      border:1px solid var(--rule);border-top:0" role="img" aria-label="승온율 겹쳐 보기">
+    <defs><clipPath id="${cid}"><rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}"/></clipPath></defs>
+    <text x="4" y="${(Y(hi-pad)+4).toFixed(1)}" font-size="10" fill="var(--muted)">${(hi-pad).toFixed(1)}</text>
+    <text x="4" y="${(Y(lo+pad)+4).toFixed(1)}" font-size="10" fill="var(--muted)">${(lo+pad).toFixed(1)}</text>
+    ${byCrack?`<line x1="${X(0).toFixed(1)}" y1="${T}" x2="${X(0).toFixed(1)}" y2="${H-B}"
+      stroke="var(--actual)" stroke-width="1.2" stroke-dasharray="5 3"/>`:""}
+    ${items.map(x=>`<path d="${line(x.ror)}" fill="none" stroke="${x.color}" stroke-width="1.4"
+       clip-path="url(#${cid})"/>`).join("")}
+    <text x="${L+4}" y="${T+10}" font-size="10" fill="var(--muted)">승온율 ℃/분</text>
+  </svg>`;
+}
+
+/* ── 자체 점검 ───────────────────────────────────────────
+   시험 파일이 하나도 없다는 게 이 앱의 가장 큰 약점이었다. 파일 하나로 된 앱이라
+   바깥에서 돌리는 시험 틀을 붙이기 어려우니, 실제로 돌아가는 이 페이지 안에서 검사한다.
+   그래서 「진짜 코드」를 검사한다는 장점이 있다 — 특히 화면 요소가 사라져 스크립트가
+   통째로 죽는 사고(오늘만 두 번 났다)를 이 방식이 바로 잡아낸다. */
+const STIDS=["savestate","r_bean","r_level","r_use","r_prof","r_dur","r_drop","r_pre","r_crack",
+  "r_cc","r_dtr","r_loss","r_ror","r_in","r_out","r_save","rec_out","recbox","p_machine","p_send",
+  "p_direct","p_pick","pf_table","rp_box","rp_out","ov_pick","ov_chart","bk_table","st_out",
+  "ik_now","ik_nowbox","ik_live","ik_chart","ik_strip","ik_prof","ik_send","ik_save","ik_log",
+  "sim_pick","sim_play","sim_seek","lb_table","y_key","d_save","cw_table","canon_out"];
+function selfTest(){
+  /* 검사 하나가 예외로 죽어도 나머지는 돌아야 한다.
+     처음엔 안 감쌌더니, 이론 상수를 지우는 시험에서 점검기가 통째로 멎었다 —
+     정작 무엇이 깨졌는지 알려주지 못하는 점검기는 쓸모가 없다. */
+  const T=[], ok=(n,c,d)=>T.push({n,pass:!!c,d:d||""});
+  const chk=(n,fn)=>{ try{ fn(); }
+    catch(e){ T.push({n,pass:false,d:"검사 중 예외 — "+(e&&e.message||e)}); } };
+  // ① 화면 — 코드가 찾는 요소가 실제로 있는가
+  chk("화면 요소",()=>{
+    const miss=STIDS.filter(id=>!document.getElementById(id));
+    ok("화면 요소",miss.length===0,miss.length?`없는 id: ${miss.join(", ")}`:`${STIDS.length}개 모두 있음`);
+  });
+  // ② 이론 상수
+  chk("교과서 상수",()=>ok("교과서 상수",
+     CANON&&CANON.level&&Object.keys(CANON.level).length===4&&CANON.flaw&&CANON.flaw.bake!=null,
+     `배전도 ${Object.keys(CANON.level).length}단계 · 결함 기준 ${CANON.flaw?"있음":"없음"}`));
+  // ③ 목표 — 모든 산지 원형 × 배전도 × 용도가 그릴 수 있는 곡선인가
+  let bad=[], nt=0;
+  chk("목표 곡선",()=>{ ARCH.forEach(a=>["light","mlight","medium","mdark"].forEach(lv=>
+    ["filter","espresso","latte"].forEach(u=>{ nt++;
+      const t=targetFor(a.b,u,lv).t;
+      const rise=t.drop-t.pre, dE=t.dur*.4/60, dD=t.dur*.25/60;
+      const mid=rise-t.rEarly*dE-t.rDev*dD;
+      if(!(t.rEarly>=5)||mid<0||t.dur<300||t.dur>480||rise<25||!isFinite(t.drop))
+        bad.push(`${a.n}/${lv}/${u}`); })));
+  ok("목표 곡선",bad.length===0,`${nt}개 조합 · 그릴 수 없는 것 ${bad.length}${bad.length?": "+bad.slice(0,3).join(", "):""}`); });
+  // ④ 채점 — 점수가 0~100 안이고 NaN 이 없는가
+  let sbad=0, ns=0;
+  const bn=DB.beans[0]||{name:"시험",proc:"워시드",alt:"1500",dens:"800"};
+  chk("채점",()=>{ allProfiles().slice(0,12).forEach(pf=>{ const t=targetFor(bn,"filter","mlight").t;
+    const m=matchScore(profChar(pf.pts),t,pf,bn,true); ns++;
+    if(!isFinite(m.score)||m.score<0||m.score>100) sbad++; });
+  ok("채점",sbad===0&&ns>0,`${ns}개 프로파일 · 범위 밖 ${sbad}`); });
+  // ⑤ 곡선 도구 — 공백을 넘어 기울기를 재지 않는가
+  chk("승온율 · 공백",()=>{
+    /* 「큰 값이 안 나온다」로 재면 안 된다 — 공백을 넘어 계산해도 긴 시간으로 나누면
+       값 자체는 작게 나오기 때문이다. 처음에 그렇게 만들었다가 일부러 망가뜨린 코드를
+       못 잡았다. 제대로 된 판정은 「공백 직후 표본에서는 아예 값이 나오면 안 된다」이다.
+       그 지점은 앞이 비어 있어 기울기를 잴 근거가 없다. */
+    const g=[[0,100],[5,101],[10,102],[400,200],[405,201],[410,202]];
+    const rs=rorSeries(g,30,15);
+    const across=rs.filter(x=>x[0]===400);
+    ok("승온율 · 공백",across.length===0,
+      across.length?`공백(0:10~6:40)을 넘어 ${across[0][1].toFixed(1)}℃/분을 계산했습니다`
+                   :`공백 직후 표본에서 값을 내지 않음 (총 ${rs.length}점)`);
+  });
+  chk("곡선 보간",()=>ok("곡선 보간",curveAt([[0,100],[100,200]],50)===150,"중간값 150℃"));
+  chk("배전도 판정",()=>ok("배전도 판정",
+    dropBand(203).level==="light"||dropBand(203).level==="mlight",
+    `203℃ → ${LVNAME[dropBand(203).level]}`));
+  // ⑥ 프로파일 수정안 — 단조 증가하고 NaN 이 없는가
+  chk("프로파일 수정안",()=>{
+    const pf0=DB.profiles[0]||{id:"t",name:"시험 v1.0",pts:[[0,143],[160,175],[300,196],[400,207]]};
+    const act=[]; for(let t=0;t<=400;t+=10) act.push([t,curveAt(pf0.pts,t)]);
+    const F=fixPlan(pf0,{id:"t",dur:400,drop:207,pre:143,crack:352,loss:15.8,dtr:12,ror:0.7,act},bn);
+    const mono=!F||F.none||F.pts.every((x,i)=>i===0||x[1]>=F.pts[i-1][1]);
+    const fin=!F||F.none||F.pts.every(x=>isFinite(x[0])&&isFinite(x[1]));
+    ok("프로파일 수정안",mono&&fin,F&&!F.none?`제어점 ${F.pts.length}개 · 단조 ${mono?"OK":"깨짐"}`:"고칠 것 없음");
+  });
+  // ⑦ 라벨 — 칸이 종이 밖으로 나가지 않는가
+  let lbad=[];
+  chk("라벨 규격",()=>{ (typeof LBS!=="undefined"?LBS:[]).forEach(x=>{ if(x.id==="custom") return;
+    const w=x.c*x.w+(x.c-1)*(x.gx||0), h=x.r*x.h+(x.r-1)*(x.gy||0);
+    if(w>215||h>302) lbad.push(x.id); });
+  ok("라벨 규격",lbad.length===0,`${(typeof LBS!=="undefined"?LBS.length:0)}종 · A4 초과 ${lbad.length}${lbad.length?": "+lbad.slice(0,4).join(","):""}`); });
+  // ⑧ 저장 — 지금 자료를 문자열로 만들고 되읽을 수 있는가
+  chk("저장 왕복",()=>{
+    let rt="";
+    try{ const j=JSON.stringify(DB); const back=JSON.parse(j);
+      rt=(back.roasts||[]).length===DB.roasts.length?"":"길이 불일치"; }
+    catch(e){ rt=e.message; }
+    ok("저장 왕복",rt==="",rt||`${Math.round(JSON.stringify(DB).length/1024)}KB`);
+  });
+  // ⑨ 동기화 키 규칙 — 서버가 받는 모양과 같은가
+  chk("동기화 키 규칙",()=>{ const kre=/^[A-Za-z0-9_-]{8,64}$/;
+    ok("동기화 키 규칙",kre.test("gwangho-roast-2026")&&!kre.test("짧음")&&!kre.test("한글키입니다"),
+      "영문·숫자·_- 8~64자"); });
+  return T;
+}
+window.runSelfTest=()=>{
+  const T=selfTest(), bad=T.filter(x=>!x.pass);
+  $("st_out").innerHTML=`<div class="scrollx"><div class="tbl"><table>
+    <tr><th>검사</th><th>결과</th><th>내용</th></tr>`
+    +T.map(x=>`<tr><td>${x.n}</td>
+      <td>${x.pass?'<span class="pill ok">통과</span>':'<span class="pill warn">실패</span>'}</td>
+      <td class="note">${x.d}</td></tr>`).join("")+`</table></div></div>`;
+  $("st_msg").innerHTML=bad.length
+    ? `<span class="pill warn">${bad.length}개 실패</span> ${bad.map(x=>x.n).join(", ")}`
+    : `<span class="pill ok">${T.length}개 모두 통과</span>`;
+  return {pass:T.length-bad.length,fail:bad.length,bad:bad.map(x=>x.n+": "+x.d)};
 };
 
 /* ---------- 평가 대기 목록 ---------- */
@@ -4300,6 +4652,9 @@ window.cmpNote=(id,v)=>{
   r.mt=Date.now(); renderRoasts(); persist();
 };
 $("cmp_go").onclick=cmpRender;
+$("st_run").onclick=()=>runSelfTest();
+$("ov_align").onchange=ovRender;
+$("ov_none").onclick=()=>{ ovSel.clear(); ovRender(); };
 $("cmp_bean").addEventListener("change",cmpRender);
 
 /* ---------- 로스팅 저장 ---------- */
