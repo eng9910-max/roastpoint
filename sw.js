@@ -4,7 +4,7 @@
    페이지 이동은 네트워크를 먼저 본다. 그래야 새로 올린 파일이 바로 반영되고,
    캐시에 없는 페이지가 막히지 않는다. */
 
-const APP_CACHE   = "roast-app-v73";
+const APP_CACHE   = "roast-app-v75";
 const SHARE_CACHE = "roast-shared";
 const SCOPE       = self.registration.scope;
 const SHARE_KEY   = new URL("__shared__", SCOPE).href;

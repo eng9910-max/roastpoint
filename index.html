@@ -128,7 +128,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v7.0</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v7.1</span>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 12px;font-size:13.5px;
@@ -504,9 +504,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
       </div>
       <p class="note" style="margin-top:7px">국가·품종은 산지 원형으로 옮겨 걸립니다 —
       예를 들어 <b>파나마</b>를 고르면 게이샤·무산소 원형에 맞는 프로파일이 남습니다.
-      셋을 겹쳐 쓰면 더 좁아지고, 걸린 원형은 「어울리는 생두」 칸 맨 앞에 <b>▸</b>로 표시됩니다.</p>
+      셋을 겹쳐 쓰면 더 좁아지고, 걸린 원형은 「닮은 산지 곡선」 칸 맨 앞에 <b>▸</b>로 표시됩니다.</p>
     </div>
-    <p class="lead">「어울리는 생두」는 <b>곡선만 보고 되짚은 추정</b>입니다.
+    <p class="lead">「닮은 산지 곡선」은 <b>곡선만 보고 되짚은 추정</b>입니다 — 「이 원두용으로 만들어졌다」가
+    아니라 「이 원형의 목표 곡선과 모양이 닮았다」는 뜻입니다. 70점 미만은 표시하지 않습니다.
     「로스팅 계획」이 쓰는 <b>생두 → 목표 곡선</b> 계산식을 그대로 뒤집어,
     산지 원형을 전부 대입해 가장 가까운 것을 고릅니다. <b>근거</b>를 누르면 판정 과정이 다 나옵니다.</p>
     <div class="scrollx"><div class="tbl"><table id="pf_table"></table></div></div>
@@ -1882,7 +1883,7 @@ function renderProfiles(){
     : `${nAll}개${allProfiles().length!==nAll?` (보관 ${allProfiles().length-nAll})`:""}`;
   if($("pf_clear")) $("pf_clear").disabled=!(filtering||q);
 
-  $("pf_table").innerHTML=`<tr><th>계보 · 버전</th><th style="min-width:190px">어울리는 생두 <span class="pill warn">추정</span></th>
+  $("pf_table").innerHTML=`<tr><th>계보 · 버전</th><th style="min-width:190px">닮은 산지 곡선 <span class="pill warn">추정</span></th>
     <th>출처</th><th class="num">예열</th><th class="num">배출</th>
     <th class="num">시간</th><th class="num">쓴 횟수</th><th class="num">평균 감량</th>
     <th class="num">평균 DTR</th><th class="num">평균 컵</th><th style="width:96px"></th></tr>`+
@@ -1932,23 +1933,39 @@ function profRow(p,title,want,fit,hit,trAttr,tdStyle){
     <td class="num">${a.cup!=null?a.cup.toFixed(0)+"/72":""}</td>
     <td style="white-space:nowrap">${act}</td></tr>`;
 }
-/* 표 안의 한 칸 — 상위 2개와 배전도, 그리고 근거 버튼.
-   거르는 중이면 걸린 원형을 맨 앞에 세운다. 왜 이 줄이 남았는지가 바로 보여야 한다. */
+/* 표 안의 한 칸 — 닮은 원형과 배전도, 그리고 근거 버튼.
+   거르는 중이면 걸린 원형을 맨 앞에 세운다. 왜 이 줄이 남았는지가 바로 보여야 한다.
+
+   두 가지를 실토한다.
+   ① 하한 — 예전에는 무조건 상위 2개를 보여줬다(ranked.slice(0,2)). 그래서 31점짜리도
+      추천처럼 보였다. 31점은 "안 맞는다"는 뜻이다.
+   ② 동점 — 산지 원형은 서로 물성이 비슷해 목표 곡선이 허용폭 안에서 겹치는 쌍이 있다.
+      그때 1·2위를 나란히 보여주면 "둘 다 맞다"로 읽히는데, 실은 "갈라지지 않는다"는 뜻이다. */
+const FITFLOOR=70;
 function fitCell(p,want,fit,hit){
   const {band,ranked}=fit||profFit(p);
   if(!ranked.length) return "—";
-  let show=ranked.slice(0,2);
+  const lv=`<span class="pill">${LVNAME[band.level]}</span>`;
+  const why=`<button class="ghost sm" onclick="profWhy('${p.id}')">근거</button>`;
+  const pass=ranked.filter(r=>r.score>=FITFLOOR);
+  if(!pass.length)
+    return `<span class="pill warn" title="어느 산지 원형의 목표 곡선과도 허용폭 안에서 맞지 않습니다">닮은 원형 없음</span>
+      <span class="note">가장 가까운 것도 ${ranked[0].a.n} ${ranked[0].score.toFixed(0)}점</span>
+      ${lv} ${why}`;
+  let show=pass.slice(0,2);
   if(hit>=0&&hit<ranked.length){
     const m=ranked[hit];
-    show=[m].concat(ranked.filter(r=>r!==m).slice(0,1));
+    show=[m].concat(pass.filter(r=>r!==m).slice(0,1));
   }
   const pills=show.map((r,i)=>{
     const on=hit>=0&&i===0;
     return `<span class="${fitPill(r.score)}" title="${r.a.w}"${on?' style="font-weight:700"':""}>`
       +`${on?"▸ ":""}${r.a.n} ${r.score.toFixed(0)}</span>`;
   }).join(" ");
-  return `${pills} <span class="pill">${LVNAME[band.level]}</span>
-    <button class="ghost sm" onclick="profWhy('${p.id}')">근거</button>`;
+  const tie=show.length>1&&Math.abs(show[0].score-show[1].score)<=3;
+  return `${pills} ${lv}
+    ${tie?`<span class="pill warn" title="두 원형의 목표 곡선이 허용폭 안에서 거의 같습니다 — 곡선만으로는 갈라지지 않습니다">구별 못 함</span>`:""}
+    ${why}`;
 }
 window.profWhy=id=>{
   const p=profById(id); if(!p) return;
@@ -2608,11 +2625,147 @@ function profChar(pts){
 /* ── 2층 : 생두 보정 ────────────────────────────────
    1층이 목적지를 정하고, 2층은 거기 도달하는 경로만 바꾼다.
    밀도·알크기·수분·가공은 열이 속까지 가는 속도를 좌우한다. */
+/* ── 생두 물성 — 실측이 있으면 실측, 없으면 품종·산지·고도로 추정 ────────
+   예전에는 밀도와 고도를 계단으로 봤다(850 이상 / 700 미만 / 그 사이). 그래서
+   822 와 851 사이에 절벽이 생겼고, 밀도를 넣으면 고도가 아예 무시됐다(else-if 사슬).
+   국가와 알 크기(스크린)는 받아 두고도 계산에 넣지 않았다.
+   여기서는 다섯 물성을 모두 연속값으로 쓰고, 각 값이 어디서 왔는지 한 줄씩 남긴다. */
+const REF={dens:800, scr:16, moist:10.5, alt:1500};   // 기준 생두 (워시드)
+
+/* 품종 → 알 크기와 밀도 경향.
+   스크린은 생두 등급 기준의 통용 범위 중앙값이다 (마라고지페 19+, 에티오피아 재래종 14 등).
+   밀도 보정 dk 는 같은 고도에서 품종 사이에 흔히 나타나는 차이로, 문헌 표가 아니라 추정이다. */
+const VAR=[
+  [/마라고지페|maragog/i,            {scr:19.5,dk:-40,rDev:0,   n:"마라고지페 — 최대립·저밀도"}],
+  [/파카마라|pacamara/i,             {scr:18.5,dk:-30,rDev:0,   n:"파카마라 — 대립·저밀도"}],
+  [/피베리|peaberry|\bpb\b/i,        {scr:13,  dk:20, rDev:0,   n:"피베리 — 둥근 소립"}],
+  [/게이샤|기샤|geisha|gesha/i,       {scr:16.5,dk:-20,rDev:-0.9,n:"게이샤 — 납작하고 휘발성 향이 잘 날아간다"}],
+  [/sl\s?28|sl\s?34|ruiru|batian/i,  {scr:17.5,dk:35, rDev:0,   n:"SL 계열 — 대립·최고밀도"}],
+  [/재래|heirloom|landrace|74110|74112|74158|kurume|wolisho|dega/i,
+                                     {scr:14,  dk:30, rDev:0,   n:"재래종 — 소립·고밀도"}],
+  [/카티모르|catimor|사르치모르|sarchimor|티모르|timor/i,
+                                     {scr:17,  dk:-20,rDev:0,   n:"카티모르 계열 — 중대립·저밀도"}],
+  [/옐로우?\s?부르봉|yellow\s?bourbon/i,
+                                     {scr:16.5,dk:-10,rDev:0,   n:"옐로 부르봉 — 중립, 부르봉보다 약간 성긴 편"}],
+  [/부르봉|bourbon/i,                {scr:16.5,dk:10, rDev:0,   n:"부르봉 — 중립·중상밀도"}],
+  [/문도\s?노보|mundo\s?novo/i,       {scr:16.5,dk:0,  rDev:0,   n:"문도노보 — 중립·중밀도"}],
+  [/티피카|typica/i,                 {scr:16.5,dk:0,  rDev:0,   n:"티피카 — 중립·중밀도"}],
+  [/카스티요|castillo/i,             {scr:16.5,dk:0,  rDev:0,   n:"카스티요 — 중립"}],
+  [/카투아이|catuai|catuaí/i,         {scr:15.5,dk:0,  rDev:0,   n:"카투아이 — 소중립"}],
+  [/카투라|caturra/i,                {scr:15.5,dk:5,  rDev:0,   n:"카투라 — 소중립"}],
+  [/파카스|pacas/i,                  {scr:15.5,dk:5,  rDev:0,   n:"파카스 — 소중립"}],
+  [/비야사르치|villa\s?sarchi/i,      {scr:15.5,dk:5,  rDev:0,   n:"비야사르치 — 소중립"}]
+];
+
+/* 가공 → 표면 잔여당과 발효산. 워시드가 기준(0)이다.
+   잔여당이 많을수록 표면이 먼저 타므로 예열을 낮추고 후반을 눕히고 얕게 끊는다. */
+const PROCADJ=[
+  [/무산소|anaerob|카보닉|carbonic|락토|lactic|이스트|yeast|마세라|macerat|mosto/i,
+   {pre:-5,rDev:-0.5,drop:-1.0,dur:15},
+   "무산소·특수발효 — 발효 유기산과 잔여당이 많다. 예열을 낮추고 후반을 눕히며, 향이 자리잡게 시간을 조금 준다"],
+  [/길링|giling|wet[\s-]?hull|반습식/i,
+   {pre:-5,rEarly:-1.0,rDev:-0.3,drop:-0.5},
+   "길링바사(반습식) — 세포 구조가 성기고 표면이 잘 탄다. 초반을 눌러 낮은 열로 간다"],
+  [/펄프드|pulped|\bpn\b/i,
+   {pre:-4,rDev:-0.15,drop:-0.5},
+   "펄프드 내추럴 — 점액질이 조금 남아 워시드와 내추럴의 중간"],
+  [/허니|honey/i,
+   {pre:-4,rDev:-0.3,drop:-0.8},
+   "허니 — 점액질을 남겨 말린다. 표면 당분이 있어 예열을 낮추고 후반을 조금 눕힌다"],
+  [/내추럴|natural/i,
+   {pre:-7,rDev:-0.6,drop:-1.5},
+   "내추럴 — 과육째 말려 표면 잔여당이 가장 많다. 얕게 끊고 후반을 확실히 눕힌다"],
+  [/워시드|washed|수세|습식/i, {},
+   "워시드 — 표면에 당분이 없다 (기준 생두)"]
+];
+
+function parseScreen(v){
+  const t=String(v==null?"":v);
+  const m=t.match(/(\d{2})\s*[\/~-]\s*(\d{2})/);          // 「17/18」
+  if(m){ const a=+m[1],b2=+m[2]; if(a>=8&&b2<=22) return (a+b2)/2; }
+  const one=t.match(/\b(\d{2})\b/);                        // 「18」 「16+」
+  const x=one?+one[1]:0;
+  return x>=8&&x<=22?x:0;
+}
+function procKey(v){
+  const t=String(v==null?"":v);
+  if(/무산소|anaerob|카보닉|carbonic|락토|lactic/i.test(t)) return "a";
+  if(/길링|giling|wet[\s-]?hull|반습식/i.test(t))          return "g";
+  if(/펄프드|pulped|\bpn\b/i.test(t))                      return "pn";
+  if(/허니|honey/i.test(t))                                return "h";
+  if(/내추럴|natural/i.test(t))                            return "n";
+  if(/워시드|washed|수세|습식/i.test(t))                    return "w";
+  return "";
+}
+/* ARCH 는 이 아래에서 선언된다. 실행 시점에는 이미 만들어져 있지만,
+   TDZ 에서 typeof 는 던지므로 try 로 감싼다. */
+function archList(){ try{ return ARCH; }catch(e){ return null; } }
+/* 이 생두에 가장 가까운 산지 원형 — 국가를 먼저 맞추고, 그 안에서 가공을 맞춘다.
+   국가는 지금까지 목표 계산에 전혀 쓰이지 않았다. 여기서 물성 추정치의 출처로 쓴다. */
+function archFor(b){
+  const L=archList(); if(!L) return null;
+  const hay=[b&&b.origin,b&&b.region,b&&b.name].filter(Boolean).join(" ");
+  if(!hay) return null;
+  const byCo=L.filter(a=>a.co.some(c=>hay.includes(c)));
+  if(!byCo.length) return null;
+  const k=procKey(b&&b.proc), va=String((b&&b.var)||"");
+  return (k&&byCo.find(a=>procKey(a.b.proc)===k))
+      || (va&&byCo.find(a=>a.va.some(v=>va.includes(String(v).split(" ")[0]))))
+      || byCo[0];
+}
+function beanPhys(b){
+  b=b||{};
+  const num=v=>{ const n=parseFloat(String(v==null?"":v).replace(/[^\d.]/g,""));
+                 return isFinite(n)&&n>0?n:0; };
+  const src=[], arch=archFor(b);
+  const vh=VAR.find(([re])=>re.test(String(b.var||""))), V=vh?vh[1]:null;
+  const from=a=>`${a.n} 원형의 중앙값`;
+
+  let alt=num(b.alt);
+  if(alt)          src.push(`고도 <b>${alt}m</b> — 입력값`);
+  else if(arch){ alt=num(arch.b.alt); src.push(`고도 <b>${alt}m</b> — ${from(arch)} <span class="pill warn">추정</span>`); }
+  else { alt=REF.alt; src.push(`고도 — 알 수 없어 기준 ${REF.alt}m 로 둡니다`); }
+
+  let scr=parseScreen(b.screen);
+  if(scr)          src.push(`알 크기 <b>스크린 ${scr}</b> — 입력값`);
+  else if(V){ scr=V.scr; src.push(`알 크기 <b>스크린 ${scr}</b> — ${V.n} <span class="pill warn">추정</span>`); }
+  else if(arch&&arch.b.screen){ scr=parseScreen(arch.b.screen);
+    src.push(`알 크기 <b>스크린 ${scr}</b> — ${from(arch)} <span class="pill warn">추정</span>`); }
+  else { scr=REF.scr; src.push(`알 크기 — 알 수 없어 기준 스크린 ${REF.scr} 로 둡니다`); }
+
+  let dens=num(b.dens);
+  if(dens)         src.push(`밀도 <b>${dens}g/L</b> — 입력값`);
+  else {
+    let ds;
+    if(arch){ dens=num(arch.b.dens); ds=from(arch); }
+    else { dens=620+0.13*alt; ds=`고도 ${alt}m 추세 (620 + 0.13×고도)`; }
+    if(V&&V.dk){ dens+=V.dk; ds+=` + ${V.n}`; }
+    dens=Math.round(dens);
+    src.push(`밀도 <b>${dens}g/L</b> — ${ds} <span class="pill warn">추정</span> · 실측을 넣으면 정확해집니다`);
+  }
+
+  let moist=num(b.moist);
+  if(moist)        src.push(`수분 <b>${moist}%</b> — 입력값`);
+  else { moist=arch?num(arch.b.moist):REF.moist;
+    src.push(`수분 <b>${moist}%</b> — ${arch?from(arch):"기준값"} <span class="pill warn">추정</span>`); }
+
+  /* 확신도 — 실측은 1, 추정은 0.5.
+     추정값에 실측값과 같은 무게를 주면, 품종에서 짐작한 스크린 하나가
+     목표 총시간을 수십 초 흔든다. 불확실한 입력은 덜 믿는 게 맞다. */
+  const w={ alt:num(b.alt)?1:0.5, scr:parseScreen(b.screen)?1:0.5,
+            dens:num(b.dens)?1:0.5, moist:num(b.moist)?1:0.5 };
+  return {alt,scr,dens,moist,V,arch,src,w};
+}
+
 function targetFor(b,use,level){
   use=use||"filter"; level=level||"mlight";
   const canon=CANON.level[level]||CANON.level.mlight;
+  /* 출발점 = 기준 생두(워시드 · 밀도 800g/L · 스크린 16 · 수분 10.5% · 고도 1500m)를
+     이 배전도로 볶을 때의 곡선. 여기서 물성 차이만큼 연속으로 옮긴다.
+     예전 기준은 「가공 미지정」이었고 워시드에 +1/+3 을 더했다. 이제 워시드가 기준이라
+     같은 결과를 내면서 가공 사이의 관계가 한눈에 보인다. */
   const t={ drop:(canon.dropHint[0]+canon.dropHint[1])/2,
-            dur:400, rEarly:14.5, rDev:2.8, pre:143 };
+            dur:400, rEarly:15.5, rDev:2.8, pre:146 };
   const FIT={ filter:{best:["light","mlight"],ok:["medium"]},
               espresso:{best:["medium","mdark"],ok:["mlight"]},
               latte:{best:["medium","mdark"],ok:["mlight"]} };
@@ -2621,53 +2774,95 @@ function targetFor(b,use,level){
     `구간 비율 건조 ${CANON.phase.dry}% · 메일라아드 ${CANON.phase.maillard}% · 발달 ${CANON.phase.dev}% (교과서)`,
     CANON.rule+" (교과서)"
   ];
+  const P=beanPhys(b||{});
   const why=[];
-  const add=(o,txt)=>{ for(const k in o) t[k]+=o[k]; why.push(txt); };
+  const cl=(v,l)=>Math.max(-l,Math.min(l,v));
+  const sg=(v,d)=>{ const r=+v.toFixed(d==null?1:d)||0; return (r>0?"+":"")+r.toFixed(d==null?1:d); };
+  const NM={rEarly:["초반","℃/분",1],pre:["예열","℃",0],dur:["시간","초",0],
+            rDev:["발달","℃/분",1],drop:["배출","℃",1]};
+  const add=(o,txt)=>{
+    const bits=[];
+    for(const k in o){ if(!o[k]) continue; t[k]+=o[k];
+      bits.push(`${NM[k][0]} ${sg(o[k],NM[k][2])}${NM[k][1]}`); }
+    if(txt) why.push(bits.length?`${txt} → <b>${bits.join(" · ")}</b>`:txt);
+  };
 
-  const proc=(b.proc||"");
-  if(/워시드|washed/i.test(proc))
-    add({rEarly:+1,pre:+3},"워시드 — 표면 당분이 없어 건조에 열을 조금 더 넣는다");
-  else if(/내추럴|natural/i.test(proc)&&!/펄프드|pulped/i.test(proc))
-    add({drop:-1.5,rDev:-0.4,pre:-4},"내추럴 — 잔여당이 타기 쉬워 얕게 끊고 후반을 눕힌다");
-  else if(/펄프드|pulped/i.test(proc))
-    add({pre:-1},"펄프드 내추럴 — 중간");
-  else if(/허니|honey/i.test(proc))
-    add({rDev:-0.2,pre:-1},"허니 — 내추럴과 워시드의 중간");
+  /* ① 밀도 — 투입은 50g 정량이므로 데워야 할 질량은 같다. 달라지는 것은
+     겉면적과 세포벽이다. 밀도가 높으면 같은 50g 이 더 작은 부피에 들어가
+     열을 받는 겉면적이 작고, 세포벽이 단단해 크랙에 더 큰 내부압이 필요하다. */
+  const kD=(P.dens-REF.dens)/100*P.w.dens;
+  if(Math.abs(kD)>=0.05)
+    add({rEarly:cl(3.0*kD,4), pre:cl(6.0*kD,8), dur:cl(40*kD,60)},
+        `밀도 ${P.dens}g/L (기준 ${REF.dens}) — 밀도가 높으면 열 받는 겉면적이 작고 세포벽이 단단하다`
+        +(P.w.dens<1?" <span class=\"note\">(추정값이라 절반만 반영)</span>":""));
 
-  const alt=parseInt(String(b.alt||"").replace(/[,\s]/g,""))||0;
-  const dens=+b.dens||0;
-  if(dens>=850)            add({rEarly:+2.5,dur:+45,pre:+6},`밀도 ${dens}g/L — 고밀도라 초반 열량을 올리고 시간을 늘린다`);
-  else if(dens&&dens<700)  add({rEarly:-2.5,dur:-30,pre:-5},`밀도 ${dens}g/L — 저밀도라 초반을 눌러 표면이 타지 않게 한다`);
-  else if(!dens&&alt>=1800)add({rEarly:+2,dur:+40,pre:+5},`고도 ${alt}m — 고밀도로 추정 (밀도를 넣으면 정확해집니다)`);
-  else if(!dens&&alt>=1500)add({rEarly:+1,dur:+20,pre:+2},`고도 ${alt}m — 중고밀도로 추정`);
-  else if(!dens&&alt&&alt<1300) add({rEarly:-2,dur:-30,pre:-5},`고도 ${alt}m — 저밀도로 추정`);
+  // ② 알 크기 — 중심까지 열이 가는 시간은 반지름의 제곱에 비례한다(열확산).
+  /* ② 알 크기 — r² 에 비례하는 것은 총시간이 아니라 「중심까지의 열 지연」이다.
+     커피 생두의 열확산계수 α ≈ 1.5×10⁻⁷ m²/s, 스크린 16 의 반지름 ≈ 3.2mm 이므로
+     지연 τ = r²/α ≈ 68초. 총시간은 그 68초 부분만 r² 로 늘어난다.
+     예전에 쓰던 400 은 총시간 전체가 확산에 지배된다고 본 것으로, 과했다. */
+  const TAU=68, rr=P.scr/REF.scr;
+  if(Math.abs(rr-1)>=0.02)
+    add({dur:cl(TAU*(rr*rr-1)*P.w.scr,40)},
+        `알 크기 스크린 ${P.scr} (기준 ${REF.scr}) — 중심까지의 열 지연 `
+        +`τ=r²/α ≈ ${Math.round(TAU*rr*rr)}초 (기준 ${TAU}초)`
+        +(P.w.scr<1?" <span class=\"note\">(추정값이라 절반만 반영)</span>":""));
 
-  const v=(b.var||"").toLowerCase();
-  if(/파카마라|pacamara|마라고지페|maragog/.test(v))
-    add({rEarly:+1.5,dur:+50,pre:+3},"대립종 — 알이 커서 속까지 열이 가는 데 오래 걸린다");
-  else if(/게이샤|기샤|geisha|gesha/.test(v))
-    add({rDev:-0.9,drop:-1,dur:+20,pre:-3},"게이샤 — 납작하고 향이 잘 날아가 후반을 확실히 눕힌다");
-  else if(/재래|heirloom|landrace|74110|74112|kurume/.test(v))
-    add({dur:-20},"소립 재래종 — 빨리 익는다");
-  else if(/sl28|sl34|ruiru|batian|케냐/.test(v))
-    add({rEarly:+1.5,dur:+10},"케냐 계열 대립·고밀도 — 초반 열량을 올린다");
+  // ③ 수분 — 증발 잠열. 물 1g 을 말리는 데 2.26kJ 이 든다.
+  const kM=(P.moist-REF.moist)*P.w.moist;
+  if(Math.abs(kM)>=0.15)
+    add({dur:cl(12*kM,40), rEarly:cl(0.5*kM,2)},
+        `수분 ${P.moist}% (기준 ${REF.moist}) — 물 1g 증발에 2.26kJ 이 든다`
+        +(P.w.moist<1?" <span class=\"note\">(추정값이라 절반만 반영)</span>":""));
 
-  const mo=+b.moist||0;
-  if(mo&&mo<9.5)      add({dur:-20,rEarly:-0.5},`수분 ${mo}% — 마른 크롭이라 빨리 익는다`);
-  else if(mo&&mo>12)  add({dur:+20,rEarly:+1},`수분 ${mo}% — 수분이 많아 건조에 시간이 더 든다`);
+  // ④ 고도 — 세포벽 치밀도. 밀도로 이미 상당 부분 들어갔으므로 계수를 작게 둔다(이중 계산 방지).
+  const kA=(P.alt-REF.alt)/500*P.w.alt;
+  if(Math.abs(kA)>=0.1)
+    add({rEarly:cl(0.5*kA,1.2), pre:cl(1.2*kA,3)},
+        `고도 ${P.alt}m (기준 ${REF.alt}) — 고지대는 세포벽이 치밀해 크랙에 더 큰 내부압이 필요하다`
+        +(P.w.alt<1?" <span class=\"note\">(추정값이라 절반만 반영)</span>":""));
 
-  if(use==="espresso") add({drop:+2,dur:+30,rDev:+0.3},"에스프레소 — 같은 배전도 안에서 조금 더 깊게");
-  else if(use==="latte") add({drop:+3,dur:+20,rDev:+0.5},"라떼 — 우유를 뚫으려면 조금 더 깊게");
+  // ⑤ 가공 — 표면 잔여당과 발효산
+  const ph=PROCADJ.find(([re])=>re.test(String((b&&b.proc)||"")));
+  if(ph) add(ph[1],ph[2]);
+  else    why.push("가공을 알 수 없어 워시드(기준)로 봅니다");
+
+  // ⑥ 품종 — 향의 휘발성 (알 크기·밀도는 ①②에서 이미 들어갔다)
+  if(P.V&&P.V.rDev) add({rDev:P.V.rDev},P.V.n);
+
+  // ⑦ 용도
+  /* 깊이는 배출온도로, 발달은 발달 기울기로 이미 표현된다.
+     총시간까지 크게 늘리면 같은 배출온도에서 승온율만 낮아져 베이킹 쪽으로 간다. */
+  if(use==="espresso") add({drop:2,dur:15,rDev:0.3},"에스프레소 — 같은 배전도 안에서 조금 더 깊게");
+  else if(use==="latte") add({drop:3,dur:10,rDev:0.5},"라떼 — 우유를 뚫으려면 조금 더 깊게. 바디는 발달 기울기로 만든다");
+
+  /* 총시간은 기계가 낼 수 있는 범위 안에 둔다.
+     보정이 겹치면(고밀도 + 대립 + 수분 많음) 8분을 넘는 목표가 나오는데,
+     IKAWA 50g 로 그렇게 볶으면 베이킹이 되고, 애초에 그 목표를 맞출 프로파일이
+     라이브러리에 없어 모든 후보가 영원히 「손보기」로 뜬다. */
+  const DURLO=340, DURHI=460;
+  if(t.dur<DURLO||t.dur>DURHI){
+    const was=t.dur; t.dur=Math.max(DURLO,Math.min(DURHI,t.dur));
+    why.push(`총시간은 <b>${fmt(Math.round(t.dur))}</b>에서 자릅니다 — 보정을 다 더하면 `
+      +`${fmt(Math.round(was))}가 되는데, IKAWA 50g 의 실용 범위는 `
+      +`${fmt(DURLO)}~${fmt(DURHI)} 입니다. 그 밖의 목표는 맞출 프로파일이 없습니다`);
+  }
 
   // 배전도 밴드를 벗어나지 않게 잡아둔다 — 1층이 상한이다
+  const rawDrop=t.drop;
   t.drop=Math.min(canon.dropHint[1]+1.5,Math.max(canon.dropHint[0]-1.5,t.drop));
+  /* 밴드 위·아래로 나간 목표는 화면에서 알려야 한다. 예전에는 조용히 1.5℃ 까지 넘겼고,
+     그래서 「미디엄 다크 + 라떼 = 212℃」 가 경고 없이 나갔다 — 미디엄 다크 상한이 211℃ 인데도. */
+  /* 1℃ 안쪽으로 살짝 걸친 것까지 경고하면 늘 켜져 있어 아무 뜻이 없다.
+     대신 목표가 실제로 어느 배전도에 앉는지는 항상 화면에 적는다. */
+  const overBand = t.drop>canon.dropHint[1]+1.0 ? "over"
+                 : t.drop<canon.dropHint[0]-1.0 ? "under" : null;
 
   /* 기하 정합성 — 보정들이 서로 싸우는 걸 여기서 끊는다.
      예열↑·초반 열량↑·총시간↑ 이 함께 붙으면 "초반에 써야 할 상승폭"이
      예열→배출 사이의 전체 상승폭을 넘어버린다. 그러면 중간 구간이 음수가 되어
      그릴 수 없는 목표가 되고, 화면은 닫을 수 없는 간격을 두고 "고치라"고 말하게 된다.
-     배출온도는 1층(배전도)이라 못 건드리므로, 초반 열량을 그릴 수 있는 상한으로 깎는다.
-     상한 = 중간 구간 승온율이 발달 기울기보다 확실히 큰(=승온율이 끝까지 감소하는) 최대치. */
+     배출온도는 1층(배전도)이라 못 건드리므로, 초반 열량을 그릴 수 있는 상한으로 깎는다. */
   const dE=t.dur*0.40/60, dM=t.dur*0.35/60, dD=t.dur*0.25/60;
   const rise=t.drop-t.pre;
   const cap=(rise - t.rDev*dD - t.rDev*1.15*dM)/dE;
@@ -2679,6 +2874,7 @@ function targetFor(b,use,level){
       +`총시간이 ${fmt(Math.round(t.dur))}이라, ${was.toFixed(1)}℃/분을 넣으면 중간 구간에서 온도가 내려가야 합니다. `
       +`고밀도·대립종에 열을 더 주는 몫은 <b>시간</b>으로 이미 나갔습니다`);
   }
+
   const fit=FIT[use]||FIT.filter;
   let advice=null;
   if(!fit.best.includes(level)&&!fit.ok.includes(level)){
@@ -2689,18 +2885,47 @@ function targetFor(b,use,level){
     advice = "쓸 수는 있지만 흔한 조합은 아닙니다.";
   }
   return {t,canon,canonWhy,why,advice,fitBest:fit.best,fitOk:fit.ok,
+    phys:P.src, physRaw:P, overBand, rawDrop,
     phase:{ dry:Math.round(t.dur*CANON.phase.dry/100),
             mai:Math.round(t.dur*CANON.phase.maillard/100),
-            dev:Math.round(t.dur*CANON.phase.dev/100) }};
+            dev:Math.round(t.dur*CANON.phase.dev/100)}};
 }
 
-/* 항목별 허용폭과 비중 — 왜 이 점수인지 화면에 그대로 보여준다 */
+/* 생두 기록에서 이름이 될 만한 토큰을 뽑는다.
+   프로파일 이름은 대개 라틴 문자(「Santa Lucia」)이고 생두 이름은 한글(「산타루시아」)이라
+   그대로는 겹치지 않는다. 그래서 농장·지역 칸과 붙여넣은 원문까지 함께 본다.
+   원문은 길어서 헛맞음이 나기 쉬우므로 다섯 글자 이상만 본다. */
+const TOKSTOP=/^(washed|natural|honey|pulped|coffee|farm|fazenda|finca|hacienda|estate|micro|nano|single|origin|specialty|arabica|green|beans?|grade|screen|lot|roast|profile|ikawa|sample)$/i;
+function beanTokens(b){
+  b=b||{};
+  const out=new Set();
+  const eat=(txt,min)=>{
+    (String(txt||"").match(/[A-Za-z][A-Za-z'\u2019-]+/g)||[]).forEach(w=>{
+      if(w.length>=min&&!TOKSTOP.test(w)) out.add(w.toLowerCase()); });
+    (String(txt||"").match(/[가-힣]{3,}/g)||[]).forEach(w=>out.add(w));
+  };
+  [b.farm,b.name,b.region,b.origin].forEach(x=>eat(x,4));
+  eat(b.raw,5);
+  return [...out];
+}
+
+/* 항목별 허용폭과 비중 — 왜 이 점수인지 화면에 그대로 보여준다.
+
+   허용폭은 「순위를 가르는 잣대」다. 라이브러리에서 그 축이 실제로 갖는 폭보다
+   허용폭이 넓으면 모든 후보가 만점을 받아 축이 죽는다. 재 보니 세 축이 그랬다 —
+     예열     실제 폭 139~154℃ (15℃)   ← 옛 허용폭 ±14 : 전 구간이 만점
+     초반 열량 실제 폭 14.2~19.7 (5.5)  ← 옛 허용폭 ±3.0 : 절반 이상이 만점
+     총시간   실제 폭 380~422초 (42초)  ← 옛 허용폭 ±60 : 전 구간이 만점
+   좁힌 뒤 산지 원형 사이 「구별 불가」 쌍이 13 → 4 로 줄었다.
+
+   「그대로 쓸 수 있나」를 가리는 GATECUT 은 일부러 그대로 둔다. 그건 다른 질문이다 —
+   20초·5℃ 차이는 순위를 가를 만큼 다르지만 배전도를 바꾸지는 않는다. */
 const DIMS=[
   ["drop",  "배출온도",   2.0, 30],
   ["rDev",  "발달 기울기", 1.2, 25],
-  ["rEarly","초반 열량",   3.0, 20],
-  ["dur",   "총시간",     60,  15],
-  ["pre",   "예열",       14,  10]
+  ["rEarly","초반 열량",   2.0, 20],
+  ["dur",   "총시간",     25,  15],
+  ["pre",   "예열",        8,  10]
 ];
 function matchScore(ch,t,prof,bean,noHist){
   const parts=DIMS.map(([k,label,tol,w])=>{
@@ -2717,9 +2942,19 @@ function matchScore(ch,t,prof,bean,noHist){
   const isGe=/게이샤|기샤|geisha|gesha/;
   if(isGe.test(nm)&&isGe.test(bv)){ score+=7; notes.push("게이샤용으로 만들어진 프로파일 +7"); }
   else if(isGe.test(nm)&&!isGe.test(bv)){ score-=4; notes.push("게이샤 전용 프로파일을 다른 품종에 −4"); }
-  if(/natural|내추럴/i.test(nm)&&/내추럴|natural/i.test(bp)){ score+=4; notes.push("내추럴용 프로파일 +4"); }
-  if(/washed|워시드/i.test(nm)&&/워시드|washed/i.test(bp)){ score+=4; notes.push("워시드용 프로파일 +4"); }
+  /* 가공은 낱말 하나가 아니라 같은 분류인지로 본다.
+     예전에는 natural·washed 두 단어만 찾아서, 「Santa Lucia PN」(펄프드 내추럴)이
+     정확히 그 원두용인데도 가점이 0 이었다. */
+  const pk=procKey(bp), pn2=procKey(prof.name||"");
+  if(pk&&pn2&&pk===pn2){ score+=5; notes.push("같은 가공을 겨냥해 만든 이름 +5"); }
+  else if(pk&&pn2){ score-=2; notes.push("다른 가공을 겨냥한 이름 −2"); }
+  /* 이름이 이 생두의 산지·농장과 겹치는가 — 「Santa Lucia」 ↔ 산타루시아 */
+  const ov=beanTokens(bean).filter(x=>nm.includes(x));
+  if(ov.length){ const bn=Math.min(10,4+3*ov.length); score+=bn;
+    notes.push(`이 생두와 이름이 겹친다 (${ov.slice(0,3).join(", ")}) +${bn}`); }
   if(/cupping|커핑|analytic/i.test(nm)){ score-=3; notes.push("커핑 평가용이라 음용 목적과 다름 −3"); }
+  if(/\blect\b|lecture|강의|시연|\bdemo\b|workshop|teaching/i.test(nm)){
+    score-=3; notes.push("강의·시연용이라 음용 목적과 다름 −3"); }
 
   // 실제로 볶아본 결과 — 이론보다 무겁게 본다
   // (역방향 판정에서는 뺀다. 프로파일마다 같은 값이 더해져 원형 사이 순위가 흔들리진 않지만,
@@ -2742,48 +2977,52 @@ function matchScore(ch,t,prof,bean,noHist){
    그래서 산지 원형을 정방향으로 전부 대입해 보고, 어느 원형의 목표 곡선이
    이 프로파일과 가장 가까운지를 본다 — 판정 근거가 2층과 완전히 같은 식이 된다.
 
-   원형의 고도·밀도·수분은 산지별로 통용되는 범위의 중앙값이다.
-   밀도는 targetFor 의 임계(850 이상 고밀도 / 700 미만 저밀도)를 기준으로 읽히므로,
-   원형마다 실제 측정에서 흔히 나오는 값을 넣었다. */
+   원형의 고도·밀도·수분·스크린은 산지별로 통용되는 범위의 중앙값이다.
+   2층이 연속 보정으로 바뀐 뒤에는 임계값을 맞출 필요가 없어, 실측에서 흔히 나오는 값 그대로 넣는다.
+   scr(스크린)은 알 크기다 — 총시간을 가르는 변수여서 원형마다 다르게 잡아야 구별이 된다. */
 const ARCH=[
   {k:"ethw", co:["에티오피아"], va:["재래종"], n:"에티오피아 워시드", w:"예가체프 · 코케 · 시다모 · 구지",
-   b:{proc:"워시드",alt:"1950",dens:"855",var:"재래종 heirloom",moist:"10.5"},
+   b:{proc:"워시드",alt:"1950",dens:"855",var:"재래종 heirloom",moist:"10.5",screen:"14"},
    note:"고지대·고밀도·소립 재래종. 초반에 열을 세게 넣어도 견디고, 알이 작아 총시간은 짧다."},
   {k:"ethn", co:["에티오피아"], va:["재래종"], n:"에티오피아 내추럴", w:"구지 함벨라 · 시다모 · 예가체프",
-   b:{proc:"내추럴",alt:"2000",dens:"850",var:"재래종 heirloom",moist:"10.8"},
+   b:{proc:"내추럴",alt:"2000",dens:"850",var:"재래종 heirloom",moist:"10.8",screen:"14"},
    note:"고밀도지만 표면 잔여당이 많다. 예열을 낮추고 후반을 눕혀야 탄맛이 안 붙는다."},
   {k:"ken", co:["케냐"], va:["SL28 · SL34"],  n:"케냐 워시드 SL", w:"니에리 · 키리냐가 · 엠부",
-   b:{proc:"워시드",alt:"1750",dens:"860",var:"SL28 SL34",moist:"10.5"},
+   b:{proc:"워시드",alt:"1750",dens:"860",var:"SL28 SL34",moist:"10.5",screen:"17.5"},
    note:"대립·최고밀도. 초반 열량이 가장 많이 필요한 쪽이다."},
   {k:"colw", co:["콜롬비아"], va:["카투라"], n:"콜롬비아·중미 워시드", w:"우일라 · 나리뇨 · 안티오키아",
-   b:{proc:"워시드",alt:"1750",dens:"810",var:"카투라",moist:"11"},
+   b:{proc:"워시드",alt:"1750",dens:"810",var:"카투라",moist:"11",screen:"15.5"},
    note:"중밀도 워시드. 교과서 기준값에 가장 가까운 표준 경로."},
   {k:"gua", co:["과테말라","온두라스"], va:["부르봉"],  n:"과테말라·온두라스 워시드", w:"안티구아 · 우에우에테낭고 · 마르칼라",
-   b:{proc:"워시드",alt:"1650",dens:"820",var:"부르봉",moist:"10.8"},
+   b:{proc:"워시드",alt:"1650",dens:"820",var:"부르봉",moist:"10.8",screen:"16.5"},
    note:"중밀도 부르봉계. 단맛 축이라 발달을 조금 더 준다."},
   {k:"anae", co:["콜롬비아","코스타리카","파나마"], va:["카스티요"], n:"무산소 발효 · 특수가공", w:"콜롬비아 · 코스타리카 · 파나마",
-   b:{proc:"무산소 발효",alt:"1800",dens:"800",var:"카스티요",moist:"11.5"},
+   b:{proc:"무산소 발효",alt:"1800",dens:"800",var:"카스티요",moist:"11.5",screen:"16.5"},
    note:"가공에서 붙은 향이 주인공이라 후반을 눕히고 얕게 끊는 경로가 어울린다."},
   {k:"hon", co:["코스타리카","온두라스","브라질"], va:["카투아이"],  n:"허니 · 펄프드 내추럴", w:"코스타리카 따라주 · 온두라스 · 브라질",
-   b:{proc:"허니",alt:"1600",dens:"800",var:"카투아이",moist:"10.8"},
+   b:{proc:"허니",alt:"1600",dens:"800",var:"카투아이",moist:"10.8",screen:"15.5"},
    note:"워시드와 내추럴의 중간. 점액질이 남아 있어 예열을 조금 낮춘다."},
   {k:"ges", co:["파나마","콜롬비아","에티오피아"], va:["게이샤"],  n:"게이샤 · 향 중심 희소종", w:"파나마 보케테 · 콜롬비아 · 에티오피아",
-   b:{proc:"워시드",alt:"1650",dens:"780",var:"게이샤",moist:"10.5"},
+   b:{proc:"워시드",alt:"1650",dens:"780",var:"게이샤",moist:"10.5",screen:"16.5"},
    note:"납작하고 휘발성 향이 잘 날아간다. 발달을 확실히 눕히고 얕게 끊는 곡선이라야 한다."},
   {k:"pac", co:["엘살바도르","과테말라","니카라과"], va:["파카마라"],  n:"파카마라 · 대립종", w:"엘살바도르 · 과테말라 · 니카라과",
-   b:{proc:"워시드",alt:"1500",dens:"750",var:"파카마라",moist:"11"},
+   b:{proc:"워시드",alt:"1500",dens:"750",var:"파카마라",moist:"11",screen:"18.5"},
    note:"알이 커서 속까지 열이 가는 데 오래 걸린다 — 총시간이 긴 곡선이 필요하다."},
   {k:"peru", co:["페루","에콰도르"], va:["티피카"], n:"중고도 워시드 (페루·에콰도르)", w:"카하마르카 · 쿠스코 · 로하",
-   b:{proc:"워시드",alt:"1500",dens:"780",var:"티피카",moist:"10.8"},
+   b:{proc:"워시드",alt:"1500",dens:"780",var:"티피카",moist:"10.8",screen:"16"},
    note:"밀도가 중간이라 보정이 거의 없다. 무난한 기준 경로."},
   {k:"brpn", co:["브라질"], va:["카투아이"], n:"브라질 펄프드 내추럴", w:"세하도 · 술 지 미나스",
-   b:{proc:"펄프드 내추럴",alt:"1100",dens:"700",var:"옐로우 카투아이",moist:"10.5"},
+   b:{proc:"펄프드 내추럴",alt:"1100",dens:"700",var:"옐로우 카투아이",moist:"10.5",screen:"15.5"},
    note:"저지대 저밀도. 견과·초콜릿 축이라 깊은 배전도와 잘 맞는다."},
   {k:"brn", co:["브라질"], va:["문도노보"],  n:"브라질 내추럴", w:"모지아나 · 세하도",
-   b:{proc:"내추럴",alt:"1050",dens:"690",var:"문도노보",moist:"10.5"},
+   b:{proc:"내추럴",alt:"1050",dens:"690",var:"문도노보",moist:"10.5",screen:"16.5"},
    note:"저밀도 + 표면 잔여당. 초반을 눌러야 표면이 타지 않는다 — 가장 약한 열 경로."},
+  {k:"afrw", co:["르완다","부룬디","탄자니아","말라위"], va:["부르봉"], n:"아프리카 워시드 부르봉",
+   w:"르완다 · 부룬디 · 탄자니아 · 말라위",
+   b:{proc:"워시드",alt:"1750",dens:"830",var:"부르봉",moist:"10.5",screen:"16"},
+   note:"고지대 워시드 부르봉. 중미 워시드보다 밀도가 높고 알은 조금 작다 — 초반 열량을 더 주고 시간은 조금 짧게."},
   {k:"sum", co:["인도네시아"], va:["카티모르"],  n:"인도네시아 길링바사", w:"수마트라 만델링 · 아체 · 토라자",
-   b:{proc:"펄프드 내추럴",alt:"1300",dens:"680",var:"카티모르",moist:"12.5"},
+   b:{proc:"펄프드 내추럴",alt:"1300",dens:"680",var:"카티모르",moist:"12.5",screen:"17.5"},
    note:"반습식이라 밀도가 낮고 수분이 많다. 낮은 열로 길게 가는 경로."}
 ];
 const USENAME={filter:"필터",espresso:"에스프레소",latte:"라떼"};
@@ -2815,13 +3054,13 @@ function archTargets(){                    // 원형 × 배전도 × 용도 → 
 }
 
 /* 곡선을 교과서 기준값과 견줘 말로 옮긴다 — 2층 보정 규칙을 그대로 뒤집은 문장이다 */
-const BASE={rEarly:14.5,rDev:2.8,dur:400,pre:143};
+const BASE={rEarly:15.5,rDev:2.8,dur:400,pre:146};   // 기준 생두 = 워시드·800g/L·스크린16·10.5%·1500m
 function profRead(ch){
   const out=[];
   const dE=ch.rEarly-BASE.rEarly, dD=ch.rDev-BASE.rDev, dU=ch.dur-BASE.dur, dP=ch.pre-BASE.pre;
   const sg=v=>{ const r=+v.toFixed(1)||0; return (r>0?"+":"")+r.toFixed(1); };
   out.push({k:"초반 열량", v:`${ch.rEarly.toFixed(1)}℃/분 (${sg(dE)})`,
-    say: dE>=2  ? "건조에 열을 많이 넣는다 — 고밀도·고지대·워시드 생두를 겨냥한 경로"
+    say: dE>=2  ? "건조에 열을 많이 넣는다 — 고밀도·고지대 생두를 겨냥한 경로"
        : dE<=-2 ? "초반을 눌러 표면을 보호한다 — 저밀도·저지대·내추럴에 맞는 경로"
        : "교과서 기준에 가까운 표준 건조"});
   out.push({k:"발달 기울기", v:`${ch.rDev.toFixed(1)}℃/분 (${sg(dD)})`,
@@ -2829,7 +3068,7 @@ function profRead(ch){
        : dD>=0.5  ? "크랙 뒤에도 열을 유지한다 — 단맛·바디를 쌓는 쪽 (에스프레소·저밀도 단맛 축)"
        : "표준 발달"});
   out.push({k:"총시간", v:`${fmt(ch.dur)} (${dU>=0?"+":"−"}${Math.abs(Math.round(dU))}초)`,
-    say: dU>=40  ? "길게 간다 — 대립종·고밀도·수분 많은 크롭에 여유"
+    say: dU>=40  ? "길게 간다 — 알이 크거나 고밀도, 수분 많은 크롭에 여유"
        : dU<=-40 ? "짧게 끊는다 — 소립 재래종·마른 크롭 쪽"
        : "표준 길이"});
   out.push({k:"예열", v:`${ch.pre.toFixed(0)}℃ (${sg(dP)})`,
@@ -3184,7 +3423,7 @@ function showRec(){
   $("recbox").hidden=false;
   const use=$("r_use")?$("r_use").value:"filter";
   const level=$("r_level")?$("r_level").value:"mlight";
-  const {t,canon,canonWhy,why,phase,advice,fitBest}=targetFor(b,use,level);
+  const {t,canon,canonWhy,why,phase,advice,fitBest,phys,overBand}=targetFor(b,use,level);
   const H=historyFor(b.id);
 
   let html=`<p class="tagline">${H.length?"두 번째부터 — 지난 결과로 조정":"첫 배치 — 여기서 시작"}</p>`;
@@ -3202,6 +3441,24 @@ function showRec(){
     <p class="note">${canonWhy.map(w=>"· "+w).join("<br>")}</p>`;
 
   html+=`<p class="tagline" style="margin-top:12px">2층 · 이 생두에 맞춘 경로 <span class="pill">물리</span></p>`;
+  /* 목표 계산에 쓴 물성이 실측인지 추정인지 먼저 밝힌다 — 추정이면 결과도 추정이다 */
+  html+=`<p class="note" style="margin:0 0 6px"><b>쓰인 생두 물성</b><br>
+    ${(phys||[]).map(x=>"· "+x).join("<br>")}</p>`;
+  /* 배전도 밴드를 벗어난 목표는 크게 알린다. 예전에는 조용히 넘어가서
+     「미디엄 다크 + 라떼 = 212℃」가 경고 없이 나갔다 — 미디엄 다크 상한이 211℃ 인데도. */
+  html+=`<p class="note" style="margin:0 0 6px">${(()=>{ const bd=dropBand(t.drop);
+    return `목표 배출 <b>${t.drop.toFixed(1)}℃</b>는 <b>${LVNAME[bd.level]}`
+      +`${bd.out==="over"?"보다 조금 깊은":bd.out==="under"?"보다 조금 얕은":""}</b> 구간입니다`
+      +` (${canon.name} 밴드 ${canon.dropHint[0]}~${canon.dropHint[1]}℃).`; })()}</p>`;
+  if(overBand){
+    const over=overBand==="over";
+    html+=`<p class="lead" style="margin:0 0 8px;color:var(--actual)">
+      <span class="pill warn">배전도 밴드 밖</span>
+      목표 배출 <b>${t.drop.toFixed(1)}℃</b>는 ${canon.name} 밴드
+      (${canon.dropHint[0]}~${canon.dropHint[1]}℃)보다 <b>${over?"깊습니다":"얕습니다"}</b> —
+      실제로는 <b>${LVNAME[dropBand(t.drop).level]}${over?" 이상":" 이하"}</b>으로 볶힙니다.
+      ${over?"더 밝게 하려면 목표 배전도를 한 단계 낮추세요.":"더 깊게 하려면 목표 배전도를 한 단계 올리세요."}</p>`;
+  }
   html+=`<p class="lead" style="margin:0">배출 <b>${t.drop.toFixed(1)}℃</b> ·
     총 <b>${fmt(t.dur)}</b> · 초반 열량 <b>${t.rEarly.toFixed(1)}℃/분</b> ·
     발달 기울기 <b>${t.rDev.toFixed(1)}℃/분</b> · 예열 <b>${t.pre.toFixed(0)}℃</b></p>
@@ -3225,7 +3482,7 @@ function showRec(){
   const sign=x=>(x>0?"+":"")+x.toFixed(x>=10||x<=-10?0:1);
   html+=`<p class="tagline" style="margin-top:12px">3층 · 후보 ${ranked.length}개 중 상위 5 <span class="pill warn">추정</span></p>`;
   html+=`<table><tr><th style="width:34px"></th><th>프로파일</th><th>출처</th><th>쓸 수 있나</th><th class="num">점수</th>
-    <th class="num">배출</th><th class="num">시간</th><th class="num">초반</th><th class="num">발달</th>
+    <th class="num">배출</th><th>배전도</th><th class="num">시간</th><th class="num">초반</th><th class="num">발달</th>
     <th>목표와의 차이</th></tr>`+
     top.map((r,i)=>{
       const gaps=r.parts.filter(x=>Math.abs(x.diff)>=(x.k==="dur"?30:x.k==="pre"?8:x.k==="rEarly"?2:1))
@@ -3240,7 +3497,12 @@ function showRec(){
         <td>${gt.ok?'<span class="pill ok">그대로</span>'
                    :`<span class="pill warn">손보기 ${gt.gaps.length}</span>`}</td>
         <td class="num"><b>${r.score.toFixed(0)}</b></td>
-        <td class="num">${r.ch.drop.toFixed(1)}</td><td class="num">${fmt(r.ch.dur)}</td>
+        <td class="num">${r.ch.drop.toFixed(1)}</td>
+        <td>${(()=>{ const bd=dropBand(r.ch.drop);
+          return `<span class="pill${bd.out?" warn":""}" title="${bd.canon.dropHint[0]}~${bd.canon.dropHint[1]}℃`
+            +`${bd.out==="over"?" — 이 밴드보다 깊습니다":bd.out==="under"?" — 이 밴드보다 얕습니다":""}">`
+            +`${bd.canon.name}${bd.out==="over"?" ↑":bd.out==="under"?" ↓":""}</span>`; })()}</td>
+        <td class="num">${fmt(r.ch.dur)}</td>
         <td class="num">${r.ch.rEarly.toFixed(1)}</td><td class="num">${r.ch.rDev.toFixed(1)}</td>
         <td>${gaps.length?gaps.join(" · "):"거의 맞음"}</td></tr>`;
     }).join("")+`</table>`;
