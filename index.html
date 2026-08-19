@@ -789,11 +789,15 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     </div>
 
     <div class="grid g5" id="y_kv">
-      <div class="wide"><label>동기화 키 — Cloudflare 방식에서만 씁니다</label>
-        <p class="note" style="margin:0 0 5px">GitHub 방식을 고르셨다면 이 칸은 비워두세요.
-        키 하나로 묶는 간편한 방식이지만, Cloudflare에 저장소를 따로 연결해야 동작합니다.</p>
-        <div class="row"><input type="text" id="y_key" style="flex:1" placeholder="비워두면 동기화하지 않습니다">
-        <button class="ghost" id="y_gen">새로 만들기</button></div></div>
+      <div class="wide"><label>동기화 키 — 이게 곧 비밀번호입니다</label>
+        <p class="note" style="margin:0 0 5px"><b>기억하기 쉬운 문장을 직접 넣으셔도 됩니다.</b>
+        다른 기기에서 <b>같은 키만 넣으면</b> 그 기록이 그대로 따라옵니다 — 그게 전부입니다.
+        <br>다만 <b>이 키를 아는 사람은 누구나 기록을 봅니다.</b> 짧은 단어 말고
+        <b>16자 이상</b>으로, 남이 짐작하기 어렵게 정하세요 (영문·숫자·<span class="mono">-</span>·<span class="mono">_</span>, 8~64자).</p>
+        <div class="row"><input type="text" id="y_key" style="flex:1"
+          placeholder="예: gwangho-roast-2026-jeju">
+        <button class="ghost" id="y_gen">무작위로 만들기</button></div>
+        <p class="note" id="y_keyhint" style="margin:5px 0 0"></p></div>
     </div>
     <div class="row" style="margin-top:8px">
       <button id="y_up">지금 올리기</button>
@@ -808,52 +812,18 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
   <div class="block">
     <h2>다른 기기에서 이어 쓰기</h2>
-    <p class="lead">새 PC나 다른 브라우저에서 열면 <b>동기화 설정이 없어 기록도 비어 있습니다.</b>
-    여기서 만든 <b>이음 링크</b>를 그 기기에서 열면 설정이 옮겨지고 기록도 바로 내려받습니다.
-    링크에는 <b>여섯 자리 비밀번호로 잠긴</b> 설정만 들어갑니다.</p>
+    <p class="lead">새 PC나 다른 브라우저에서 열면 <b>기록이 비어 있습니다.</b>
+    버튼 한 번이면 이 기기의 기록을 그쪽에서도 그대로 볼 수 있습니다.</p>
     <div class="row">
-      <button id="h_get">이 기기로 가져오기</button>
-      <button class="ghost" id="h_give">다른 기기 승인하기</button>
-      <button class="ghost sm" id="h_make">링크로 하기</button>
-      <span class="note" id="h_msg"></span>
+      <button id="h_start">다른 기기와 잇기</button>
     </div>
 
-    <div class="extra" id="h_getbox" hidden style="margin-top:9px">
-      <p class="tagline">이 기기에 뜬 코드를 <b>기록이 있는 기기</b>에 입력하세요</p>
-      <p class="mono" id="h_code" style="font-size:40px;font-weight:700;letter-spacing:.16em;
-        margin:0 0 6px"></p>
-      <p class="lead" style="margin:0 0 8px">폰에서 <b>데이터 탭 → 「다른 기기 승인하기」</b>를 누르고
-      이 코드를 넣으면 됩니다.</p>
-      <p class="note" id="h_getmsg"></p>
-      <button class="ghost sm" id="h_getcancel">그만두기</button>
-    </div>
-
-    <div class="extra" id="h_givebox" hidden style="margin-top:9px">
-      <p class="tagline">새 기기에 뜬 코드를 넣으세요</p>
-      <div class="row">
-        <input type="text" id="h_incode" placeholder="예: K7M2QP" maxlength="8"
-          style="width:180px;font-size:22px;letter-spacing:.14em;text-transform:uppercase" class="mono">
-        <button id="h_send">승인하고 보내기</button>
-        <button class="ghost" id="h_givecancel">닫기</button>
+    <div class="extra" id="h_panel" hidden style="margin-top:9px">
+      <div id="h_body"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="ghost sm" id="h_flip">반대로 하기</button>
+        <button class="ghost sm" id="h_close">닫기</button>
       </div>
-      <p class="note" id="h_givemsg" style="margin-top:7px"></p>
-    </div>
-    <div class="extra" id="h_box" hidden style="margin-top:9px">
-      <p class="tagline" style="color:var(--actual)">대비책 — 중계가 없을 때 쓰는 링크 방식</p>
-      <p class="tagline">① 이 비밀번호를 새 기기에서 입력합니다</p>
-      <p class="mono" id="h_pin" style="font-size:34px;font-weight:700;letter-spacing:.22em;
-        margin:0 0 4px"></p>
-      <p class="note" style="margin:0 0 10px">메신저로 보내지 마세요. <b>화면을 보고 손으로 입력</b>하세요 —
-      링크와 비밀번호가 따로 다녀야 안전합니다.</p>
-      <p class="tagline">② 이 링크를 새 기기에서 엽니다</p>
-      <textarea id="h_link" readonly style="min-height:66px;font-size:12px" class="mono"></textarea>
-      <div class="row" style="margin-top:7px">
-        <button class="ghost" id="h_copy">링크 복사</button>
-        <button class="ghost" id="h_done">닫기</button>
-        <span class="note" id="h_copymsg"></span>
-      </div>
-      <p class="note" style="margin-top:8px">링크는 <b>10분 뒤 만료</b>됩니다.
-      카톡·메일 어디로 보내도 됩니다 — 비밀번호 없이는 열리지 않습니다.</p>
     </div>
   </div>
 
@@ -1614,7 +1584,19 @@ $("y_gen").onclick=()=>{
   DB.settings.syncKey=$("y_key").value; persist();
   $("y_msg").innerHTML="키를 만들었습니다. <b>다른 기기에도 같은 키를 넣으세요.</b> 어딘가에 적어두시고요.";
 };
-$("y_key").addEventListener("input",()=>{ DB.settings.syncKey=syncKey(); persist(); });
+$("y_key").addEventListener("input",()=>{ DB.settings.syncKey=syncKey(); persist(); keyHint(); });
+/* 키가 곧 비밀번호이므로 세기를 바로 알려준다 */
+function keyHint(){
+  const e=$("y_keyhint"); if(!e) return;
+  const k=($("y_key").value||"").trim();
+  if(!k){ e.innerHTML=""; return; }
+  if(!/^[A-Za-z0-9_-]+$/.test(k)){
+    e.innerHTML='<span class="pill warn">쓸 수 없는 글자</span> 영문·숫자·'
+      +'<span class="mono">-</span>·<span class="mono">_</span> 만 됩니다 (한글·공백 불가).'; return; }
+  if(k.length<8){ e.innerHTML='<span class="pill warn">너무 짧습니다</span> 8자 이상이어야 합니다.'; return; }
+  if(k.length<16){ e.innerHTML='<span class="pill warn">약합니다</span> 16자 이상을 권합니다 — 이 키가 곧 비밀번호입니다.'; return; }
+  e.innerHTML='<span class="pill ok">좋습니다</span> 다른 기기에서 이 키를 그대로 넣으면 됩니다.';
+}
 $("y_auto").addEventListener("change",()=>{ DB.settings.syncAuto=$("y_auto").checked; persist(); });
 async function runSync(btn,label,fn){
   const b=$(btn), old=b.textContent;
@@ -1699,6 +1681,7 @@ async function restore(){
   }
   applySettings(); renderBeans(); renderRoasts(); renderProfiles(); renderWaiting(); stats();
   if(DB.settings.syncKey) $("y_key").value=DB.settings.syncKey;
+  keyHint();
   ["g_repo","g_path","g_token"].forEach(id=>{ if(DB.settings[id]) $(id).value=DB.settings[id]; });
   tokState();
   if(DB.settings.syncMode){ $("y_mode").value=DB.settings.syncMode;
@@ -5238,26 +5221,7 @@ const b64u  = a=>btoa(String.fromCharCode(...a)).replace(/\+/g,"-").replace(/\//
 const unb64u= t=>{ t=t.replace(/-/g,"+").replace(/_/g,"/"); while(t.length%4) t+="=";
   const b=atob(t), u=new Uint8Array(b.length);
   for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; };
-async function hKey(pin,salt){
-  const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pin),"PBKDF2",false,["deriveKey"]);
-  return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:250000,hash:"SHA-256"},
-    base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
-}
-async function hPack(obj,pin){
-  const salt=crypto.getRandomValues(new Uint8Array(16));
-  const iv  =crypto.getRandomValues(new Uint8Array(12));
-  const ct=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},
-    await hKey(pin,salt), new TextEncoder().encode(JSON.stringify(obj))));
-  const out=new Uint8Array(28+ct.length);
-  out.set(salt,0); out.set(iv,16); out.set(ct,28);
-  return b64u(out);
-}
-async function hUnpack(txt,pin){
-  const raw=unb64u(txt);
-  const salt=raw.slice(0,16), iv=raw.slice(16,28), ct=raw.slice(28);
-  const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv},await hKey(pin,salt),ct);
-  return JSON.parse(new TextDecoder().decode(pt));
-}
+
 /* ── 기기 잇기 : 새 기기가 요청 → 기록 있는 기기가 승인 ──────────────
    중계(api/pair)는 잠긴 봉투만 나른다. 서버는 내용을 못 본다:
      새 기기가 공개키를 올리고 → 승인 기기가 그 공개키로 잠가 올리고 → 새 기기가 개인키로 연다.
@@ -5286,164 +5250,126 @@ async function pairGet(code,slot){
   if(!r.ok) throw new Error((await r.json().catch(()=>({}))).error||`중계 오류 ${r.status}`);
   return r.json();
 }
-let pairStop=null;
-/* ① 새 기기 — 코드를 띄우고 답장을 기다린다 */
-$("h_get").onclick=async()=>{
-  if(!(window.crypto&&crypto.subtle)){
-    $("h_msg").innerHTML=`<span class="pill warn">불가</span> <b>https 주소</b>로 열어주세요.`; return; }
-  const code=pairCode();
-  const kp=await ecdhPair();
-  $("h_code").textContent=code;
-  $("h_getbox").hidden=false; $("h_givebox").hidden=true; $("h_box").hidden=true;
-  $("h_msg").textContent="";
-  $("h_getmsg").innerHTML=`<span class="pill">기다리는 중…</span> 3분 안에 입력하세요.`;
-  try{ await pairPut(code,"offer",{pub:await jwk(kp.publicKey)}); }
-  catch(e){
-    $("h_getbox").hidden=true;
-    $("h_msg").innerHTML=`<span class="pill warn">중계가 아직 없습니다</span> ${e.message}<br>
-      아래 <b>「이음 링크 만들기」</b>로 대신 하실 수 있습니다.`;
-    $("h_box").hidden=true; $("h_make").hidden=false; return;
-  }
-  const until=Date.now()+180000;
-  pairStop=false;
-  (async function poll(){
-    while(!pairStop&&Date.now()<until){
-      await new Promise(r=>setTimeout(r,1500));
-      let rep2=null;
-      try{ rep2=await pairGet(code,"reply"); }catch(e){}
-      if(!rep2) continue;
-      try{
-        const key=await ecdhSecret(kp.privateKey,rep2.pub);
-        const iv=unb64u(rep2.iv), ct=unb64u(rep2.ct);
-        const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv},key,ct);
-        const cfg=JSON.parse(new TextDecoder().decode(pt));
-        HKEYS.forEach(k=>{ if(cfg[k]!=null) DB.settings[k]=cfg[k]; });
-        if(DB.settings.syncKey) $("y_key").value=DB.settings.syncKey;
-        ["g_repo","g_path","g_token"].forEach(id=>{ if(DB.settings[id]) $(id).value=DB.settings[id]; });
-        if(DB.settings.syncMode){ $("y_mode").value=DB.settings.syncMode;
-          $("y_mode").dispatchEvent(new Event("change")); }
-        $("y_auto").checked=!!DB.settings.syncAuto;
-        tokState(); persist();
-        $("h_getmsg").innerHTML=`<span class="pill ok">설정을 받았습니다</span> 기록을 내려받는 중…`;
-        try{
-          if(syncMode()==="gh") await ghDown(false); else await syncDown(false);
-          $("h_getmsg").innerHTML=`<span class="pill ok">준비 끝</span>
-            생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length} · 프로파일 ${DB.profiles.length}건을 가져왔습니다.`;
-        }catch(e){ $("h_getmsg").innerHTML=
-          `<span class="pill warn">설정은 받았는데 내려받기 실패</span> ${e.message}`; }
-      }catch(e){ $("h_getmsg").innerHTML=`<span class="pill warn">봉투를 열지 못했습니다</span> ${e.message}`; }
-      pairStop=true; return;
-    }
-    if(!pairStop) $("h_getmsg").innerHTML=
-      `<span class="pill warn">시간이 지났습니다</span> 다시 눌러 새 코드를 받으세요.`;
-  })();
-};
-$("h_getcancel").onclick=()=>{ pairStop=true; $("h_getbox").hidden=true; };
-/* ② 기록 있는 기기 — 코드를 받아 설정을 잠가 올린다 */
-$("h_give").onclick=()=>{
-  $("h_givebox").hidden=false; $("h_getbox").hidden=true; $("h_box").hidden=true;
-  $("h_msg").textContent=""; $("h_givemsg").textContent=""; $("h_incode").value="";
-  $("h_incode").focus();
-};
-$("h_givecancel").onclick=()=>{ $("h_givebox").hidden=true; };
-$("h_send").onclick=async()=>{
-  const code=($("h_incode").value||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
-  if(code.length<4){ $("h_givemsg").innerHTML=`<span class="pill warn">코드를 넣으세요</span>`; return; }
-  const cfg={}; HKEYS.forEach(k=>{ if(DB.settings[k]!=null&&DB.settings[k]!=="") cfg[k]=DB.settings[k]; });
-  if(!cfg.syncKey&&!cfg.g_token){
-    $("h_givemsg").innerHTML=`<span class="pill warn">동기화가 아직 없습니다</span>
-      위 「기기 간 동기화」를 먼저 설정하세요 — 옮길 것이 있어야 합니다.`; return; }
-  $("h_givemsg").innerHTML=`<span class="pill">보내는 중…</span>`;
-  try{
-    const off=await pairGet(code,"offer");
-    if(!off){ $("h_givemsg").innerHTML=
-      `<span class="pill warn">그 코드를 찾지 못했습니다</span> 새 기기에 뜬 코드가 맞는지, 3분이 지나지 않았는지 보세요.`;
-      return; }
-    const kp=await ecdhPair();
-    const key=await ecdhSecret(kp.privateKey,off.pub);
-    const iv=crypto.getRandomValues(new Uint8Array(12));
-    const ct=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},key,
-      new TextEncoder().encode(JSON.stringify(cfg))));
-    await pairPut(code,"reply",{pub:await jwk(kp.publicKey),iv:b64u(iv),ct:b64u(ct)});
-    $("h_givemsg").innerHTML=`<span class="pill ok">보냈습니다</span>
-      새 기기 화면에 「준비 끝」이 뜨는지 확인하세요.`;
-  }catch(e){ $("h_givemsg").innerHTML=`<span class="pill warn">실패</span> ${e.message}`; }
-};
+let pairStop=null, hMode=null;      // hMode: "get"(받는 쪽) | "give"(주는 쪽)
+function hHasSync(){ return !!(DB.settings.syncKey||DB.settings.g_token); }
+function hPanel(html){ $("h_body").innerHTML=html; $("h_panel").hidden=false; }
 
-$("h_make").onclick=async()=>{
-  const cfg={}; HKEYS.forEach(k=>{ if(DB.settings[k]!=null&&DB.settings[k]!=="") cfg[k]=DB.settings[k]; });
-  if(!cfg.syncKey&&!cfg.g_token){
-    $("h_msg").innerHTML=`<span class="pill warn">동기화가 아직 없습니다</span>
-      위 「기기 간 동기화」를 먼저 설정하세요 — 옮길 것이 있어야 이을 수 있습니다.`;
-    $("h_box").hidden=true; return;
-  }
-  if(!(window.crypto&&crypto.subtle)){
-    $("h_msg").innerHTML=`<span class="pill warn">불가</span>
-      이 주소에서는 암호화를 쓸 수 없습니다. <b>https 주소</b>로 열어주세요.`; return;
-  }
-  const pin=String(Math.floor(Math.random()*900000)+100000);
-  cfg.exp=Date.now()+10*60*1000;                 // 10분 뒤 만료
-  const link=location.origin+location.pathname+"#setup="+await hPack(cfg,pin);
-  $("h_pin").textContent=pin.slice(0,3)+" "+pin.slice(3);
-  $("h_link").value=link;
-  $("h_box").hidden=false;
-  $("h_msg").innerHTML=`<span class="pill ok">만들었습니다</span> 아래 순서대로 하세요.`;
-  $("h_copymsg").textContent="";
-};
-$("h_copy").onclick=async()=>{
-  try{ await navigator.clipboard.writeText($("h_link").value);
-    $("h_copymsg").innerHTML='<span class="pill ok">복사했습니다</span>';
-  }catch(e){ $("h_link").select(); $("h_copymsg").textContent="칸을 길게 눌러 직접 복사하세요."; }
-};
-$("h_done").onclick=()=>{ $("h_box").hidden=true; $("h_pin").textContent="";
-  $("h_link").value=""; $("h_msg").textContent=""; };
+/* 버튼 하나로 시작한다. 이 기기에 설정이 있으면 주는 쪽, 없으면 받는 쪽으로 알아서 연다. */
+$("h_start").onclick=()=>{ hOpen(hHasSync()?"give":"get"); };
+$("h_close").onclick=()=>{ pairStop=true; $("h_panel").hidden=true; };
+$("h_flip").onclick=()=>{ hOpen(hMode==="get"?"give":"get"); };
 
-/* 받는 쪽 — 주소에 #setup= 이 있으면 비밀번호를 물어 설정을 심고 바로 내려받는다 */
-async function hReceive(){
-  const m=String(location.hash||"").match(/setup=([A-Za-z0-9_-]+)/);
-  if(!m) return;
-  history.replaceState(null,"",location.pathname);     // 주소창에서 지운다
-  document.querySelector('nav button[data-p="data"]').click();
+function hOpen(mode){
+  pairStop=true; hMode=mode;
+  $("h_flip").textContent = mode==="get" ? "아니요, 이 기기가 넘겨줄게요"
+                                         : "아니요, 이 기기가 받을게요";
   if(!(window.crypto&&crypto.subtle)){
-    $("y_msg").innerHTML=`<span class="pill warn">불가</span> https 주소로 열어주세요.`; return; }
-  for(let tries=1;tries<=3;tries++){
-    const pin=prompt(`다른 기기에 뜬 여섯 자리 비밀번호를 넣으세요`
-      +(tries>1?`  (${tries}/3)`:""));
-    if(pin===null) return;
-    let cfg;
-    try{ cfg=await hUnpack(m[1],pin.replace(/\D/g,"")); }
-    catch(e){
-      if(tries===3){ $("y_msg").innerHTML=
-        `<span class="pill warn">비밀번호가 맞지 않습니다</span> 링크를 다시 만들어 주세요.`; return; }
-      continue;
-    }
-    if(cfg.exp&&Date.now()>cfg.exp){
-      $("y_msg").innerHTML=`<span class="pill warn">만료된 링크</span>
-        10분이 지났습니다 — 다른 기기에서 새로 만들어 주세요.`; return; }
-    delete cfg.exp;
-    HKEYS.forEach(k=>{ if(cfg[k]!=null) DB.settings[k]=cfg[k]; });
-    // 화면 칸에도 반영
-    if(DB.settings.syncKey) $("y_key").value=DB.settings.syncKey;
-    ["g_repo","g_path","g_token"].forEach(id=>{ if(DB.settings[id]) $(id).value=DB.settings[id]; });
-    if(DB.settings.syncMode){ $("y_mode").value=DB.settings.syncMode;
-      $("y_mode").dispatchEvent(new Event("change")); }
-    $("y_auto").checked=!!DB.settings.syncAuto;
-    tokState(); persist();
-    $("y_msg").innerHTML=`<span class="pill ok">설정을 옮겼습니다</span> 이제 기록을 내려받습니다…`;
-    try{
-      if(syncMode()==="gh") await ghDown(false); else await syncDown(false);
-      $("y_msg").innerHTML=`<span class="pill ok">준비 끝</span>
-        생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length} · 프로파일 ${DB.profiles.length}건을 가져왔습니다.
-        이 기기에서도 그대로 쓰시면 됩니다.`;
-    }catch(e){
-      $("y_msg").innerHTML=`<span class="pill warn">설정은 옮겼는데 내려받기가 실패했습니다</span>
-        ${e.message} — 위 「지금 내려받기」를 눌러보세요.`;
-    }
-    return;
-  }
+    hPanel(`<p class="lead" style="color:var(--actual);margin:0">
+      <b>https 주소로 열어야 합니다.</b><br>
+      <span class="note">주소창이 <b>localhost</b> 나 <b>file://</b> 이면 브라우저가 암호화를 막습니다.
+      <b>roastpoint.pages.dev</b> 로 열어주세요.</span></p>`); return; }
+  if(mode==="give") hGive(); else hGet();
 }
 
-restore().then(hReceive);
+/* ── 받는 쪽 : 코드를 띄우고 기다린다 ── */
+async function hGet(){
+  const code=pairCode();
+  hPanel(`<p class="tagline">이 기기로 기록을 가져옵니다</p>
+    <p class="lead" style="margin:0 0 4px">아래 여섯 글자를 <b>기록이 있는 기기</b>(폰)에 입력하세요.</p>
+    <p class="mono" style="font-size:42px;font-weight:700;letter-spacing:.16em;margin:6px 0">${code}</p>
+    <p class="note" style="margin:0 0 8px">폰에서 <b>데이터 탭 → 「다른 기기와 잇기」</b> → 이 코드 입력</p>
+    <p class="note" id="h_stat"><span class="pill">기다리는 중…</span> 3분 안에 넣으세요.</p>`);
+  const kp=await ecdhPair();
+  try{ await pairPut(code,"offer",{pub:await jwk(kp.publicKey)}); }
+  catch(e){ hRelayMissing(e); return; }
+  const until=Date.now()+180000; pairStop=false;
+  while(!pairStop&&Date.now()<until){
+    await new Promise(r=>setTimeout(r,1500));
+    let rep=null; try{ rep=await pairGet(code,"reply"); }catch(e){}
+    if(!rep) continue;
+    try{
+      const key=await ecdhSecret(kp.privateKey,rep.pub);
+      const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv:unb64u(rep.iv)},key,unb64u(rep.ct));
+      const cfg=JSON.parse(new TextDecoder().decode(pt));
+      hApply(cfg);
+      $("h_stat").innerHTML=`<span class="pill ok">설정을 받았습니다</span> 기록을 내려받는 중…`;
+      try{
+        if(syncMode()==="gh") await ghDown(false); else await syncDown(false);
+        $("h_stat").innerHTML=`<span class="pill ok">준비 끝</span>
+          생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length} · 프로파일 ${DB.profiles.length}건을 가져왔습니다.
+          이제 이 기기에서 그대로 쓰시면 됩니다.`;
+      }catch(e){ $("h_stat").innerHTML=
+        `<span class="pill warn">설정은 받았는데 내려받기 실패</span> ${e.message}`; }
+    }catch(e){ $("h_stat").innerHTML=`<span class="pill warn">봉투를 열지 못했습니다</span> ${e.message}`; }
+    pairStop=true; return;
+  }
+  if(!pairStop&&$("h_stat")) $("h_stat").innerHTML=
+    `<span class="pill warn">시간이 지났습니다</span> 「반대로 하기」 위 버튼을 다시 눌러 새 코드를 받으세요.`;
+}
+
+/* ── 주는 쪽 : 새 기기에 뜬 코드를 받아 잠가서 올린다 ── */
+function hGive(){
+  if(!hHasSync()){
+    hPanel(`<p class="lead" style="margin:0"><b>이 기기에도 아직 동기화가 없습니다.</b><br>
+      <span class="note">위 「기기 간 동기화」에서 <b>GitHub 비공개 저장소</b>를 먼저 설정하고
+      「지금 올리기」를 한 번 누르세요. 그게 원본이 됩니다.</span></p>`); return; }
+  hPanel(`<p class="tagline">다른 기기에 기록을 넘겨줍니다</p>
+    <p class="lead" style="margin:0 0 8px">새 기기 화면에 뜬 <b>여섯 글자</b>를 넣으세요.</p>
+    <div class="row">
+      <input type="text" id="h_incode" placeholder="K P B J R 8" maxlength="8" class="mono"
+        style="width:190px;font-size:24px;letter-spacing:.14em;text-transform:uppercase">
+      <button id="h_send">보내기</button>
+    </div>
+    <p class="note" id="h_stat" style="margin-top:8px"></p>`);
+  $("h_incode").focus();
+  $("h_send").onclick=async()=>{
+    const code=($("h_incode").value||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+    if(code.length<4){ $("h_stat").innerHTML=`<span class="pill warn">코드를 넣으세요</span>`; return; }
+    const cfg={}; HKEYS.forEach(k=>{ if(DB.settings[k]!=null&&DB.settings[k]!=="") cfg[k]=DB.settings[k]; });
+    $("h_stat").innerHTML=`<span class="pill">보내는 중…</span>`;
+    let off=null;
+    try{ off=await pairGet(code,"offer"); }catch(e){ hRelayMissing(e); return; }
+    if(!off){ $("h_stat").innerHTML=`<span class="pill warn">그 코드를 찾지 못했습니다</span>
+      새 기기에 뜬 코드가 맞는지, 3분이 지나지 않았는지 확인하세요.`; return; }
+    try{
+      const kp=await ecdhPair();
+      const key=await ecdhSecret(kp.privateKey,off.pub);
+      const iv=crypto.getRandomValues(new Uint8Array(12));
+      const ct=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},key,
+        new TextEncoder().encode(JSON.stringify(cfg))));
+      await pairPut(code,"reply",{pub:await jwk(kp.publicKey),iv:b64u(iv),ct:b64u(ct)});
+      $("h_stat").innerHTML=`<span class="pill ok">보냈습니다</span>
+        새 기기 화면에 <b>「준비 끝」</b>이 뜨는지 보세요.`;
+    }catch(e){ $("h_stat").innerHTML=`<span class="pill warn">실패</span> ${e.message}`; }
+  };
+}
+
+function hApply(cfg){
+  HKEYS.forEach(k=>{ if(cfg[k]!=null) DB.settings[k]=cfg[k]; });
+  if(DB.settings.syncKey) $("y_key").value=DB.settings.syncKey;
+  ["g_repo","g_path","g_token"].forEach(id=>{ if(DB.settings[id]) $(id).value=DB.settings[id]; });
+  if(DB.settings.syncMode){ $("y_mode").value=DB.settings.syncMode;
+    $("y_mode").dispatchEvent(new Event("change")); }
+  $("y_auto").checked=!!DB.settings.syncAuto;
+  tokState(); persist();
+}
+/* 중계가 아직 없을 때 — 작은 글씨로 흘리지 않고 화면 한가운데에 크게 알린다 */
+function hRelayMissing(e){
+  pairStop=true;
+  hPanel(`<p class="lead" style="margin:0 0 8px;color:var(--actual)">
+    <b>기기 잇기 자리가 아직 준비되지 않았습니다.</b></p>
+    <p class="note" style="margin:0 0 10px">${e&&e.message?e.message:""}<br>
+    Cloudflare 대시보드에서 <b>KV 이름공간</b>을 한 번 연결하면 됩니다 (5분):<br>
+    ① Storage &amp; Databases → KV → Create (이름 아무거나)<br>
+    ② Workers &amp; Pages → roastpoint → Settings → Bindings → Add → KV namespace<br>
+    ③ Variable name 에 <b>ROASTPOINT_KV</b>, 만든 이름공간 선택 → Save<br>
+    ④ Retry deployment</p>
+    <p class="lead" style="margin:0 0 6px">그때까지는 <b>파일로 옮기시면</b> 됩니다:</p>
+    <p class="note" style="margin:0">이 기기에서 위 <b>「전체 저장」</b> → 나온 파일을 새 기기로 보내기 →
+    새 기기에서 <b>「불러오기」</b>. 설정은 안 넘어가지만 기록은 그대로 옮겨집니다.</p>`);
+}
+
+restore();
 </script>
 </body>
 </html>
