@@ -5,4 +5,18 @@
     "directory": "./",
     "not_found_handling": "single-page-application"
   }
+
+  // ── 기기 잇기·동기화를 쓰려면 KV 이름공간을 연결해야 합니다 ──
+  // functions/api/pair.js 와 functions/api/sync.js 가 env.ROASTPOINT_KV 를 씁니다.
+  //
+  // Cloudflare 대시보드에서 하는 편이 쉽습니다:
+  //   1) Storage & Databases → KV → Create → 이름 아무거나 (예: roastpoint)
+  //   2) Workers & Pages → roastpoint → Settings → Bindings → Add → KV namespace
+  //   3) Variable name 에 ROASTPOINT_KV, 위에서 만든 이름공간 선택 → Save
+  //   4) 다시 배포(Retry deployment)
+  //
+  // wrangler 로 직접 올린다면 아래 주석을 풀고 id 를 채우세요:
+  // "kv_namespaces": [
+  //   { "binding": "ROASTPOINT_KV", "id": "여기에_KV_이름공간_ID" }
+  // ]
 }
