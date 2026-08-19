@@ -563,8 +563,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
         <div><label>미세 조정 ← →</label><input type="number" id="lb_ox" step="0.1" value="0"></div>
         <div><label>미세 조정 ↑ ↓</label><input type="number" id="lb_oy" step="0.1" value="0"></div>
       </div>
-      <p class="note">폼텍 규격은 칸 크기가 공식 값이고 여백은 A4 가운데 정렬로 잡았습니다.
-      라벨지마다 미세하게 다르니 시험 인쇄로 한 번만 맞춰두면 됩니다.</p>
+      <p class="note"><b>칸 크기·열·행은 폼텍 공개 목록표의 공식 값</b>입니다(품번 37종).
+      다만 <b>칸 사이 간격은 목록표에 없어서</b>, 에이버리 규격이 확인된 품번 말고는
+      간격 0으로 두고 A4 가운데 정렬했습니다. 간격이 있는 라벨지라면 바깥 칸이 2~3mm 어긋날 수 있으니
+      <b>「시험 인쇄」로 한 번 확인하고 「가로 간격」만 고쳐두면</b> 그다음부터는 그대로 맞습니다.</p>
     </div>
   </div>
 
@@ -802,6 +804,33 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
       </label>
     </div>
     <p class="note" id="y_msg"></p>
+  </div>
+
+  <div class="block">
+    <h2>다른 기기에서 이어 쓰기</h2>
+    <p class="lead">새 PC나 다른 브라우저에서 열면 <b>동기화 설정이 없어 기록도 비어 있습니다.</b>
+    여기서 만든 <b>이음 링크</b>를 그 기기에서 열면 설정이 옮겨지고 기록도 바로 내려받습니다.
+    링크에는 <b>여섯 자리 비밀번호로 잠긴</b> 설정만 들어갑니다.</p>
+    <div class="row">
+      <button id="h_make">이음 링크 만들기</button>
+      <span class="note" id="h_msg"></span>
+    </div>
+    <div class="extra" id="h_box" hidden style="margin-top:9px">
+      <p class="tagline">① 이 비밀번호를 새 기기에서 입력합니다</p>
+      <p class="mono" id="h_pin" style="font-size:34px;font-weight:700;letter-spacing:.22em;
+        margin:0 0 4px"></p>
+      <p class="note" style="margin:0 0 10px">메신저로 보내지 마세요. <b>화면을 보고 손으로 입력</b>하세요 —
+      링크와 비밀번호가 따로 다녀야 안전합니다.</p>
+      <p class="tagline">② 이 링크를 새 기기에서 엽니다</p>
+      <textarea id="h_link" readonly style="min-height:66px;font-size:12px" class="mono"></textarea>
+      <div class="row" style="margin-top:7px">
+        <button class="ghost" id="h_copy">링크 복사</button>
+        <button class="ghost" id="h_done">닫기</button>
+        <span class="note" id="h_copymsg"></span>
+      </div>
+      <p class="note" style="margin-top:8px">링크는 <b>10분 뒤 만료</b>됩니다.
+      카톡·메일 어디로 보내도 됩니다 — 비밀번호 없이는 열리지 않습니다.</p>
+    </div>
   </div>
 
   <div class="block">
@@ -4036,23 +4065,53 @@ pickupShared();
 
 const MMPX = 96/25.4;                      // 화면 미리보기 축소용
 /* 폼텍 칸 크기는 공식 값. 여백은 A4 가운데 정렬로 잡고 사용자가 고칠 수 있게 둔다. */
+/* 라벨지 규격 — 폼텍 공개 목록표에서 품번·칸크기·열·행을 그대로 옮겼다.
+   칸수(열×행)와 A4(210×297) 적합성을 모두 검산해 통과한 것만 넣었다.
+   ⚠ 칸 사이 간격(gx·gy)은 목록표에 없다. 에이버리 규격이 확인된 품번만 값을 넣고
+     나머지는 0으로 두고 A4 가운데 정렬한다 — 「시험 인쇄」로 한 번 맞추면 된다. */
 const LBS=[
-  {id:"ls3105", g:"폼텍 A4",  n:"LS-3105 · 21칸 · 63×38",      c:3,r:7, w:63,   h:38,   gx:2.5,gy:0},
-  {id:"ls3106", g:"폼텍 A4",  n:"LS-3106 · 24칸 · 64×34",      c:3,r:8, w:64,   h:34,   gx:2.5,gy:0},
-  {id:"ls3102", g:"폼텍 A4",  n:"LS-3102 · 40칸 · 47×26.9",    c:4,r:10,w:47,   h:26.9, gx:2,  gy:0},
-  {id:"ls3109", g:"폼텍 A4",  n:"LS-3109 · 18칸 · 100×30",     c:2,r:9, w:100,  h:30,   gx:2,  gy:0},
-  {id:"ls3107", g:"폼텍 A4",  n:"LS-3107 · 16칸 · 99.1×33.9",  c:2,r:8, w:99.1, h:33.9, gx:2.5,gy:0},
-  {id:"ls3108", g:"폼텍 A4",  n:"LS-3108 · 14칸 · 99.1×38.1",  c:2,r:7, w:99.1, h:38.1, gx:2.5,gy:0},
-  {id:"ls3112", g:"폼텍 A4",  n:"LS-3112 · 12칸 · 63.5×70",    c:3,r:4, w:63.5, h:70,   gx:2.5,gy:0},
-  {id:"ls3114", g:"폼텍 A4",  n:"LS-3114 · 8칸 · 99.1×67.7",   c:2,r:4, w:99.1, h:67.7, gx:2.5,gy:0},
-  {id:"ls3118", g:"폼텍 A4",  n:"LS-3118 · 4칸 · 99.1×140",    c:2,r:2, w:99.1, h:140,  gx:2.5,gy:0},
-  {id:"av7160", g:"에이버리 호환", n:"L7160 · 21칸 · 63.5×38.1", c:3,r:7, w:63.5,h:38.1, gx:2.5,gy:0},
-  {id:"av7165", g:"에이버리 호환", n:"L7165 · 8칸 · 99.1×67.7",  c:2,r:4, w:99.1,h:67.7, gx:2.5,gy:0},
+  {id:"ls3130", g:"폼텍 · 큰 라벨 (원두 봉투용)", n:"LS-3130 · 1칸 · 210×297", c:1,r:1, w:210, h:297, gx:0,gy:0},
+  {id:"ls3120", g:"폼텍 · 큰 라벨 (원두 봉투용)", n:"LS-3120 · 2칸 · 200×140", c:1,r:2, w:200, h:140, gx:0,gy:0},
+  {id:"ls3203", g:"폼텍 · 큰 라벨 (원두 봉투용)", n:"LS-3203 · 3칸 · 200×93", c:1,r:3, w:200, h:93, gx:0,gy:0},
+  {id:"ls3626", g:"폼텍 · 큰 라벨 (원두 봉투용)", n:"LS-3626 · 4칸 · 160×60", c:1,r:4, w:160, h:60, gx:0,gy:0},
+  {id:"ls3118", g:"폼텍 · 큰 라벨 (원두 봉투용)", n:"LS-3118 · 4칸 · 99.1×140", c:2,r:2, w:99.1, h:140, gx:2.5,gy:0},
+  {id:"ls3116", g:"폼텍 · 큰 라벨 (원두 봉투용)", n:"LS-3116 · 6칸 · 99.1×93.1", c:2,r:3, w:99.1, h:93.1, gx:0,gy:0},
+  {id:"ls3114", g:"폼텍 · 큰 라벨 (원두 봉투용)", n:"LS-3114 · 8칸 · 99.1×67.7 (에이버리 L7165 호환)", c:2,r:4, w:99.1, h:67.7, gx:2.5,gy:0},
+  {id:"ls3627", g:"폼텍 · 큰 라벨 (원두 봉투용)", n:"LS-3627 · 8칸 · 48×130", c:4,r:2, w:48, h:130, gx:0,gy:0},
+  {id:"ls3510", g:"폼텍 · 큰 라벨 (원두 봉투용)", n:"LS-3510 · 10칸 · 88.9×52", c:2,r:5, w:88.9, h:52, gx:0,gy:0},
+  {id:"ls3212", g:"폼텍 · 큰 라벨 (원두 봉투용)", n:"LS-3212 · 12칸 · 100×45", c:2,r:6, w:100, h:45, gx:0,gy:0},
+  {id:"ls3112", g:"폼텍 · 큰 라벨 (원두 봉투용)", n:"LS-3112 · 12칸 · 63.5×70", c:3,r:4, w:63.5, h:70, gx:2.5,gy:0},
+  {id:"ls3218", g:"폼텍 · 큰 라벨 (원두 봉투용)", n:"LS-3218 · 18칸 · 63.5×45", c:3,r:6, w:63.5, h:45, gx:0,gy:0},
+  {id:"ls3628", g:"폼텍 · 큰 라벨 (원두 봉투용)", n:"LS-3628 · 30칸 · 12×130", c:15,r:2, w:12, h:130, gx:0,gy:0},
+  {id:"ls3620", g:"폼텍 · 중간 (주소·정보용)", n:"LS-3620 · 6칸 · 119.3×42.8", c:1,r:6, w:119.3, h:42.8, gx:0,gy:0},
+  {id:"ls3625", g:"폼텍 · 중간 (주소·정보용)", n:"LS-3625 · 7칸 · 160×38", c:1,r:7, w:160, h:38, gx:0,gy:0},
+  {id:"ls3642q", g:"폼텍 · 중간 (주소·정보용)", n:"LQ-3642F · 8칸 · 124×30", c:1,r:8, w:124, h:30, gx:0,gy:0},
+  {id:"ls3624", g:"폼텍 · 중간 (주소·정보용)", n:"LS-3624 · 9칸 · 150×28", c:1,r:9, w:150, h:28, gx:0,gy:0},
+  {id:"ls3108", g:"폼텍 · 중간 (주소·정보용)", n:"LS-3108 · 14칸 · 99.1×38.1 (에이버리 L7163 호환)", c:2,r:7, w:99.1, h:38.1, gx:2.5,gy:0},
+  {id:"ls3107", g:"폼텍 · 중간 (주소·정보용)", n:"LS-3107 · 16칸 · 99.1×33.9", c:2,r:8, w:99.1, h:33.9, gx:2.5,gy:0},
+  {id:"ls3109", g:"폼텍 · 중간 (주소·정보용)", n:"LS-3109 · 18칸 · 100×30", c:2,r:9, w:100, h:30, gx:2,gy:0},
+  {id:"ls3105", g:"폼텍 · 중간 (주소·정보용)", n:"LS-3105 · 21칸 · 63.5×38.1 (에이버리 L7160 호환)", c:3,r:7, w:63.5, h:38.1, gx:2.5,gy:0},
+  {id:"ls3106", g:"폼텍 · 중간 (주소·정보용)", n:"LS-3106 · 24칸 · 64×34", c:3,r:8, w:64, h:34, gx:2.5,gy:0},
+  {id:"ls3104", g:"폼텍 · 중간 (주소·정보용)", n:"LS-3104 · 27칸 · 62.7×30.1", c:3,r:9, w:62.7, h:30.1, gx:0,gy:0},
+  {id:"ls3102", g:"폼텍 · 중간 (주소·정보용)", n:"LS-3102 · 40칸 · 47×26.9", c:4,r:10, w:47, h:26.9, gx:2,gy:0},
+  {id:"ls3110", g:"폼텍 · 중간 (주소·정보용)", n:"LS-3110 · 54칸 · 26×29.5", c:6,r:9, w:26, h:29.5, gx:0,gy:0},
+  {id:"ls3621", g:"폼텍 · 작은 라벨 (품번·바코드용)", n:"LS-3621 · 36칸 · 95×14", c:2,r:18, w:95, h:14, gx:0,gy:0},
+  {id:"ls3642q", g:"폼텍 · 작은 라벨 (품번·바코드용)", n:"LQ-3642S · 48칸 · 114×5.5", c:1,r:48, w:114, h:5.5, gx:0,gy:0},
+  {id:"ls3154", g:"폼텍 · 작은 라벨 (품번·바코드용)", n:"LS-3154 · 54칸 · 62.7×15", c:3,r:18, w:62.7, h:15, gx:0,gy:0},
+  {id:"ls3101", g:"폼텍 · 작은 라벨 (품번·바코드용)", n:"LS-3101 · 60칸 · 38.1×19.2", c:5,r:12, w:38.1, h:19.2, gx:0,gy:0},
+  {id:"ls3100", g:"폼텍 · 작은 라벨 (품번·바코드용)", n:"LS-3100 · 65칸 · 38.1×21.2", c:5,r:13, w:38.1, h:21.2, gx:0,gy:0},
+  {id:"ls3181", g:"폼텍 · 작은 라벨 (품번·바코드용)", n:"LS-3181 · 81칸 · 53×10", c:3,r:27, w:53, h:10, gx:0,gy:0},
+  {id:"ls3623", g:"폼텍 · 작은 라벨 (품번·바코드용)", n:"LS-3623 · 84칸 · 46×11", c:4,r:21, w:46, h:11, gx:0,gy:0},
+  {id:"ls3622", g:"폼텍 · 작은 라벨 (품번·바코드용)", n:"LS-3622 · 96칸 · 30×14", c:6,r:16, w:30, h:14, gx:0,gy:0},
+  {id:"ls3136", g:"폼텍 · 작은 라벨 (품번·바코드용)", n:"LS-3136 · 136칸 · 46×8", c:4,r:34, w:46, h:8, gx:0,gy:0},
+  {id:"ls3145", g:"폼텍 · 작은 라벨 (품번·바코드용)", n:"LS-3145 · 145칸 · 30×9", c:5,r:29, w:30, h:9, gx:0,gy:0},
+  {id:"ls3189", g:"폼텍 · 작은 라벨 (품번·바코드용)", n:"LS-3189 · 189칸 · 25.4×10", c:7,r:27, w:25.4, h:10, gx:0,gy:0},
+  {id:"ls3216", g:"폼텍 · 작은 라벨 (품번·바코드용)", n:"LS-3216 · 216칸 · 20×10", c:8,r:27, w:20, h:10, gx:0,gy:0},
   {id:"full2",  g:"무테 (여백 없이 꽉 채움)", n:"2칸 · 210×148.5",  c:1,r:2, w:210, h:148.5, gx:0,gy:0,mx:0,my:0},
   {id:"full4",  g:"무테 (여백 없이 꽉 채움)", n:"4칸 · 105×148.5",  c:2,r:2, w:105, h:148.5, gx:0,gy:0,mx:0,my:0},
   {id:"full8",  g:"무테 (여백 없이 꽉 채움)", n:"8칸 · 105×74.25",  c:2,r:4, w:105, h:74.25, gx:0,gy:0,mx:0,my:0},
   {id:"full12", g:"무테 (여백 없이 꽉 채움)", n:"12칸 · 70×74.25",  c:3,r:4, w:70,  h:74.25, gx:0,gy:0,mx:0,my:0},
-  {id:"custom", g:"", n:"직접 지정",             c:3,r:7, w:63,  h:38,    gx:2.5,gy:0}
+  {id:"custom", g:"", n:"직접 지정",             c:3,r:7, w:63.5,h:38.1, gx:2.5,gy:0}
 ];
 /* 라벨에 넣을 수 있는 항목 — [키, 이름, 기본값, 어느 대상에서 쓰나] */
 const LBF=[
@@ -4286,7 +4345,11 @@ function lbRender(){
   $("lb_msg").innerHTML=empty
     ? `<span class="pill">칸 번호 미리보기</span> 위에서 인쇄할 항목을 고르세요. 한 장에 ${per}칸입니다.`
     : `<span class="pill ok">${items.length}장 · ${pages}쪽</span> 한 장에 ${per}칸`
-      +(over?` · <span class="pill warn">넘침 ${over}칸</span> 글자 크기를 줄이거나 항목을 몇 개 끄세요.`:"");
+      +(over?` · <span class="pill warn">넘침 ${over}칸</span> `
+        +(cfg.h<20
+          ? `이 규격은 높이 ${cfg.h}mm짜리 <b>품번·바코드용</b>입니다 — 원두 정보가 물리적으로 안 들어갑니다.
+             이름과 날짜만 남기거나 더 큰 규격을 고르세요.`
+          : `글자 크기를 줄이거나 항목을 몇 개 끄세요.`):"");
 }
 const lbSoon=(()=>{ let t=null; return ()=>{ clearTimeout(t); t=setTimeout(lbRender,120); }; })();
 
@@ -5142,7 +5205,109 @@ function ikOpen(){
   if(keep) $("ik_prof").value=keep;
 }
 
-restore();
+/* ================= 기기 이음 (설정 옮기기) =================
+   새 기기에는 동기화 키도 기록도 없다. 그렇다고 토큰을 메신저에 그냥 흘리면 안 된다.
+   그래서 두 경로로 나눈다 — 링크는 메신저로, 여섯 자리 비밀번호는 눈으로.
+   링크 안의 설정은 그 비밀번호로 잠겨 있어(PBKDF2 + AES-GCM) 링크만으로는 열리지 않는다. */
+const HKEYS=["syncMode","syncKey","syncAuto","g_repo","g_path","g_token"];
+const b64u  = a=>btoa(String.fromCharCode(...a)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+const unb64u= t=>{ t=t.replace(/-/g,"+").replace(/_/g,"/"); while(t.length%4) t+="=";
+  const b=atob(t), u=new Uint8Array(b.length);
+  for(let i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; };
+async function hKey(pin,salt){
+  const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pin),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:250000,hash:"SHA-256"},
+    base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+}
+async function hPack(obj,pin){
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  const iv  =crypto.getRandomValues(new Uint8Array(12));
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},
+    await hKey(pin,salt), new TextEncoder().encode(JSON.stringify(obj))));
+  const out=new Uint8Array(28+ct.length);
+  out.set(salt,0); out.set(iv,16); out.set(ct,28);
+  return b64u(out);
+}
+async function hUnpack(txt,pin){
+  const raw=unb64u(txt);
+  const salt=raw.slice(0,16), iv=raw.slice(16,28), ct=raw.slice(28);
+  const pt=await crypto.subtle.decrypt({name:"AES-GCM",iv},await hKey(pin,salt),ct);
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+$("h_make").onclick=async()=>{
+  const cfg={}; HKEYS.forEach(k=>{ if(DB.settings[k]!=null&&DB.settings[k]!=="") cfg[k]=DB.settings[k]; });
+  if(!cfg.syncKey&&!cfg.g_token){
+    $("h_msg").innerHTML=`<span class="pill warn">동기화가 아직 없습니다</span>
+      위 「기기 간 동기화」를 먼저 설정하세요 — 옮길 것이 있어야 이을 수 있습니다.`;
+    $("h_box").hidden=true; return;
+  }
+  if(!(window.crypto&&crypto.subtle)){
+    $("h_msg").innerHTML=`<span class="pill warn">불가</span>
+      이 주소에서는 암호화를 쓸 수 없습니다. <b>https 주소</b>로 열어주세요.`; return;
+  }
+  const pin=String(Math.floor(Math.random()*900000)+100000);
+  cfg.exp=Date.now()+10*60*1000;                 // 10분 뒤 만료
+  const link=location.origin+location.pathname+"#setup="+await hPack(cfg,pin);
+  $("h_pin").textContent=pin.slice(0,3)+" "+pin.slice(3);
+  $("h_link").value=link;
+  $("h_box").hidden=false;
+  $("h_msg").innerHTML=`<span class="pill ok">만들었습니다</span> 아래 순서대로 하세요.`;
+  $("h_copymsg").textContent="";
+};
+$("h_copy").onclick=async()=>{
+  try{ await navigator.clipboard.writeText($("h_link").value);
+    $("h_copymsg").innerHTML='<span class="pill ok">복사했습니다</span>';
+  }catch(e){ $("h_link").select(); $("h_copymsg").textContent="칸을 길게 눌러 직접 복사하세요."; }
+};
+$("h_done").onclick=()=>{ $("h_box").hidden=true; $("h_pin").textContent="";
+  $("h_link").value=""; $("h_msg").textContent=""; };
+
+/* 받는 쪽 — 주소에 #setup= 이 있으면 비밀번호를 물어 설정을 심고 바로 내려받는다 */
+async function hReceive(){
+  const m=String(location.hash||"").match(/setup=([A-Za-z0-9_-]+)/);
+  if(!m) return;
+  history.replaceState(null,"",location.pathname);     // 주소창에서 지운다
+  document.querySelector('nav button[data-p="data"]').click();
+  if(!(window.crypto&&crypto.subtle)){
+    $("y_msg").innerHTML=`<span class="pill warn">불가</span> https 주소로 열어주세요.`; return; }
+  for(let tries=1;tries<=3;tries++){
+    const pin=prompt(`다른 기기에 뜬 여섯 자리 비밀번호를 넣으세요`
+      +(tries>1?`  (${tries}/3)`:""));
+    if(pin===null) return;
+    let cfg;
+    try{ cfg=await hUnpack(m[1],pin.replace(/\D/g,"")); }
+    catch(e){
+      if(tries===3){ $("y_msg").innerHTML=
+        `<span class="pill warn">비밀번호가 맞지 않습니다</span> 링크를 다시 만들어 주세요.`; return; }
+      continue;
+    }
+    if(cfg.exp&&Date.now()>cfg.exp){
+      $("y_msg").innerHTML=`<span class="pill warn">만료된 링크</span>
+        10분이 지났습니다 — 다른 기기에서 새로 만들어 주세요.`; return; }
+    delete cfg.exp;
+    HKEYS.forEach(k=>{ if(cfg[k]!=null) DB.settings[k]=cfg[k]; });
+    // 화면 칸에도 반영
+    if(DB.settings.syncKey) $("y_key").value=DB.settings.syncKey;
+    ["g_repo","g_path","g_token"].forEach(id=>{ if(DB.settings[id]) $(id).value=DB.settings[id]; });
+    if(DB.settings.syncMode){ $("y_mode").value=DB.settings.syncMode;
+      $("y_mode").dispatchEvent(new Event("change")); }
+    $("y_auto").checked=!!DB.settings.syncAuto;
+    tokState(); persist();
+    $("y_msg").innerHTML=`<span class="pill ok">설정을 옮겼습니다</span> 이제 기록을 내려받습니다…`;
+    try{
+      if(syncMode()==="gh") await ghDown(false); else await syncDown(false);
+      $("y_msg").innerHTML=`<span class="pill ok">준비 끝</span>
+        생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length} · 프로파일 ${DB.profiles.length}건을 가져왔습니다.
+        이 기기에서도 그대로 쓰시면 됩니다.`;
+    }catch(e){
+      $("y_msg").innerHTML=`<span class="pill warn">설정은 옮겼는데 내려받기가 실패했습니다</span>
+        ${e.message} — 위 「지금 내려받기」를 눌러보세요.`;
+    }
+    return;
+  }
+}
+
+restore().then(hReceive);
 </script>
 </body>
 </html>
