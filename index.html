@@ -657,6 +657,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     크롬·엣지에서만 되고 <b>아이폰에서는 되지 않습니다</b>(iOS가 웹 블루투스를 지원하지 않음).</p>
   </div>
 
+  <div class="block" id="ik_nowbox" hidden style="border-width:2px">
+    <div id="ik_now"></div>
+  </div>
+
   <div class="block" id="ik_livebox" hidden>
     <h2>② 실시간</h2>
     <div class="grid g5" id="ik_live"></div>
@@ -4520,7 +4524,33 @@ const IK={
 /* 머신 상태 값 — 아티산 소스 주석에 그대로 적혀 있다 */
 const IKSTATE={0:"대기",1:"예열 중",2:"원두를 넣으세요",3:"로스팅 중",4:"머신 사용 중",
   5:"냉각 중",6:"도저 열림",7:"오류",8:"배출 준비됨",9:"시험 모드",10:"감지 중",11:"개발 모드"};
-const IKALERT={1:1,2:3,3:1,5:2,0:1};       // 상태가 바뀔 때 울릴 삐 횟수
+const IKALERT={1:1,2:3,3:1,5:2,8:3,7:3,0:1};   // 상태가 바뀔 때 울릴 삐 횟수
+/* 상태마다 다음에 할 일을 한 줄로 적어 둔다.
+   예전에는 상태 이름만 작은 칸에 떴다 — 「원두를 넣으세요」가 승온율·팬 사이에 끼어
+   눈에 띄지 않았다. lv 는 안내판 색이다: act 는 지금 손을 써야 하는 상태. */
+const IKNEXT={
+  0:{lv:"wait", t:"대기 중",
+     d:"③에서 프로파일을 보낸 뒤 <b>머신 본체 버튼</b>을 눌러 예열을 시작하세요."},
+  1:{lv:"run",  t:"예열 중",
+     d:"기다리세요. 설정온도에 닿으면 머신이 「원두를 넣으세요」로 바뀌고 여기서도 알려드립니다."},
+  2:{lv:"act",  t:"원두를 넣으세요",
+     d:"생두를 넣고 뚜껑을 닫으세요. 넣으면 로스팅이 바로 시작됩니다."},
+  3:{lv:"run",  t:"로스팅 중",
+     d:"크랙 소리가 들리면 <b>「지금 1차 크랙」</b>, 색이 갈색으로 돌면 <b>「컬러 변환(CC)」</b>을 누르세요."},
+  4:{lv:"wait", t:"머신 사용 중",
+     d:"머신이 다른 작업을 하고 있습니다. 잠시 기다리세요."},
+  5:{lv:"run",  t:"냉각 중",
+     d:"곧 끝납니다. 끝나면 <b>「이 배치를 기록에 담기」</b>를 누르세요."},
+  6:{lv:"act",  t:"도저가 열렸습니다",  d:"뚜껑·도저를 닫아 주세요."},
+  7:{lv:"bad",  t:"오류",
+     d:"머신 화면의 오류 표시를 확인하세요. 아래 <b>통신 기록</b>에 그때의 값이 그대로 남습니다."},
+  8:{lv:"act",  t:"배출 준비됨",
+     d:"원두를 꺼내고 <b>「이 배치를 기록에 담기」</b>를 누르세요. 실측 곡선과 마커가 기록 탭으로 넘어갑니다."},
+  9:{lv:"wait", t:"시험 모드",  d:"머신이 시험 모드입니다."},
+ 10:{lv:"wait", t:"감지 중",    d:"머신이 상태를 확인하고 있습니다."},
+ 11:{lv:"wait", t:"개발 모드",  d:"머신이 개발 모드입니다."}
+};
+const IKNCOL={act:"var(--actual)", run:"var(--setpoint)", bad:"var(--actual)", wait:"var(--ink-2)"};
 /* CRC 종류를 모르므로 후보를 넓게 잡는다.
    이름 있는 것들을 앞에 두고, 그다음 흔한 다항식 × 초깃값 × 반사 × 뒤집기 조합을 훑는다.
    같은 상태 요청을 보내는 것뿐이라 머신에 위험하지 않다. */
@@ -4867,15 +4897,38 @@ function ikOnStatus(st){
     const nm=IKSTATE[st.state]||`알 수 없음(${st.state})`;
     ikLog(`■ 머신 상태 → ${nm}  [값 ${st.state}]`);
     if(ikLastState!=null&&IKALERT[st.state]) tBeep(IKALERT[st.state]);   // PC에 앉아 있어도 듣도록
-    if(st.state===2) document.title="☕ 원두를 넣으세요 — 로스트포인트";
-    else if(st.state===5) document.title="❄ 냉각 중 — 로스트포인트";
-    else if(st.state===0) document.title="로스트포인트 — 로스팅 기록장";
+    /* 다른 창을 보고 있어도 알아채도록 제목에 붙인다 — 삐 소리만으로는 놓친다 */
+    const TT={1:"🔥 예열 중",2:"☕ 원두를 넣으세요",3:"● 로스팅 중",
+              5:"❄ 냉각 중",8:"✔ 배출 준비됨",7:"⚠ 오류"};
+    document.title=TT[st.state]?TT[st.state]+" — 로스트포인트":"로스트포인트 — 로스팅 기록장";
     ikLastState=st.state; ikSyncLog(true);
   }
   ikSyncLog(false);
   ikRenderLive(st);
 }
+function ikBanner(st){
+  const n=IKNEXT[st.state];
+  if(st.state==null||!n){ $("ik_nowbox").hidden=true; return; }
+  $("ik_nowbox").hidden=false;
+  const col=IKNCOL[n.lv]||"var(--ink)";
+  $("ik_nowbox").style.borderColor=n.lv==="wait"?"var(--rule)":col;
+  const num=(v,u,d)=>v==null?"":`${v.toFixed(d==null?1:d)}${u}`;
+  const bits=[];
+  if(st.temp_above!=null) bits.push(`배기 <b>${num(st.temp_above,"℃")}</b>`);
+  if(st.setpoint!=null)   bits.push(`설정 ${num(st.setpoint,"℃")}`);
+  if(st.state===1&&st.temp_above!=null&&st.setpoint!=null){
+    const left=st.setpoint-st.temp_above;
+    if(left>0.5) bits.push(`<b>${left.toFixed(0)}℃</b> 남음`);
+  }
+  if(ikCurve.length) bits.push(`경과 ${fmt(ikNow)}`);
+  $("ik_now").innerHTML=
+    `<p class="lead" style="margin:0 0 4px;font-size:22px;color:${col}">${n.t}</p>
+     <p class="lead" style="margin:0 0 6px">${n.d}</p>
+     <p class="note" style="margin:0">${bits.join(" · ")}
+       <span style="color:var(--muted)">· 머신 상태값 ${st.state}</span></p>`;
+}
 function ikRenderLive(st){
+  ikBanner(st);
   $("ik_livebox").hidden=false; $("ik_sendbox").hidden=false;
   const row=(k,label,unit,dec)=>st[k]==null?"":
     `<div><label>${label}</label><input type="text" readonly value="${
