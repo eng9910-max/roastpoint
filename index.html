@@ -128,7 +128,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v7.7</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v7.8</span>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 12px;font-size:13.5px;
@@ -2690,7 +2690,26 @@ function fixPlan(prof,r,b){
        ② 계획은 서 있는데 머신이 못 따라왔다 → 계획을 더 세워도 소용없다.
           열풍기의 마지막 구간은 히터가 이미 한계에 가깝다. 그때는 배출을 앞당기는 쪽이 맞다. */
     const planTail=profChar(prof.pts).rDev;
-    if(planTail<CANON.flaw.bake*1.6){
+    /* 히터 실측이 있으면 추측하지 않는다. 발달 구간에서 히터가 계속 100%에 붙어 있었다면
+       설정을 더 올려도 머신이 못 따라온다 — 곡선을 고칠 일이 아니다. */
+    let maxed=null;
+    if(r.heat&&r.heat.length>3&&r.dur>0){
+      const tail=r.heat.filter(x=>x[0]>=r.dur*0.75).map(x=>x[1]);
+      if(tail.length>2) maxed=tail.filter(v=>v>=99).length/tail.length>=0.7;
+    }
+    if(maxed===true){
+      why.push(`후반 승온 ${r.ror.toFixed(1)}℃/분이 ${CANON.flaw.bake} 아래입니다(베이킹). `
+        +`그런데 <b>발달 구간에서 히터가 계속 100%였습니다</b>(실측) — `
+        +`설정을 더 올려도 머신이 못 따라옵니다. 곡선이 아니라 <b>기계의 한계</b>입니다. `
+        +`배출을 앞당기거나(총시간 −20초) 후반 팬을 5%p 낮춰 열이 덜 빠지게 하세요`);
+      blocked.push("후반 기울기는 곡선 수정으로 못 고칩니다 — 히터가 이미 100%였습니다");
+    }
+    else if(maxed===false&&planTail>=CANON.flaw.bake*1.6){
+      why.push(`후반 승온 ${r.ror.toFixed(1)}℃/분이 낮은데 <b>히터에는 여유가 있었습니다</b>(실측). `
+        +`계획의 후반 기울기는 ${planTail.toFixed(1)}℃/분으로 서 있으니, `
+        +`곡선보다 <b>팬이 너무 세서 열이 빠져나간 쪽</b>을 의심하세요 — 후반 팬을 5%p 낮춰 보세요`);
+    }
+    else if(planTail<CANON.flaw.bake*1.6){
       const need=(CANON.flaw.bake*1.6-planTail)*(dur*0.25/60);
       let at=1; for(let i=1;i<n-1;i++) if(Math.abs(pts[i][0]-dur*0.75)<Math.abs(pts[at][0]-dur*0.75)) at=i;
       const d=Math.max(-4,-need*FIXDAMP);
@@ -3504,7 +3523,7 @@ function curveSvg(plan,acts,marks,tip){
 }
 
 /* 승온율 곡선 그리기 — 0선을 기준으로 두고 감소 추세를 본다 */
-function rorSvg(series,tip){
+function rorSvg(series,tip,mach){
   if(!series||series.length<3) return "";
   const W=640,H=150,L=36,R=8,T=8,B=16;
   const tMax=Math.max(...series.map(p=>p[0]))||1;
@@ -3513,10 +3532,11 @@ function rorSvg(series,tip){
      그 값에 축을 맞추면 정작 봐야 할 0~30℃/분 이 한 줄로 눌린다.
      넘치는 부분은 위쪽에서 자르고, 잘렸다는 사실을 글로 적는다. */
   const HICAP=40;
-  let lo=Math.min(0,...series.map(p=>p[1])), hi=Math.max(...series.map(p=>p[1]));
+  const both=(mach&&mach.length>2)?series.concat(mach):series;
+  let lo=Math.min(0,...both.map(p=>p[1])), hi=Math.max(...both.map(p=>p[1]));
   const off=hi>HICAP;
   if(off){
-    const inr=series.filter(p=>p[1]<=HICAP).map(p=>p[1]);
+    const inr=both.filter(p=>p[1]<=HICAP).map(p=>p[1]);
     hi=inr.length?Math.min(HICAP,Math.max(6,...inr)):HICAP;
   }
   if(hi-lo<2) hi=lo+2;
@@ -3534,8 +3554,17 @@ function rorSvg(series,tip){
     <defs><clipPath id="${cid}"><rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}"/></clipPath></defs>
     <text x="4" y="${(Y(hi-pad)+4).toFixed(1)}" font-size="10" fill="var(--muted)">${(hi-pad).toFixed(1)}</text>
     <text x="4" y="${(Y(lo+pad)+4).toFixed(1)}" font-size="10" fill="var(--muted)">${(lo+pad).toFixed(1)}</text>
-    ${zero}<path d="${d}" fill="none" stroke="var(--mark)" stroke-width="1.6" clip-path="url(#${cid})"/>
-    <text x="${L+4}" y="${T+10}" font-size="10" fill="var(--muted)">승온율 ℃/분 — 끝까지 내려가야 정상</text>
+    ${zero}
+    ${(()=>{ if(!mach||mach.length<3) return "";
+      /* 머신이 보내준 승온율 — 우리 계산과 겹쳐 그린다 */
+      let m="",pt=null;
+      mach.forEach(p=>{ const cmd=(pt==null||p[0]-pt>15)?"M":"L";
+        m+=(m?" ":"")+cmd+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1); pt=p[0]; });
+      return `<path d="${m}" fill="none" stroke="var(--setpoint)" stroke-width="1.3"
+        stroke-dasharray="4 3" opacity="0.85" clip-path="url(#${cid})"/>`; })()}
+    <path d="${d}" fill="none" stroke="var(--mark)" stroke-width="1.6" clip-path="url(#${cid})"/>
+    <text x="${L+4}" y="${T+10}" font-size="10" fill="var(--muted)">승온율 ℃/분 — 끝까지 내려가야 정상`
+    +`${mach&&mach.length>2?"  (— 우리 계산 · ┄ 머신 값)":""}</text>
     ${off?`<text x="${W-R-4}" y="${T+10}" font-size="10" text-anchor="end" fill="var(--muted)"
       >투입 직후 과도구간은 축 위로 잘림</text>`:""}
     ${(()=>{ if(!tip||tip.t==null||tip.v==null) return "";
@@ -4333,6 +4362,8 @@ $("r_save").onclick=()=>{
     act:(pendingLog&&pendingLog.act)||(editingId?(DB.roasts.find(x=>x.id===editingId)||{}).act:null)||null,
     tl:(pendingLog&&pendingLog.tl)||(editingId?(DB.roasts.find(x=>x.id===editingId)||{}).tl:null)||null,
     gaps:(pendingLog&&pendingLog.gaps)||(editingId?(DB.roasts.find(x=>x.id===editingId)||{}).gaps:null)||null,
+    heat:(pendingLog&&pendingLog.heat)||(editingId?(DB.roasts.find(x=>x.id===editingId)||{}).heat:null)||null,
+    fanc:(pendingLog&&pendingLog.fan)||(editingId?(DB.roasts.find(x=>x.id===editingId)||{}).fanc:null)||null,
     cup:Object.keys(cup).length?cup:null,
     cost:(()=>{ const b=DB.beans.find(x=>x.id===$("r_bean").value);
       const up=b?unitPrice(b):null, g=+$("r_in").value;
@@ -5419,6 +5450,10 @@ function ikStopTick(){
 }
 function ikLive(){ return !!(ikDev&&ikDev.gatt&&ikDev.gatt.connected); }
 let ikCurve=[], ikPlanCurve=[], ikFanCurve=[], ikHeatCurve=[], ikInlet=[];
+/* 머신이 스스로 계산해 보내주는 승온율(ror_above). 우리는 온도 곡선에서 직접 계산하는데,
+   머신은 자체 필터를 거친 값을 쓴다(temp_above_filtered 가 따로 오는 걸 보면 그렇다).
+   둘을 겹쳐 그리면 우리 계산이 머신과 어긋나는지 눈으로 확인할 수 있다. */
+let ikRorCurve=[];
 let ikHasInlet=false, ikMarks={cc:null,crack:null};
 let ikT0=null, ikLastState=null, ikNegot=null, ikRx=0;
 /* 머신이 주는 time 은 로스팅 경과 시간이라 단계가 바뀔 때 0 으로 돌아갈 수 있다.
@@ -5636,6 +5671,7 @@ function ikOnStatus(st){
       // 팬·히터도 매초 온다 — 온도만 봐서는 "왜 그렇게 됐는지"를 알 수 없다
       if(st.fan!=null&&isFinite(st.fan))    ikFanCurve.push([Math.round(t),st.fan]);
       if(st.heater!=null&&isFinite(st.heater)) ikHeatCurve.push([Math.round(t),st.heater]);
+      if(st.ror_above!=null&&isFinite(st.ror_above)) ikRorCurve.push([Math.round(t),st.ror_above]);
       // 흡기 센서는 Pro V3 에만 있다. 값이 오면 그때부터 함께 그린다.
       if(st.temp_below!=null&&isFinite(st.temp_below)&&st.temp_below>0){
         ikHasInlet=true; ikInlet.push([Math.round(t),Math.round(st.temp_below*10)/10]);
@@ -5719,7 +5755,12 @@ function ikRenderLive(st){
     (ikHasInlet?row("temp_below","흡기온도 (원두 아래)","℃"):"")+
     row("setpoint","설정온도","℃")+row("ror_above","승온율","℃/분")+
     row("fan","팬","%",0)+row("fan_measured","팬 RPM","",0)+
-    row("heater","히터","",0)+row("humidity_abs","절대습도","",2)+
+    /* 히터가 100%에 붙어 있으면 설정을 더 올려도 머신이 못 따라온다 —
+       베이킹을 「곡선 탓」으로 볼지 「머신 한계」로 볼지 가르는 값이다. */
+    (st.heater!=null?`<div><label>히터${st.heater>=99?" <span class=\"pill warn\">한계</span>":""}</label>
+      <input type="text" readonly value="${st.heater.toFixed(0)}%"></div>`:"")+
+    row("fan_power","팬 출력","",0)+row("board_temp","보드 온도","℃")+
+    row("humidity_abs","절대습도","",2)+
     (st.state!=null?`<div><label>머신 상태</label>
       <input type="text" readonly value="${(IKSTATE[st.state]||"?")+" ("+st.state+")"}"></div>`:"")+
     `<div><label>모은 점</label><input type="text" readonly value="${ikCurve.length}개"></div>`
@@ -5781,7 +5822,7 @@ function ikRenderLive(st){
       : curveSvg(vcur,ikHasInlet&&vin.length>2?[vin]:[],vmk,tip))
       + (()=>{ const rs=rorSeries(vcur,30);
           const rt=rs.length?{t:rs[rs.length-1][0],v:rs[rs.length-1][1]}:null;
-          return rorSvg(rs,rt); })()
+          return rorSvg(rs,rt,shift(ikRorCurve)); })()
       + powerSvg(shift(ikFanCurve),shift(ikHeatCurve),tMax);
   }
   /* 그래프 바로 아래 한 줄 띠 — 지금 판정을 압축해서 곡선 옆에 붙여 둔다 */
@@ -6132,8 +6173,12 @@ function ikSaveBatch(){
   if(rt!=null) $("r_ror").value=rt.toFixed(1);
   /* 사건 타임라인도 함께 담는다 — 나중에 「그때 앱이 무슨 말을 했나」를 되짚으려고 */
   const z0=ikRoastT0!=null?0:0;
+  /* 히터·팬·머신 승온율도 담는다. 볶은 뒤에 「그때 히터가 얼마였나」를 알아야
+     베이킹이 곡선 탓인지 머신 한계인지 가릴 수 있다 — 지금까지는 추측이었다. */
+  const cut2=a=>a.filter(x=>x[0]>=t0+0&&x[0]<=t0+dur).map(x=>[Math.round(x[0]-t0),x[1]]);
   pendingLog={act:c, tl:ikTL.filter(x=>x.t<=dur+2).map(x=>({...x})),
-              gaps:ikGaps.map(g=>[Math.round(g[0]-t0),Math.round(g[1]-t0)]).filter(g=>g[1]>=0)};
+              gaps:ikGaps.map(g=>[Math.round(g[0]-t0),Math.round(g[1]-t0)]).filter(g=>g[1]>=0),
+              heat:cut2(ikHeatCurve), fan:cut2(ikFanCurve), mror:cut2(ikRorCurve)};
   recalc();
   $("ik_savemsg").innerHTML=`<span class="pill ok">옮겼습니다</span> 로스팅 기록 탭에서
     생두와 중량을 채우고 저장하세요. 실측 곡선 ${c.length}점${mk}이 함께 담깁니다.`
@@ -6193,7 +6238,7 @@ function ikInit(){
   $("ik_logclear").onclick=()=>{ ikLines=[]; $("ik_log").textContent=""; $("ik_logmsg").textContent=""; };
   $("ik_selftest").onclick=ikSelfTest;
   $("ik_clear").onclick=()=>{ ikCurve=[]; ikPlanCurve=[]; ikFanCurve=[]; ikHeatCurve=[];
-    ikInlet=[]; ikHasInlet=false; ikT0=null; ikNow=0; $("ik_coachbox").hidden=true;
+    ikInlet=[]; ikRorCurve=[]; ikHasInlet=false; ikT0=null; ikNow=0; $("ik_coachbox").hidden=true;
     ikTBase=0; ikTPrev=null; ikDropAt=null; ikRoastT0=null; ikSawRoast=false;
     ikGaps=[]; ikTL=[]; ikTLLast={};
     ikMarks={cc:null,crack:null}; $("ik_chart").innerHTML=""; $("ik_elapsed").textContent="";
