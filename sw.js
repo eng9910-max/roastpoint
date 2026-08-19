@@ -4,7 +4,7 @@
    페이지 이동은 네트워크를 먼저 본다. 그래야 새로 올린 파일이 바로 반영되고,
    캐시에 없는 페이지가 막히지 않는다. */
 
-const APP_CACHE   = "roast-app-v85";
+const APP_CACHE   = "roast-app-v86";
 const SHARE_CACHE = "roast-shared";
 const SCOPE       = self.registration.scope;
 const SHARE_KEY   = new URL("__shared__", SCOPE).href;
@@ -12,7 +12,7 @@ const SHARE_KEY   = new URL("__shared__", SCOPE).href;
 /* theory.js 는 버전을 붙여 부른다. 안 붙이면 캐시 우선 규칙에 걸려 옛 판정 코드가
    계속 쓰이고, index.html 만 새것이 되는 어긋난 상태가 된다 — 실제로 그랬다.
    자체 점검이 「승온율 공백」 시험에서 이 어긋남을 잡아냈다. */
-const SHELL = ["./", "./index.html", "./studio.html", "./theory.js?v=8.0", "./manifest.webmanifest",
+const SHELL = ["./", "./index.html", "./studio.html", "./theory.js?v=8.1", "./manifest.webmanifest",
                "./icons/icon-192.png", "./icons/icon-512.png"];
 
 self.addEventListener("install", e => {
