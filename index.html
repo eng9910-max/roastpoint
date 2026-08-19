@@ -128,7 +128,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v7.6</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v7.7</span>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 12px;font-size:13.5px;
@@ -666,6 +666,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <h2>② 실시간</h2>
     <div class="grid g5" id="ik_live"></div>
     <div id="ik_chart" style="margin-top:10px"></div>
+    <div id="ik_strip" style="margin-top:6px"></div>
     <div class="extra" id="ik_coachbox" style="margin-top:9px" hidden>
       <p class="tagline">지금 무슨 일이 벌어지고 있나 <span class="pill">교과서 기준</span></p>
       <div id="ik_coach"></div>
@@ -683,6 +684,28 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
       <button class="ghost" id="ik_clear">곡선 지우기</button>
       <span class="note" id="ik_savemsg"></span>
     </div>
+  </div>
+
+  <div class="block">
+    <h2>재생 — 지난 배치를 다시 돌려 보기 <span class="pill">공부용</span></h2>
+    <p class="lead">저장한 배치의 <b>실측 곡선</b>을 그대로 다시 흘려, 그때 화면이 무엇을 말했는지
+    처음부터 되짚습니다. 머신은 돌지 않습니다.</p>
+    <div class="row">
+      <select id="sim_pick" style="width:auto;flex:1;min-width:220px"></select>
+      <button id="sim_play">재생</button>
+      <button class="ghost" id="sim_stop" disabled>멈춤</button>
+      <select id="sim_speed" style="width:auto">
+        <option value="1">1배속</option><option value="4">4배속</option>
+        <option value="10" selected>10배속</option><option value="30">30배속</option>
+      </select>
+      <span class="note" id="sim_msg"></span>
+    </div>
+    <div class="row" style="margin-top:7px">
+      <input type="range" id="sim_seek" min="0" max="100" value="0" style="flex:1">
+      <span class="mono" id="sim_at" style="min-width:64px;text-align:right"></span>
+    </div>
+    <p class="note">머신에 연결된 동안에는 재생할 수 없습니다 — 실시간 값과 섞이면
+    어느 쪽을 보는지 알 수 없어집니다.</p>
   </div>
 
   <div class="block" id="ik_sendbox" hidden>
@@ -5369,6 +5392,32 @@ function ikFindProfile(payload){
     fans:g.filter(f=>f[0]===5).length, schema:(g.find(f=>f[0]===1)||[])[1]};
 }
 let ikDev=null, ikChr=null, ikBuf=[], ikSeq=1, ikPoll=null, ikCrc=CRCV[0];
+/* 1초 타이머를 워커에서 돌린다.
+   크롬은 탭이 5분 넘게 가려져 있으면 「집중 스로틀링」으로 setInterval 을 1분에 한 번으로
+   줄인다(Chrome 88~). 그러면 로스팅 도중에 다른 탭을 보는 것만으로 데이터가 1분에 한 점씩
+   들어와 곡선에 큰 구멍이 생긴다 — 블루투스가 끊긴 것처럼 보이지만 실제로는 타이머가 죽은 것이다.
+   워커의 타이머는 이 스로틀링을 받지 않으므로, 틱만 워커에서 만들고 실제 통신은 본체에서 한다. */
+let ikTickW=null;
+function ikStartTick(fn,ms){
+  ikStopTick();
+  try{
+    const src="let h=null;onmessage=e=>{clearInterval(h);h=null;"
+      +"if(e.data&&e.data.ms) h=setInterval(()=>postMessage(1),e.data.ms);};";
+    const url=URL.createObjectURL(new Blob([src],{type:"text/javascript"}));
+    ikTickW=new Worker(url); URL.revokeObjectURL(url);
+    ikTickW.onmessage=fn;
+    ikTickW.postMessage({ms});
+    ikLog("틱을 워커에서 돌립니다 — 다른 탭을 봐도 1초 간격이 유지됩니다.");
+  }catch(e){
+    ikTickW=null; ikPoll=setInterval(fn,ms);
+    ikLog("워커를 쓰지 못해 일반 타이머로 돕니다 — 이 탭을 가리면 수집이 느려집니다: "+e.message);
+  }
+}
+function ikStopTick(){
+  if(ikTickW){ try{ ikTickW.postMessage({}); ikTickW.terminate(); }catch(e){} ikTickW=null; }
+  if(ikPoll){ clearInterval(ikPoll); ikPoll=null; }
+}
+function ikLive(){ return !!(ikDev&&ikDev.gatt&&ikDev.gatt.connected); }
 let ikCurve=[], ikPlanCurve=[], ikFanCurve=[], ikHeatCurve=[], ikInlet=[];
 let ikHasInlet=false, ikMarks={cc:null,crack:null};
 let ikT0=null, ikLastState=null, ikNegot=null, ikRx=0;
@@ -5511,7 +5560,7 @@ function ikHandleFrame(raw){
   else ikLog(`← ${payload.length}B`);
   if(ikNegot){ clearTimeout(ikNegot); ikNegot=null; ikQuiet=false;
     ikLog("✓ 응답 도착 — CRC 탐색을 멈춥니다");
-    ikPoll=setInterval(()=>{ if(!ikSending&&!ikInFlight){
+    ikStartTick(()=>{ if(!ikSending&&!ikInFlight){
       if(ikQ.lastAsk) ikQ.asked++;              // 앞 요청의 답이 안 왔다 = 놓친 것
       ikQ.lastAsk=Date.now(); ikQ.asked++;
       ikSend(ikMsg(IK.STATUS_GET,ikSeq++&0x7fff),"상태 요청");
@@ -5715,14 +5764,15 @@ function ikRenderLive(st){
       const last=vcur[vcur.length-1];
       const pick=coach.notes.filter(n=>n.lv==="warn").concat(coach.notes.filter(n=>n.lv!=="warn"));
       const COL={warn:"var(--actual)",ok:"var(--ok)",info:"var(--ink-2)"};
-      /* 승온율은 아래 승온율 그래프에 적는다 — 그 값은 그쪽 그래프의 것이다.
-         여기에는 시각·온도·구간과 경고만 둔다. */
+      /* 곡선 위에는 꼭 필요한 것만 둔다 — 시각·온도·구간, 그리고 경고가 있을 때만 한 줄.
+         나머지 해설은 그래프 바로 아래 띠와 그 아래 박스에 둔다.
+         곡선 위에 다 넣으면 말풍선이 그래프를 덮는다. */
+      const wn=coach.notes.filter(n=>n.lv==="warn");
       tip={t:last[0], v:last[1], lines:[
         {text:`${fmt(Math.round(last[0]))} · ${last[1].toFixed(1)}℃`,bold:true},
         ...(coach.phase?[{text:`${coach.phase} 구간${coach.pct!=null?` (${coach.pct}%)`:""}`,
                           color:"var(--ink-2)"}]:[]),
-        ...pick.filter(n=>!/승온율/.test(n.t)).slice(0,2)
-              .map(n=>({text:n.t,color:COL[n.lv]||"var(--ink)",bold:n.lv==="warn"}))
+        ...wn.slice(0,1).map(n=>({text:n.t,color:COL.warn,bold:true}))
       ]};
     }
     const acts=ikHasInlet&&vin.length>2?[vcur,vin]:[vcur];
@@ -5734,6 +5784,14 @@ function ikRenderLive(st){
           return rorSvg(rs,rt); })()
       + powerSvg(shift(ikFanCurve),shift(ikHeatCurve),tMax);
   }
+  /* 그래프 바로 아래 한 줄 띠 — 지금 판정을 압축해서 곡선 옆에 붙여 둔다 */
+  if(coach&&coach.notes.length){
+      const C={warn:"var(--actual)",ok:"var(--ok)",info:"var(--ink-2)",act:"var(--actual)"};
+      $("ik_strip").innerHTML=coach.notes.map(n=>
+        `<span class="pill${n.lv==="warn"?" warn":n.lv==="ok"?" ok":""}"
+           style="margin:0 5px 4px 0" title="${String(n.d||"").replace(/<[^>]+>/g,"").replace(/"/g,"&quot;")}"
+           >${n.t}</span>`).join("");
+  } else $("ik_strip").innerHTML="";
   $("ik_elapsed").textContent=ikCurve.length?fmt(Math.max(0,ikNow-ikZero())):"";
   $("ik_cc").disabled=$("ik_crack").disabled=ikCurve.length<2;
   if($("ik_raw").checked&&st._raw){
@@ -5760,7 +5818,7 @@ async function ikConnect(all){
       : {filters:[{services:[IK.SERVICE]},{namePrefix:"IKAWA"},{namePrefix:"ikawa"}],
          optionalServices:[IK.SERVICE]});
     ikDev.addEventListener("gattserverdisconnected",()=>{
-      ikSetState("끊김","pill warn"); clearInterval(ikPoll); ikPoll=null;
+      ikSetState("끊김","pill warn"); ikStopTick();
       $("ik_connect").disabled=false; $("ik_disconnect").disabled=true;
       $("ik_send").disabled=true; $("ik_readback").disabled=true; $("ik_readinfo").disabled=true;
       ikQ.drops++; ikQ.lastAsk=0;
@@ -5874,7 +5932,7 @@ function ikReconnect(){
 function ikDisconnect(){
   ikUserStop=true;
   if(ikReTimer){ clearTimeout(ikReTimer); ikReTimer=null; }
-  clearInterval(ikPoll); ikPoll=null;
+  ikStopTick();
   if(ikNegot){ clearTimeout(ikNegot); ikNegot=null; }
   try{ if(ikDev&&ikDev.gatt.connected) ikDev.gatt.disconnect(); }catch(e){}
   ikSetState("끊김"); $("ik_connect").disabled=false; $("ik_disconnect").disabled=true;
@@ -5962,6 +6020,66 @@ function ikTrim(c){
   }
   return at?{c:c.slice(at),cut:at}:{c,cut:0};
 }
+/* ── 재생 ───────────────────────────────────────────────
+   저장된 실측 곡선을 실시간 경로에 그대로 흘려 넣는다. 판정·안내판·그래프가 모두
+   그때와 같은 코드로 다시 도므로, 「그 순간 화면이 무엇을 말했나」를 처음부터 볼 수 있다.
+   실시간 값과 섞이면 안 되므로 연결 중에는 막는다. */
+let simT=null, simR=null, simI=0;
+function simFill(){
+  const rs=DB.roasts.filter(r=>r.act&&r.act.length>5)
+    .sort((a,b)=>String(b.date||"").localeCompare(String(a.date||"")));
+  $("sim_pick").innerHTML=rs.length
+    ? rs.map(r=>`<option value="${r.id}">${r.date||""} · ${beanName(r.beanId)}`
+        +`${r.prof?" · "+r.prof:""} — ${fmt(r.dur||0)}</option>`).join("")
+    : `<option value="">실측 곡선이 담긴 배치가 아직 없습니다</option>`;
+  $("sim_play").disabled=!rs.length;
+}
+function simStop(){
+  if(simT){ clearInterval(simT); simT=null; }
+  $("sim_stop").disabled=true; $("sim_play").textContent="재생";
+}
+function simSeek(i){
+  if(!simR) return;
+  simI=Math.max(0,Math.min(simR.act.length-1,i));
+  ikCurve=simR.act.slice(0,simI+1).map(p=>[p[0],p[1]]);
+  ikNow=ikCurve.length?ikCurve[ikCurve.length-1][0]:0;
+  const t=ikNow, v=ikCurve.length?ikCurve[ikCurve.length-1][1]:0;
+  ikDropAt=(simR.dur!=null&&t>=simR.dur)?simR.dur:null;
+  $("sim_seek").value=simI; $("sim_at").textContent=fmt(Math.round(t));
+  ikRenderLive({state:ikDropAt!=null?5:3,temp_above:v,
+    setpoint:ikPlanCurve.length?curveAt(ikPlanCurve,t):null});
+}
+function simStart(){
+  if(ikLive()){ $("sim_msg").innerHTML=
+    `<span class="pill warn">불가</span> 머신에 연결되어 있습니다. 먼저 「끊기」를 누르세요.`; return; }
+  const r=DB.roasts.find(x=>x.id===$("sim_pick").value);
+  if(!r||!r.act||r.act.length<5){ $("sim_msg").textContent="실측 곡선이 없는 배치입니다."; return; }
+  if(simT){ simStop(); return; }
+  if(simR!==r||simI>=r.act.length-1){
+    simR=r; simI=0;
+    ikCurve=[];ikFanCurve=[];ikHeatCurve=[];ikInlet=[];ikHasInlet=false;
+    ikT0=null;ikTBase=0;ikTPrev=null;ikDropAt=null;ikSawRoast=true;
+    ikRoastT0=0;ikTL=[];ikTLLast={};
+    ikGaps=(r.gaps||[]).map(g=>[g[0],g[1]]);
+    ikMarks={cc:r.cc||null,crack:r.crack||null};
+    const prof=r.profileId?DB.profiles.find(x=>x.id===r.profileId):null;
+    ikRef=prof?{name:prof.name,pts:prof.pts.map(q=>[q[0],q[1]])}:null;
+    ikPlanCurve=prof?prof.pts.map(q=>[q[0],q[1]]):[];
+    $("sim_seek").max=r.act.length-1;
+  }
+  const sp=+$("sim_speed").value||10;
+  const step=Math.max(1,Math.round((r.act.length/Math.max(1,r.dur||r.act.length))*1));
+  $("sim_stop").disabled=false; $("sim_play").textContent="일시정지";
+  $("sim_msg").innerHTML=`<span class="pill ok">재생 중</span> ${sp}배속 —
+    화면·해설이 그때와 같은 코드로 다시 돕니다.`;
+  simT=setInterval(()=>{
+    if(!simR||simI>=simR.act.length-1){ simStop();
+      $("sim_msg").innerHTML=`<span class="pill">끝</span> 슬라이더로 아무 지점이나 다시 볼 수 있습니다.`;
+      return; }
+    simSeek(simI+step);
+  },Math.max(30,1000/sp));
+}
+
 function ikSaveBatch(){
   if(ikCurve.length<5) return;
   /* 냉각 구간을 먼저 떼어낸다. 안 떼면 마지막 점이 냉각 끝 온도라
@@ -6100,6 +6218,19 @@ function ikInit(){
   $("ik_undo").onclick=()=>{ ikMarks={cc:null,crack:null}; $("ik_undo").disabled=true;
     $("ik_markmsg").textContent="마커를 지웠습니다."; if(ikCurve.length>2) ikRenderLive({}); };
   $("ik_save").onclick=ikSaveBatch;
+  $("sim_play").onclick=simStart;
+  $("sim_stop").onclick=()=>{ simStop();
+    $("sim_msg").innerHTML=`<span class="pill">멈춤</span> 「재생」을 다시 누르면 이어서 갑니다.`; };
+  $("sim_seek").oninput=()=>{ simStop();
+    if(!simR){ const r=DB.roasts.find(x=>x.id===$("sim_pick").value);
+      if(r&&r.act&&r.act.length>5){ simR=r; $("sim_seek").max=r.act.length-1;
+        const prof=r.profileId?DB.profiles.find(x=>x.id===r.profileId):null;
+        ikRef=prof?{name:prof.name,pts:prof.pts.map(q=>[q[0],q[1]])}:null;
+        ikPlanCurve=prof?prof.pts.map(q=>[q[0],q[1]]):[];
+        ikRoastT0=0; ikSawRoast=true; ikGaps=(r.gaps||[]).map(g=>[g[0],g[1]]);
+        ikMarks={cc:r.cc||null,crack:r.crack||null}; } }
+    simSeek(+$("sim_seek").value); };
+  $("sim_pick").onchange=()=>{ simStop(); simR=null; simI=0; $("sim_msg").textContent=""; };
   $("ik_send").onclick=()=>ikSendProfile(IK.PROFILE_SET);
   $("ik_readinfo").onclick=async()=>{
     /* 모두 읽기 전용 명령이다. 상태 요청과 같은 성격이라 머신에 위험하지 않다.
@@ -6151,6 +6282,7 @@ function ikRemote(){
 }
 function ikOpen(){
   if(!ikInit.done){ ikInit(); ikInit.done=true; }
+  simFill();
   ikRemote();
   const list=allProfiles().filter(p=>!p.archived);
   const keep=$("ik_prof").value;
@@ -6329,6 +6461,28 @@ function hRelayMissing(e){
     새 기기에서 <b>「불러오기」</b>. 설정은 안 넘어가지만 기록은 그대로 옮겨집니다.</p>`);
 }
 
+/* 연결된 채로 페이지를 떠나면 블루투스가 통째로 죽고, 그때까지 모은 곡선도 사라진다.
+   스튜디오는 별도 페이지라 그 링크도 같은 문제다 — 눌리기 전에 물어본다. */
+window.addEventListener("beforeunload",e=>{
+  if(ikLive()&&ikCurve.length>5){ e.preventDefault(); e.returnValue=""; return ""; }
+});
+document.querySelectorAll('a[href="studio.html"]').forEach(a=>a.addEventListener("click",e=>{
+  if(ikLive()&&!confirm("머신에 연결되어 있습니다.\n\n스튜디오는 다른 페이지라 넘어가면 "
+    +"블루투스 연결이 끊기고 지금까지 모은 곡선이 사라집니다.\n\n그래도 넘어갈까요?"))
+    e.preventDefault();
+}));
+/* 탭이 가려진 동안을 기록해 둔다 — 워커 틱 덕에 수집은 이어지지만,
+   그래도 무슨 일이 있었는지는 남겨야 곡선을 읽을 때 헷갈리지 않는다. */
+let ikHidAt=0;
+document.addEventListener("visibilitychange",()=>{
+  if(!ikLive()) return;
+  if(document.hidden){ ikHidAt=Date.now(); }
+  else if(ikHidAt){
+    const sec=Math.round((Date.now()-ikHidAt)/1000); ikHidAt=0;
+    if(sec>20){ ikLog(`■ 이 탭이 ${fmt(sec)} 동안 가려져 있었습니다 — 틱은 워커에서 돌아 수집은 이어졌습니다.`);
+      ikEvent("hide",`탭 가림 ${fmt(sec)}`,"다른 탭·창을 보는 동안입니다. 수집은 이어졌습니다.","info"); }
+  }
+});
 restore().then(bootTab,bootTab);
 </script>
 </body>
