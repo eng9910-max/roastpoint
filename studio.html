@@ -258,7 +258,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
   </aside>
 </main>
 
-<script src="theory.js?v=8.1"></script>
+<script src="theory.js?v=8.2"></script>
 <script>
 /* QR Code Generator for JavaScript — (c) Kazuhiko Arase, MIT */
 //---------------------------------------------------------------------
@@ -3522,7 +3522,16 @@ $("tgtapply").onclick=()=>{
           const g=h.target;
           $("fromplan").hidden=false;
           $("fromplan").className="pill ok";
-          $("fromplan").innerHTML=`계획에서 받음${h.bean?" · "+h.bean:""}`;
+          $("fromplan").innerHTML=`${h.fixWhy?"수정안을 받음":"계획에서 받음"}${h.bean?" · "+h.bean:""}`;
+          /* 로스팅 결과에서 넘어온 수정안이면, 왜 그렇게 옮겼는지를 함께 띄운다.
+             이유를 모른 채 곡선만 받으면 손으로 다듬을 때 근거가 사라진다. */
+          if(h.fixWhy&&h.fixWhy.length){
+            const box=document.getElementById("libmsg");
+            if(box) box.innerHTML=`<b>이 곡선은 지난 배치 결과로 이미 고쳐진 것입니다</b><br>`
+              +h.fixWhy.map(x=>`· ${x.s?`<b>[${x.s}]</b> `:""}${x.t}`).join("<br>")
+              +`<br><span style="opacity:.7">여기서 제어점을 더 끌어 다듬은 뒤 「링크 · QR 만들기」를
+              누르면 기록장 프로파일 탭에도 저장됩니다.</span>`;
+          }
           if(g){
             planTarget=g; showTarget();
             setTimeout(()=>runAutoFix(true),0);   // 들어오자마자 보정된 모습으로

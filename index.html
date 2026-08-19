@@ -128,7 +128,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v8.1</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v8.2</span>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 12px;font-size:13.5px;
@@ -730,6 +730,19 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     어느 쪽을 보는지 알 수 없어집니다.</p>
   </div>
 
+  <div class="block" id="ik_micbox">
+    <h2>소리로 크랙 찾기 <span class="pill warn">시험</span></h2>
+    <p class="lead">IKAWA 는 팬 소리가 커서 크랙을 귀로 잡기 어렵습니다.
+    마이크를 머신 <b>가까이</b> 두고 켜면, 팬의 지속음은 걸러내고 <b>딱딱 터지는 소리만</b> 세어
+    그래프 아래에 밀도로 그립니다. 소리를 못 들어도 <b>눈으로 보입니다</b>.</p>
+    <div class="row">
+      <button id="mic_on">마이크 켜기</button>
+      <button class="ghost" id="mic_off" disabled>끄기</button>
+      <span class="note" id="mic_msg">소리는 <b>저장하지 않습니다</b> — 초당 터짐 횟수만 남깁니다.</span>
+    </div>
+    <div id="mic_meter" style="margin-top:8px"></div>
+  </div>
+
   <div class="block" id="ik_sendbox" hidden>
     <h2>③ 프로파일 보내기</h2>
     <p class="lead">프로파일을 머신으로 <b>직접</b> 올립니다. 폰이 필요 없습니다.</p>
@@ -909,10 +922,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
-<script src="theory.js?v=8.1"></script>
+<script src="theory.js?v=8.2"></script>
 <script>
 "use strict";
-const APP_V="8.1";                       // 화면 오른쪽 위 표시와 같아야 한다
+const APP_V="8.2";                       // 화면 오른쪽 위 표시와 같아야 한다
 const $=id=>document.getElementById(id);
 const DB={beans:[],roasts:[],profiles:[],settings:{}};
 let editingId=null;
@@ -3022,9 +3035,34 @@ function fixBlock(prof,r,b){
     h+=`<p class="note" style="color:var(--actual)">${F.warn.map(x=>"· "+x).join("<br>")}</p>`;
   h+=`<div class="row" style="margin-top:8px">
     <button onclick="fixSave('${prof.id}','${r.id}')">${F.root} ${nextVer(F.root)} 로 저장</button>
-    <span class="note">저장하면 프로파일 탭에 새 버전으로 들어가고, 머신 탭에서 바로 고를 수 있습니다.</span></div>`;
+    <button class="ghost" onclick="fixStudio('${prof.id}','${r.id}')">스튜디오에서 다듬기 ↗</button>
+  </div>
+  <p class="note" style="margin-top:5px"><b>저장</b>은 이 수정안 그대로 새 버전을 만들어
+  프로파일 탭에 넣고 머신 탭에 올려 둡니다 — 손댈 게 없으면 이쪽이 빠릅니다.<br>
+  <b>스튜디오</b>는 고친 곡선을 <b>이미 반영한 채로</b> 열어, 제어점을 끌어 더 다듬을 수 있게 합니다.
+  왜 그렇게 옮겼는지도 함께 넘어갑니다.</p>`;
   return h;
 }
+/* 수정안을 그대로 스튜디오로 — 이미 고친 곡선 위에서 손으로 더 다듬게 한다.
+   예전에는 「배출점 −4.0℃」라고 말만 하고 끝이라, 사람이 스튜디오에서 감으로 옮겨야 했다. */
+window.fixStudio=async(profId,roastId)=>{
+  const prof=DB.profiles.find(x=>x.id===profId), r=DB.roasts.find(x=>x.id===roastId);
+  if(!prof||!r) return;
+  const b=DB.beans.find(x=>x.id===r.beanId);
+  const F=fixPlan(prof,r,b);
+  if(!F||F.none||!F.pts){ alert("고칠 것이 없습니다."); return; }
+  const STG={mach:"머신 데이터",phys:"물리 측정",cup:"관능",sys:"정합성"};
+  try{
+    await idbSet("handoff",{ at:Date.now(),
+      name:`${profRoot(prof.name)} ${nextVer(profRoot(prof.name))}`,
+      pts:F.pts.map(x=>[x[0],x[1]]),
+      base:prof.pts.map(x=>[x[0],x[1]]),
+      fixWhy:(F.why||[]).map((w,i)=>({s:STG[(F.stg||[])[i]]||"",t:String(w).replace(/<[^>]+>/g,"")})),
+      beanId:r.beanId||null, bean:beanName(r.beanId),
+      level:r.level||null, use:r.use||null });
+    location.href="studio.html#from=plan";
+  }catch(e){ alert("넘기지 못했습니다: "+e.message); }
+};
 window.fixSave=(profId,roastId)=>{
   const prof=DB.profiles.find(x=>x.id===profId);
   const r=DB.roasts.find(x=>x.id===roastId);
@@ -6659,6 +6697,105 @@ function simStart(){
   },Math.max(30,1000/sp));
 }
 
+/* ── 소리로 크랙 찾기 ───────────────────────────────────
+   1차 크랙은 짧고 날카로운 파열음이다. 팬은 넓은 대역의 「지속음」이라 성격이 다르다.
+   그래서 소리를 알아듣는(분류) 대신, 1~4kHz 대역에서 <b>순간적으로 튀는 정도</b>만 센다.
+   완벽히 못 맞혀도 된다 — 터짐이 몰리는 구간이 눈에 보이면 사람이 판단할 수 있다.
+   녹음은 남기지 않는다. 초당 숫자 하나만 곡선으로 쌓는다. */
+let micCtx=null, micStream=null, micTimer=null, micBase=null;
+let micCurve=[];                     // [[t, 초당 터짐 정도]]
+async function micOn(){
+  try{
+    micStream=await navigator.mediaDevices.getUserMedia({audio:{
+      echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
+  }catch(e){
+    $("mic_msg").innerHTML=`<span class="pill warn">불가</span> 마이크를 쓸 수 없습니다 — ${e.message}`;
+    return;
+  }
+  micCtx=new (window.AudioContext||window.webkitAudioContext)();
+  const src=micCtx.createMediaStreamSource(micStream);
+  /* 팬의 저역 웅웅거림을 깎아낸다. 크랙은 그보다 높은 대역에서 튄다. */
+  const hp=micCtx.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=1200;
+  const an=micCtx.createAnalyser(); an.fftSize=1024; an.smoothingTimeConstant=0;
+  src.connect(hp); hp.connect(an);
+  const buf=new Float32Array(an.fftSize);
+  let prev=0, hist=[];
+  micBase=null;
+  $("mic_on").disabled=true; $("mic_off").disabled=false;
+  $("mic_msg").innerHTML=`<span class="pill ok">듣는 중</span> 팬 소리를 기준으로 잡는 중입니다…`;
+  micTimer=setInterval(()=>{
+    an.getFloatTimeDomainData(buf);
+    let e=0; for(let i=0;i<buf.length;i++) e+=buf[i]*buf[i];
+    e=Math.sqrt(e/buf.length);
+    /* 「지속음 대비 갑자기 커진 정도」를 본다. 팬이 아무리 커도 일정하면 0 에 가깝다. */
+    const jump=Math.max(0,e-prev); prev=prev*0.85+e*0.15;
+    hist.push(jump); if(hist.length>10) hist.shift();
+    const now=hist.reduce((a,b)=>a+b,0);
+    if(micBase===null&&hist.length>=10){ micBase=now*1.6+1e-4;
+      $("mic_msg").innerHTML=`<span class="pill ok">듣는 중</span> 기준을 잡았습니다 — 터짐만 셉니다.`; }
+    if(micBase!==null){
+      const v=Math.max(0,now/micBase-1);
+      const t=ikLive()?Math.max(0,Math.round(ikNow-ikZero())):(micCurve.length?micCurve[micCurve.length-1][0]+0.1:0);
+      micCurve.push([+t.toFixed(1),+v.toFixed(3)]);
+      if(micCurve.length>4000) micCurve.shift();
+      micDraw();
+    }
+  },100);
+}
+function micOff(){
+  if(micTimer){ clearInterval(micTimer); micTimer=null; }
+  try{ if(micStream) micStream.getTracks().forEach(t=>t.stop()); }catch(e){}
+  try{ if(micCtx) micCtx.close(); }catch(e){}
+  micStream=null; micCtx=null;
+  $("mic_on").disabled=false; $("mic_off").disabled=true;
+  $("mic_msg").innerHTML=`<span class="pill">멈춤</span> 모은 터짐 기록 ${micCurve.length}점은 남아 있습니다.`;
+}
+/* 터짐이 가장 몰린 구간 — 크랙 후보 */
+function micPeak(){
+  if(micCurve.length<50) return null;
+  const end=micCurve[micCurve.length-1][0];
+  const W=8;
+  let best={v:0,t:null};
+  for(let i=0;i<micCurve.length;i++){
+    const t=micCurve[i][0];
+    if(t<end*0.35) continue;
+    let s2=0,n=0;
+    for(let j=i;j<micCurve.length&&micCurve[j][0]-t<=W;j++){ s2+=micCurve[j][1]; n++; }
+    if(n>20&&s2/n>best.v) best={v:s2/n,t:t+W/2};
+  }
+  return best.t!=null&&best.v>0.25?{t:Math.round(best.t),v:best.v}:null;
+}
+function micDraw(){
+  const el=$("mic_meter"); if(!el) return;
+  if(micCurve.length<5){ el.innerHTML=""; return; }
+  const W=640,H=90,L=36,R=8,T=8,B=14;
+  const t0=micCurve[0][0], t1=micCurve[micCurve.length-1][0]||1;
+  const hi=Math.max(0.5,...micCurve.map(p=>p[1]));
+  const X=t=>L+(W-L-R)*(t-t0)/((t1-t0)||1), Y=v=>H-B-(H-T-B)*v/hi;
+  const d=micCurve.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1)).join(" ");
+  const pk=micPeak();
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:#fff;
+      border:1px solid var(--rule)" role="img" aria-label="터짐 밀도">
+    <path d="${d}" fill="none" stroke="var(--actual)" stroke-width="1.2"/>
+    ${pk?`<line x1="${X(pk.t).toFixed(1)}" y1="${T}" x2="${X(pk.t).toFixed(1)}" y2="${H-B}"
+      stroke="var(--actual)" stroke-width="1.6" stroke-dasharray="5 3"/>
+      <text x="${(X(pk.t)+4).toFixed(1)}" y="${T+12}" font-size="10" fill="var(--actual)"
+        >크랙 후보 ${fmt(pk.t)}</text>`:""}
+    <text x="${L+4}" y="${T+10}" font-size="10" fill="var(--muted)">터짐 밀도 — 팬 소리를 뺀 값</text>
+  </svg>`
+    +(pk?`<p class="note" style="margin:4px 0 0">소리가 가장 몰린 곳은 <b>${fmt(pk.t)}</b> 입니다.
+      맞다고 보시면 <b>「지금 1차 크랙」</b> 대신 아래 버튼으로 그 시각을 넣으세요.
+      <button class="ghost sm" onclick="micTake(${pk.t})">${fmt(pk.t)} 로 크랙 넣기</button></p>`
+       :`<p class="note" style="margin:4px 0 0">아직 뚜렷한 터짐이 없습니다.</p>`);
+}
+window.micTake=t=>{
+  ikMarks.crack=ikZero()+t;
+  ikLog(`▼ 1차 크랙 ${fmt(t)} (소리에서)`);
+  ikEvent("mark","1차 크랙 (소리)","마이크가 잡은 터짐이 가장 몰린 지점","act");
+  if(ikCurve.length>2) ikRenderLive(ikLastSt||{});
+  $("mic_msg").innerHTML=`<span class="pill ok">넣었습니다</span> 1차 크랙 ${fmt(t)}`;
+};
+
 function ikSaveBatch(){
   if(ikCurve.length<5) return;
   /* 냉각 구간을 먼저 떼어낸다. 안 떼면 마지막 점이 냉각 끝 온도라
@@ -6784,7 +6921,7 @@ function ikInit(){
   $("ik_clear").onclick=()=>{ ikCurve=[]; ikPlanCurve=[]; ikFanCurve=[]; ikHeatCurve=[];
     ikInlet=[]; ikRorCurve=[]; ikHasInlet=false; ikT0=null; ikNow=0; $("ik_coachbox").hidden=true;
     ikTBase=0; ikTPrev=null; ikDropAt=null; ikRoastT0=null; ikSawRoast=false;
-    ikGaps=[]; ikTL=[]; ikTLLast={};
+    ikGaps=[]; ikTL=[]; ikTLLast={}; micCurve=[]; micDraw();
     ikMarks={cc:null,crack:null}; $("ik_chart").innerHTML=""; $("ik_elapsed").textContent="";
     $("ik_save").disabled=true; $("ik_savemsg").textContent="";
     $("ik_undo").disabled=true; $("ik_markmsg").textContent="곡선을 지웠습니다."; };
@@ -6820,6 +6957,8 @@ function ikInit(){
         ikMarks={cc:r.cc||null,crack:r.crack||null}; } }
     simSeek(+$("sim_seek").value); };
   $("sim_pick").onchange=()=>{ simStop(); simR=null; simI=0; $("sim_msg").textContent=""; };
+  $("mic_on").onclick=micOn;
+  $("mic_off").onclick=micOff;
   $("ik_send").onclick=()=>ikSendProfile(IK.PROFILE_SET);
   $("ik_readinfo").onclick=async()=>{
     /* 모두 읽기 전용 명령이다. 상태 요청과 같은 성격이라 머신에 위험하지 않다.
