@@ -128,24 +128,25 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v6.9</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v7.0</span>
   <nav>
-    <button class="on" data-p="beans">생두</button>
-    <button data-p="plan">로스팅 계획</button>
-    <button data-p="roasts">로스팅 기록</button>
-    <button data-p="profiles">프로파일</button>
-    <button data-p="cup">커핑</button>
-    <button data-p="label">라벨</button>
+    <button class="on" data-p="plan">로스팅 계획</button>
+    <a href="studio.html" style="display:flex;align-items:center;padding:0 12px;font-size:13.5px;
+       color:var(--setpoint);text-decoration:none;white-space:nowrap">스튜디오 ↗</a>
     <button data-p="machine">머신</button>
+    <button data-p="roasts">로스팅 기록</button>
+    <button data-p="cup">커핑</button>
+    <button data-p="profiles">프로파일</button>
+    <button data-p="label">라벨</button>
+    <button data-p="beans">생두</button>
     <button data-p="data">데이터</button>
-    <a href="studio.html" style="display:flex;align-items:center;padding:0 14px;font-size:14.5px;color:var(--setpoint);text-decoration:none">스튜디오 →</a>
   </nav>
 </header>
 
 <main>
 
 <!-- ================= 생두 ================= -->
-<section class="pane on" id="p-beans">
+<section class="pane" id="p-beans">
 
   <div class="block">
     <h2>① 생두 정보 넣기</h2>
@@ -237,9 +238,12 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 </section>
 
 <!-- ================= 로스팅 기록 · 장비 ================= -->
-<section class="pane" id="p-plan">
+<section class="pane on" id="p-plan">
   <div class="block">
     <h2>무엇을 어떻게 볶을지 정합니다</h2>
+    <p class="note" id="p_nobean" hidden style="color:var(--actual);margin-top:0">
+      등록된 생두가 없습니다 — 계획은 생두에서 출발합니다.
+      <button class="ghost sm" data-gobeans="1">생두 등록하러 가기</button></p>
     <div class="core">
       <div class="grid g5">
         <div class="wide"><label>생두 *</label><select id="r_bean"></select></div>
@@ -258,8 +262,9 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <div class="extra" id="recbox" hidden>
       <div id="rec_out"></div>
       <div class="row" style="margin-top:10px">
-        <button id="p_direct" disabled>바로 앱으로 보내기</button>
-        <button class="ghost" id="p_send" disabled>스튜디오에서 고치고 보내기 →</button>
+        <button id="p_machine" disabled>머신에서 바로 로스팅 →</button>
+        <button class="ghost" id="p_send" disabled>스튜디오에서 고치기 ↗</button>
+        <button class="ghost" id="p_direct" disabled>폰 IKAWA 앱으로 보내기</button>
         <a href="studio.html" style="font-size:13px;color:var(--setpoint)">빈 스튜디오 열기</a>
       </div>
       <p class="note" id="p_pick">위 표에서 <b>줄을 누르거나 왼쪽 동그라미를 체크</b>하면 여기에 표시됩니다.
@@ -682,6 +687,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
       <select id="ik_prof" style="width:auto;flex:1;min-width:220px"></select>
       <button id="ik_send" disabled>머신으로 보내기</button>
       <button class="ghost" id="ik_readback" disabled>머신에서 읽어 확인</button>
+      <span class="note" id="ik_profmsg"></span>
     </div>
     <p class="note" style="margin:0 0 8px"><b>보낸 게 들어갔는지 확인하는 법</b> —
     보낸 뒤 <b>「머신에서 읽어 확인」</b>을 누르면 머신이 지금 갖고 있는 프로파일의
@@ -848,15 +854,41 @@ let pendingLog=null, pendingImg=null;
 const fmt=s=>`${Math.floor(s/60)}:${String(Math.round(s%60)).padStart(2,"0")}`;
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 
-/* ---------- 탭 ---------- */
+/* ---------- 탭 ----------
+   스튜디오는 따로 된 페이지다. 캔버스 편집기·되돌리기 이력·QR 라이브러리를 통째로 들고 있어
+   한 페이지에 합치면 첫 로딩이 무거워지고 두 화면이 DOM 을 나눠 써야 한다.
+   그래서 탭이 아니라 링크로 둔다. 대신 마지막에 보던 탭을 기억해 두었다가
+   돌아왔을 때 그 자리로 되돌린다 — 예전에는 스튜디오에서 뒤로 오면 늘 첫 탭으로 튕겼다. */
+const TABKEY="rpTab";
+let tabSwitched=false;              // 자료를 읽는 중에 이미 탭이 옮겨졌는가
+function goTab(p){
+  const b=document.querySelector(`nav button[data-p="${p}"]`);
+  if(b) b.click();
+}
 document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>{
   document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("on",x===b));
   document.querySelectorAll(".pane").forEach(p=>p.classList.toggle("on",p.id==="p-"+b.dataset.p));
+  tabSwitched=true;
+  try{ localStorage.setItem(TABKEY,b.dataset.p); }catch(e){}
   if(b.dataset.p==="data") stats();
   if(b.dataset.p==="cup"){ renderWaiting(); cmpFill(); }
   if(b.dataset.p==="label") lbOpen();
   if(b.dataset.p==="machine") ikOpen();
 });
+/* 주소의 #machine → 기억된 탭 → 계획 순으로 고른다.
+   자료를 읽은 뒤에 불러야 탭이 열릴 때 도는 ikOpen·lbOpen 이 빈 DB 를 보지 않는다. */
+function bootTab(){
+  /* 공유로 들어온 파일처럼 자료를 읽는 동안 이미 탭을 옮긴 경우에는 손대지 않는다.
+     그쪽이 더 급한 용건이다. */
+  if(tabSwitched) return;
+  const has=p=>!!(p&&document.querySelector(`nav button[data-p="${p}"]`));
+  const h=(location.hash||"").replace(/^#/,"").split(/[&?]/)[0];
+  let p=has(h)?h:null;
+  if(!p){ try{ const v=localStorage.getItem(TABKEY); if(has(v)) p=v; }catch(e){} }
+  goTab(p||"plan");
+  // 주소의 #machine 은 한 번만 쓴다. 남겨 두면 새로 고칠 때마다 그 탭으로 끌려간다.
+  if(h) try{ history.replaceState(null,"",location.pathname+location.search); }catch(e){}
+}
 
 
 /* ---------- 값 사전 : 라벨이 없어도 값만 보고 판별 ---------- */
@@ -1333,6 +1365,7 @@ function renderBeans(){
     const e=$(id); if(!e) return;
     const keep=e.value; e.innerHTML=opts; if(keep) e.value=keep;
   });
+  if($("p_nobean")) $("p_nobean").hidden=DB.beans.length>0;
 }
 window.delBean=i=>{ if(confirm("삭제할까요?")){ DB.beans.splice(i,1); renderBeans(); persist(); } };
 
@@ -3187,7 +3220,7 @@ function showRec(){
   const top=ranked.slice(0,5);
   const sign=x=>(x>0?"+":"")+x.toFixed(x>=10||x<=-10?0:1);
   html+=`<p class="tagline" style="margin-top:12px">3층 · 후보 ${ranked.length}개 중 상위 5 <span class="pill warn">추정</span></p>`;
-  html+=`<table><tr><th>프로파일</th><th>출처</th><th>쓸 수 있나</th><th class="num">점수</th>
+  html+=`<table><tr><th style="width:34px"></th><th>프로파일</th><th>출처</th><th>쓸 수 있나</th><th class="num">점수</th>
     <th class="num">배출</th><th class="num">시간</th><th class="num">초반</th><th class="num">발달</th>
     <th>목표와의 차이</th></tr>`+
     top.map((r,i)=>{
@@ -3281,6 +3314,7 @@ document.addEventListener("click",e=>{
   if(row&&row.dataset.row!==undefined) return pickProfile(+row.dataset.row);
   if(t.dataset.ctxclear!==undefined){
     idbSet("context",{}).catch(()=>{}); $("ctxmsg").hidden=true; return; }
+  if(t.dataset.gobeans!==undefined){ goTab("beans"); return; }
   if(t.dataset.goplan!==undefined){
     document.querySelector('nav button[data-p="plan"]').click();
     $("r_bean").scrollIntoView({behavior:"smooth",block:"center"}); return; }
@@ -3292,7 +3326,7 @@ document.addEventListener("click",e=>{
 window.pickProfile=i=>{
   const r=(window.__ranked||[])[i]; if(!r) return;
   picked={ name:r.p.name, pts:r.p.pts, target:window.__target||null };
-  $("p_send").disabled=false; $("p_direct").disabled=false;
+  $("p_send").disabled=false; $("p_direct").disabled=false; $("p_machine").disabled=false;
   document.querySelectorAll("tr.pickrow").forEach(tr=>{
     const on=+tr.dataset.row===i;
     tr.style.background=on?"#FFF4EF":"";
@@ -3304,15 +3338,15 @@ window.pickProfile=i=>{
   /* 결론은 하나만 — 점수(평균)와 게이트(최악 축)를 한 문장으로 합치고,
      권하는 쪽 버튼을 진하게 만든다. 예전엔 "93점 추천"과 "차이 있음, 고치세요"가
      나란히 떠 있고 강조된 버튼이 권고와 반대여서 무엇을 누를지 알 수 없었다. */
-  $("p_direct").classList.toggle("ghost",!g.ok);
+  $("p_machine").classList.toggle("ghost",!g.ok);
   $("p_send").classList.toggle("ghost",g.ok);
   $("p_pick").innerHTML=`고름: <b>${r.p.name}</b> — 배출 ${r.ch.drop.toFixed(1)}℃ · 총 ${fmt(r.ch.dur)}<br>`+
     (g.ok
       ? `<span class="pill ok">${r.score.toFixed(0)}점 · 그대로 보내기</span>
-         모든 축이 허용폭 안입니다. <b>바로 앱으로 보내기</b>를 누르세요.`
+         모든 축이 허용폭 안입니다. <b>머신에서 바로 로스팅</b>을 누르세요.`
       : `<span class="pill warn">${r.score.toFixed(0)}점 · 손보기 필요</span>
          평균은 ${r.score.toFixed(0)}점이지만 ${g.gaps.length}개 축이 치우쳤습니다 —
-         <b>스튜디오에서 고치고 보내기</b>로 아래를 맞추세요.
+         <b>스튜디오에서 고치기</b>로 아래를 맞추세요.
          <table style="margin-top:7px"><tr><th>고칠 것</th><th>지금</th><th>이렇게</th><th>안 고치면</th></tr>`
         +g.gaps.map(x=>`<tr><td>${x.label}</td><td class="num">${x.now}</td>
            <td class="num"><b>${x.to}</b></td><td class="note">${x.risk}</td></tr>`).join("")
@@ -3341,6 +3375,18 @@ function pickGate(r){
   }));
   return {ok:gaps.length===0, gaps};
 }
+/* 계획에서 고른 것을 머신 탭으로 그대로 넘긴다.
+   생두·배전도는 같은 양식(r_bean·r_level)을 쓰므로 저절로 따라간다 —
+   머신 탭에 생두 칸을 따로 두지 않은 이유다. 넘길 것은 프로파일 이름뿐이다. */
+const PROFKEY="rpMachineProf";
+$("p_machine").onclick=()=>{
+  if(!picked) return;
+  if($("r_prof")&&!$("r_prof").value) $("r_prof").value=picked.name;
+  try{ localStorage.setItem(PROFKEY,picked.name); }catch(e){}
+  goTab("machine");
+  const t=$("ik_sendbox")&&!$("ik_sendbox").hidden?$("ik_prof"):$("ik_connect");
+  if(t&&t.scrollIntoView) t.scrollIntoView({behavior:"smooth",block:"center"});
+};
 $("p_send").onclick=async()=>{
   if(!picked) return;
   try{
@@ -5063,6 +5109,7 @@ function ikSaveBatch(){
   const dur=c[c.length-1][0], drop=c[c.length-1][1];
   $("r_dur").value=Math.round(dur); $("r_drop").value=drop.toFixed(1);
   $("r_pre").value=c[0][1].toFixed(1);
+  if(ikRef&&ikRef.name&&$("r_prof")&&!$("r_prof").value) $("r_prof").value=ikRef.name;
   if(!$("r_date").value) $("r_date").value=new Date().toISOString().slice(0,10);
   // 마커도 같은 만큼 당겨서 넣는다
   // 경계를 포함해서 넣는다. 예전엔 크랙 시각이 총시간과 같으면 조용히 버려졌다.
@@ -5209,7 +5256,20 @@ function ikOpen(){
   const keep=$("ik_prof").value;
   $("ik_prof").innerHTML=list.map(p=>
     `<option value="${p.id}">${p.name} — 배출 ${profStat(p.pts).drop.toFixed(1)}℃ · ${fmt(profStat(p.pts).dur)}</option>`).join("");
-  if(keep) $("ik_prof").value=keep;
+  /* 계획 탭이나 스튜디오에서 고른 프로파일을 띄운다.
+     내장 프로파일에는 id 가 없어 이름으로 맞춘다.
+     한 번 띄운 뒤에는 손으로 바꾼 선택을 덮지 않는다. */
+  const want=ikWant(), hit=want?list.find(p=>p.name===want):null;
+  if(hit&&want!==ikWantAt){
+    $("ik_prof").value=hit.id; ikWantAt=want;
+    $("ik_profmsg").innerHTML=`<span class="pill ok">가져왔습니다</span>
+      <b>${hit.name}</b> — 연결한 뒤 「머신으로 보내기」를 누르세요.`;
+  } else if(keep) $("ik_prof").value=keep;
+}
+let ikWantAt=null;
+function ikWant(){
+  if(typeof picked!=="undefined"&&picked&&picked.name) return picked.name;
+  try{ return localStorage.getItem("rpMachineProf")||null; }catch(e){ return null; }
 }
 
 /* ================= 기기 이음 (설정 옮기기) =================
@@ -5369,7 +5429,7 @@ function hRelayMissing(e){
     새 기기에서 <b>「불러오기」</b>. 설정은 안 넘어가지만 기록은 그대로 옮겨집니다.</p>`);
 }
 
-restore();
+restore().then(bootTab,bootTab);
 </script>
 </body>
 </html>

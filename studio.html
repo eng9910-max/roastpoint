@@ -77,7 +77,7 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
 </head>
 <body>
 <header>
-  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v2.5</span>
+  <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">스튜디오</span></h1><span class="ver mono">v2.6</span>
   <button class="ghost" id="undo" title="Ctrl+Z">되돌리기</button>
   <button class="ghost" id="redo" title="Ctrl+Shift+Z">다시</button>
   <a href="./" style="font-size:12.5px;color:var(--setpoint);margin-left:auto">← 기록장</a>
@@ -227,8 +227,11 @@ td input{border:0;padding:1px 2px;font-size:12px;text-align:right}
     </div>
 
     <div>
-      <h2>⑤ IKAWA 앱으로 보내기</h2>
-      <button id="mklink" class="wide">링크 · QR 만들기</button>
+      <h2>⑤ 보내기</h2>
+      <button id="tomachine" class="wide">머신으로 보내기 — 기록장 머신 탭으로 ↗</button>
+      <p class="hint" style="margin:5px 0 9px">블루투스로 IKAWA 에 직접 올립니다. 폰이 필요 없습니다.
+      곡선은 기록장 프로파일 탭에도 함께 저장됩니다.</p>
+      <button id="mklink" class="wide">폰 IKAWA 앱용 링크 · QR 만들기</button>
       <div id="qr" hidden></div>
       <div class="hint" id="savedmsg" style="margin-top:6px"></div>
       <div class="linkbox" id="linkout">아직 만들지 않았습니다.</div>
@@ -3302,6 +3305,21 @@ $("mklink").onclick=()=>{
   try{ const q=qrcode(0,"L"); q.addData(url); q.make();
     $("qr").innerHTML=q.createSvgTag({cellSize:4,margin:2,scalable:true}); $("qr").hidden=false;
   }catch{ $("qr").hidden=true; }
+};
+/* 스튜디오 → 기록장 머신 탭.
+   같은 저장 영역을 쓰므로 프로파일을 먼저 넣어 두고, 어느 것을 띄울지는
+   이름을 localStorage 에 남겨 알린다. 기록장의 ikOpen 이 그 이름으로 골라 준다. */
+$("tomachine").onclick=()=>{
+  const nm=fullName();
+  if(!S.temps||S.temps.length<2){ alert("온도점이 없습니다. 먼저 곡선을 만드세요."); return; }
+  saveContext(nm);
+  try{ localStorage.setItem("rpMachineProf",nm);
+       localStorage.setItem("rpTab","machine"); }catch(e){}
+  $("savedmsg").innerHTML=`<span class="pill">기록장으로 넘기는 중…</span>`;
+  let gone=false;
+  const go=()=>{ if(gone) return; gone=true; location.href="./#machine"; };
+  saveToRecords(nm,S.temps,readFans(),go);
+  setTimeout(go,1500);            // 저장이 조용히 실패해도 넘어가긴 한다
 };
 $("cplink").onclick=async()=>{
   const t=$("linkout").textContent;
