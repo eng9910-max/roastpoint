@@ -11,7 +11,7 @@
 /* 판본 — 기록장·스튜디오가 「지금 쓰는 판정 코드가 몇 판인가」를 확인할 수 있게 박아 둔다.
    서비스워커가 옛 theory.js 를 계속 내주는 바람에 화면은 새것이고 판정만 옛것인 상태로
    돌던 적이 있다. 눈으로는 절대 못 알아챈다. 그래서 숫자로 맞춰 본다. */
-const THEORY_V="8.9";
+const THEORY_V="9.2";
 
 /* ── 1층 : 교과서 상수 ───────────────────────────────
    SCA 로스팅 커리큘럼과 로스팅 문헌에서 통용되는 값. 임의로 손대지 않는다.
@@ -94,6 +94,21 @@ const SRC = {
   precrack:"라오 p.46 — 「1차 크랙이 시작되리라 보는 시점의 40~45초 전에 화력을 크게 낮추는 것이 "
        +"좋은 어림」. 또 진단 규칙 둘 — 승온율이 평평해지거나 오르다 크래시하면 화력이 너무 높았던 것, "
        +"크랙 전에 꾸준히 내려가다 크랙 중 정체·평탄해지면 화력이 너무 낮았던 것",
+  cvai:"SCA Standard 103-2024 『Coffee Value Assessment: Descriptive Assessment』 §6.2 — "
+       +"15점 척도에 LOW·MEDIUM·HIGH 를 0-5-10-15 로 나눈다. "
+       +"§4 「강도는 품질이나 선호를 뜻하지 않는다」, §6.1 「개별 성분이 아니라 각 항목의 총 강도를 매긴다」, "
+       +"§6.3.1 「그 커피를 가장 잘 나타내는 다섯 개까지 고른다」. 표준 문서를 직접 확인한 값이다",
+  inlet:"라오 p.52 — 흡기온도(Inlet Temperature)는 버너에서 드럼으로 들어가는 공기의 온도. "
+       +"「가스 설정은 로스터가 넣는 <b>입력</b>이고 흡기온도는 그 <b>결과</b>다. "
+       +"원두가 실제로 겪는 것을 더 곧게 비추므로 가스 설정보다 더 관련 있다고 할 만하다. "
+       +"큰 기계 중에는 가스가 아니라 미리 짜 둔 흡기온도로 로스팅을 관리하는 것도 있다」. "
+       +"IKAWA 프로파일이 바로 이 방식이다 — 우리는 화력이 아니라 <b>공기 온도 곡선</b>을 짠다",
+  cool:"Baggenstoss 2008 (ETH Diss 17696) §6 — 「공랭은 여러 분에 걸쳐 많은 찬 공기를 쓰므로 비교적 느리다. "
+       +"따라서 냉각 첫 15초 동안 콩 안의 발열 반응이 계속될 수 있다」. "
+       +"같은 실험에서 45분간 천천히 식힌 커피는 배전도가 더 깊게 나왔다. "
+       +"물 담금질은 훨씬 빠르지만 수분이 올라 보관 안정성을 해친다(§10.4-4). "
+       +"**60초 강하 ℃ 기준은 문헌에 없다 — IKAWA 50g 기준으로 이 앱이 잡은 어림이고, "
+       +"쓰임은 절대 판정이 아니라 같은 원두 배치끼리의 비교다**",
   crack:"라오 p.62~63 — 배기온도 승온율(ETROR)이 깊은 골에서 **급격히 다시 오르기 시작하는 순간**이 "
        +"1차 크랙의 객관적 지표. 그 골·반등은 로스팅 중 가장 극적이어야 한다. "
        +"내추럴·디카페인은 신호가 뚜렷하지 않을 수 있다"
@@ -199,6 +214,21 @@ function crashKind(slope, bend, heatBefore){
   if(abrupt && (lowHeat || !already)) return "hard";
   return "soft";
 }
+/* 라오 p.46 — 크래시·정체의 <b>원인</b>을 곡선 모양에서 되짚는 규칙 둘.
+   지금까지는 SRC 문구로만 적어 두고 판정에는 안 쓰고 있었다.
+     · 승온율이 평평해지거나 오르다가 크래시  → 화력이 너무 높았다
+     · 크랙 전에 꾸준히 내려가다 크랙 중 정체·평탄 → 화력이 너무 낮았다 */
+function heatBlame(slope, stalled){
+  if(stalled) return {k:"low",
+    d:"크랙 전에는 꾸준히 내려오다 <b>크랙 중에 정체</b>했습니다. "
+     +"라오는 이것을 <b>화력이 너무 낮았던</b> 신호로 읽습니다 (p.46) — "
+     +"크랙에 들어갈 때 열이 모자랐다는 뜻입니다."};
+  if(slope>=-0.5) return {k:"high",
+    d:"크래시 직전에 승온율이 <b>평평하거나 오히려 올랐습니다</b>. "
+     +"라오는 이것을 <b>화력이 너무 높았던</b> 신호로 읽습니다 (p.46) — "
+     +"크랙 전에 미리 낮췄어야 할 열이 남아 있다가 한꺼번에 꺾인 것입니다."};
+  return null;
+}
 const CRASHSAY = {
   soft:{ name:"부드러운 크래시",
     d:"크래시로 들어가기 <b>전부터 승온율이 이미 내려오고 있었습니다</b>. "
@@ -237,6 +267,60 @@ function dtrRisk(pct){
   if(pct==null||!isFinite(pct)) return null;
   return DTRRISK.find(r=>pct>=r.lo&&pct<r.hi)||null;
 }
+/* ── CVA 서술 평가의 강도 눈금 ────────────────────────
+   SCA Standard 103-2024 §6.2 「Rating Intensity」. 15점 척도이고
+   눈금 위에 <b>LOW · MEDIUM · HIGH</b> 세 구획이 0-5-10-15 로 표시된다.
+
+   표준이 두 번 못박는 것이 있고, 둘 다 오해하기 쉬운 대목이다.
+
+   ① <b>「Intensity does not imply quality or desirability」</b> (§4 용어 정의)
+      — 세다고 좋은 것이 아니다. 좋고 나쁨은 정동 평가(Standard 104)가 맡는다.
+   ② <b>구성 요소가 아니라 그 항목 <u>전체</u>가 얼마나 센가</b> (§6.1)
+      — 「초콜릿 강도」를 매기는 게 아니라 「프래그런스 전체가 얼마나 센가」다.
+      표준의 예: 과일향이 강하고 초콜릿이 옅은 커피라면, 성분을 따지지 말고
+      <b>향 전체의 세기</b> 하나를 매긴다. */
+const CVAI = { lo:[0,5], mid:[5,10], hi:[10,15] };
+function cvaBand(v){
+  if(v==null||!(v>0)) return null;
+  return v<5?{n:"낮음",c:""}:v<10?{n:"중간",c:""}:{n:"높음",c:""};
+}
+const CVANOTE = "SCA 103 §6.2 — <b>강도는 좋고 나쁨이 아닙니다</b>. "
+  +"「세다」와 「좋다」는 다른 축이고, 좋고 나쁨은 위의 정동 평가가 맡습니다. "
+  +"또 <b>성분이 아니라 그 항목 전체가 얼마나 센가</b>를 매깁니다 — "
+  +"「초콜릿이 얼마나 센가」가 아니라 「향 전체가 얼마나 센가」입니다.";
+/* §6.3.1 — CATA 목록에서는 「그 커피를 가장 잘 나타내는 <b>다섯 개까지</b>」 고른다.
+   많이 고를수록 좋은 게 아니라, 고르는 행위 자체가 판단이다. */
+const CATAMAX = 5;
+/* ── 냉각도 로스팅의 일부다 ──────────────────────────
+   Baggenstoss 2008 §6. 배출로 로스팅이 끝나지 않는다.
+
+   · 「공랭은 여러 분에 걸쳐 많은 양의 찬 공기를 쓰므로 비교적 느리다. 따라서
+     <b>냉각 첫 15초 동안 콩 안의 발열 반응이 계속될 수 있다</b>」 (Eggers 인용)
+   · 같은 실험에서 45분에 걸쳐 천천히 식힌 커피는 <b>배전도가 실제로 더 깊어졌다</b>
+   · 물 담금질은 230→100℃ 를 1초 안에 끝내지만 <b>수분이 올라가 보관 안정성이 나빠진다</b>.
+     그의 결론 §10.4-4 는 「담금질이 수분을 올려서는 안 된다」이다.
+
+   IKAWA 는 공랭이라 수분이 오를 일은 없다 — 그건 이 기계의 이점이다.
+   대신 <b>느린 편</b>이므로 배출 온도가 같아도 냉각이 느렸던 배치는 조금 더 깊다.
+   그래서 배치끼리 견줄 때 냉각 속도를 함께 봐야 한다.
+
+   숫자 기준은 문헌에 없다. 아래 값은 <b>이 앱이 IKAWA 50g 기준으로 잡은 어림</b>이고,
+   쓰임은 절대 판정이 아니라 <b>같은 원두 배치끼리의 비교</b>다. */
+const COOL = { fast:60, slow:35, hot:15 };   // 60초간 강하 ℃ · 발열 지속 초
+function coolSay(d60){
+  if(d60==null||!isFinite(d60)) return null;
+  if(d60>=COOL.fast) return {k:"fast", n:"빠름",
+    d:`배출 뒤 60초에 <b>${Math.round(d60)}℃</b> 내려갔습니다. 잘 식었습니다.`};
+  if(d60>=COOL.slow) return {k:"ok", n:"보통",
+    d:`배출 뒤 60초에 <b>${Math.round(d60)}℃</b> 내려갔습니다. 무난합니다.`};
+  return {k:"slow", n:"느림",
+    d:`배출 뒤 60초에 <b>${Math.round(d60)}℃</b>밖에 안 내려갔습니다. `
+     +`Baggenstoss 는 천천히 식힌 커피가 <b>배전도가 더 깊어졌다</b>고 보고합니다 — `
+     +`배출 온도가 같아도 이 배치는 조금 더 깊게 나올 수 있습니다. `
+     +`팬을 더 돌리거나 원두를 넓게 펴서 식히세요.`};
+}
+const COOLNOTE = "배출로 로스팅이 끝나지 않습니다 — <b>첫 15초 동안 콩 안의 발열 반응이 계속됩니다</b>. "
+  +"다만 IKAWA 는 <b>공랭</b>이라 물 담금질처럼 수분이 올라 보관 중 향이 무너지는 일은 없습니다.";
 const GRADE = {
   meas:{n:"측정", c:"ok",   d:"물리적으로 잰 값입니다 — 기계와 사람에 무관합니다. 어긋나면 이쪽을 먼저 믿으세요."},
   phys:{n:"물리", c:"ok",   d:"물리에서 따라 나옵니다. 원두는 열원 온도로 수렴하므로 승온율은 자연히 줄어듭니다."},
@@ -247,7 +331,9 @@ const GRADE = {
 /* 무엇이 어느 등급인가 */
 const CANONG = {
   loss:"meas", agtron:"meas", lossmoist:"meas",
-  crashkind:"conv", dtrrisk:"conv", precrack:"conv",
+  crashkind:"conv", dtrrisk:"conv", precrack:"conv", cvai:"meas",
+  size:"conv", dens:"conv", moist:"conv", form:"conv", early:"conv", transfer:"conv", inlet:"mach",
+  crack:"conv", flick:"conv", crash:"conv", dur:"conv", cool:"est",
   rule:"phys",
   drop:"mach", pre:"mach",
   dtr:"conv", phase:"conv", flaw:"conv",
@@ -310,6 +396,30 @@ function gradeTag(k){
   return `<span class="pill ${g.c}" title="${(g.d+s).replace(/"/g,"&quot;")}">${g.n}</span>`;
 }
 /* 출처를 본문에 적을 때 */
+/* 여기까지 오는 동안 출처를 열아홉 군데 적어 뒀는데, 그중 열셋은 화면에서 닿을 길이 없었다.
+   딱지(gradeTag)가 붙은 항목만 툴팁으로 보였기 때문이다. 적어만 두고 안 보여 주면
+   「근거가 있다」는 말이 검증 불가능한 주장이 된다. 그래서 전부 한자리에 편다. */
+const SRCNAME = {
+  loss:"감량률", dtr:"DTR", dur:"총시간", rule:"승온율 규칙", phase:"구간 비율",
+  drop:"배출온도", crack:"1차 크랙 추정", flick:"플릭", crash:"크래시",
+  size:"알 크기", dens:"밀도", moist:"생두 수분", form:"물성 → 프로파일 공식",
+  lossmoist:"감량률 × 생두 수분", early:"초반 승온율", transfer:"드럼 → 열풍 이식",
+  inlet:"흡기온도 — IKAWA 프로파일의 정체", cool:"냉각 속도",
+  crashkind:"크래시 두 종류", dtrrisk:"DTR 위험 지도", precrack:"크랙 직전 화력",
+  cvai:"CVA 강도 눈금"
+};
+function srcAll(){
+  const ks=Object.keys(SRC);
+  return `<p class="note" style="margin:0 0 6px">이 앱이 숫자를 가져온 곳을 <b>전부</b> 적었습니다
+    (${ks.length}군데). 책·논문·표준을 직접 확인한 것만 올렸고,
+    <b>출처가 없는 값은 「이 앱의 추정」이라고 밝혀 두었습니다.</b></p>`
+    +ks.map(k=>{
+      const g=GRADE[CANONG[k]||"est"];
+      return `<p class="note" style="margin:0 0 7px">
+        <span class="pill ${g?g.c:""}">${g?g.n:"추정"}</span>
+        <b>${SRCNAME[k]||k}</b> — ${SRC[k]}</p>`;
+    }).join("");
+}
 function srcNote(k){ return SRC[k]?`<span class="note">출처 — ${SRC[k]}</span>`:""; }
 
 

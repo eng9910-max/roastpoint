@@ -128,7 +128,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v8.9</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v9.2</span>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 12px;font-size:13.5px;
@@ -475,12 +475,18 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
       CVA 가 둘을 나눈 데는 이유가 있습니다 — <b>산미가 좋다</b>와 <b>산미가 세다</b>는 다른 말이고,
       프로파일을 고칠 때 필요한 건 <b>센 정도</b>입니다.
       매번 쓸 필요는 없고 <b>프로파일을 확정하려는 배치</b>에서만 켜도 충분합니다.</p>
+      <p class="note" id="c_descstd" hidden style="margin:0 0 6px"></p>
       <div class="sliders" id="cupdesc" hidden></div>
       <p class="note" id="c_deschint" hidden style="margin-top:5px"></p>
     </div>
 
     <div class="extra" style="margin-top:9px">
-      <p class="tagline">향미 — 해당하는 것만 (SCA 플레이버 휠 분류)</p>
+      <p class="tagline">향미 — 해당하는 것만
+        <span class="note" style="font-weight:400">· 표준은 <b>다섯 개까지</b></span></p>
+      <p class="note" style="margin:0 0 5px">SCA 103 의 CATA 목록을 <b>13개로 줄인 것</b>입니다 —
+      표준은 「로스티」를 곡물·탄내·담배로, 「기타」를 화학·흙내·나무로 더 쪼갭니다.
+      기록을 남에게 그대로 견주실 거라면 그 점을 감안하세요.</p>
+      <p class="note" id="c_catahint" hidden style="margin:0 0 5px"></p>
       <div id="cata"></div>
       <div class="grid g5" style="margin-top:9px">
         <div class="wide"><label>노트 — 자유롭게</label>
@@ -934,10 +940,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
-<script src="theory.js?v=8.9"></script>
+<script src="theory.js?v=9.2"></script>
 <script>
 "use strict";
-const APP_V="8.9";                       // 화면 오른쪽 위 표시와 같아야 한다
+const APP_V="9.2";                       // 화면 오른쪽 위 표시와 같아야 한다
 const $=id=>document.getElementById(id);
 const DB={beans:[],roasts:[],profiles:[],settings:{}};
 let editingId=null;
@@ -1883,7 +1889,7 @@ async function restore(){
     $("savestate").textContent="저장 영역을 쓸 수 없습니다"; $("savestate").className="pill warn";
   }
   applySettings(); renderBeans(); renderRoasts(); renderProfiles(); renderWaiting(); stats(); gdRender();
-  if(DB.settings.cupDesc){ $("c_descon").checked=true; $("cupdesc").hidden=false; }
+  if(DB.settings.cupDesc){ $("c_descon").checked=true; $("cupdesc").hidden=$("c_descstd").hidden=false; }
   if(DB.settings.syncKey) $("y_key").value=DB.settings.syncKey;
   keyHint();
   ["g_repo","g_path","g_token"].forEach(id=>{ if(DB.settings[id]) $(id).value=DB.settings[id]; });
@@ -2609,15 +2615,21 @@ const CUP=[["frag","프래그런스"],["aroma","아로마"],["flavor","플레이
            ["acid","산미"],["sweet","단맛"],["mouth","마우스필"],["overall","전체"]];
 /* CVA 서술 평가 — 강도 0~15. 정동(선호)과 완전히 다른 축이다.
    프로파일 수정안이 필요로 하는 것은 이쪽이다. */
-const CUPD=[["acid","산미 강도"],["sweet","단맛 강도"],["mouth","바디(마우스필) 강도"],
-            ["flavor","향미 강도"]];
+/* SCA 103 §6.1 이 강도를 매기라고 하는 항목은 <b>일곱</b>이다 —
+   프래그런스 · 아로마 · 플레이버 · 애프터테이스트 · 산미 · 단맛 · 마우스필.
+   위 정동 평가와 같은 항목이되 「전체」만 빠진다(전체는 선호 축이라 서술에는 없다).
+   앱이 프로파일 수정에 실제로 쓰는 것은 산미·단맛 둘뿐이지만,
+   기록은 표준대로 남겨야 나중에 다른 사람의 커핑과 견줄 수 있다. */
+const CUPD=[["frag","프래그런스"],["aroma","아로마"],["flavor","플레이버"],["after","애프터테이스트"],
+            ["acid","산미"],["sweet","단맛"],["mouth","마우스필"]];
+const CUPDUSE={acid:1,sweet:1};        // 이 둘만 프로파일 수정에 쓰인다
 $("cupsl").innerHTML=CUP.map(([k,n])=>
   `<div class="sl"><label for="c_${k}">${n}</label>
    <input type="range" id="c_${k}" min="0" max="9" step="1" value="0">
    <input type="number" id="o_${k}" min="0" max="9" step="1" placeholder="–"
      style="width:52px;flex:none;text-align:center;padding:4px"></div>`).join("");
 $("cupdesc").innerHTML=CUPD.map(([k,n])=>
-  `<div class="sl"><label for="d_${k}">${n}</label>
+  `<div class="sl"><label for="d_${k}">${n}${CUPDUSE[k]?' <span class="pill">수정에 쓰임</span>':""}</label>
    <input type="range" id="d_${k}" min="0" max="15" step="1" value="0">
    <input type="number" id="dn_${k}" min="0" max="15" step="1" placeholder="–"
      style="width:52px;flex:none;text-align:center;padding:4px"></div>`).join("");
@@ -2627,21 +2639,26 @@ CUPD.forEach(([k])=>{
   n.addEventListener("input",()=>{ let v=parseInt(n.value); if(isNaN(v)) v=0;
     r.value=Math.max(0,Math.min(15,v)); descHint(); });
 });
+$("c_descstd").innerHTML=`<span class="pill">눈금</span>
+  <b>0~5 낮음 · 5~10 중간 · 10~15 높음</b> (SCA 103 §6.2 의 LOW·MEDIUM·HIGH).
+  ${CVANOTE} ${gradeTag("cvai")}`;
 function descOn(){ return $("c_descon").checked; }
 function descHint(){
   const a=+$("d_acid").value, w=+$("d_sweet").value;
   if(!a&&!w){ $("c_deschint").hidden=true; return; }
   $("c_deschint").hidden=false;
+  const bn=v=>{ const b=cvaBand(v); return b?`(${b.n})`:""; };   // SCA 103 의 낮음·중간·높음
+  const tag=`산미 ${a}${bn(a)} · 단맛 ${w}${bn(w)}`;
   $("c_deschint").innerHTML = (a>=10&&w<=5)
-    ? `<span class="pill warn">산미 ${a} · 단맛 ${w}</span> 산미는 센데 단맛이 얕습니다 —
+    ? `<span class="pill warn">${tag}</span> 산미는 센데 단맛이 얕습니다 —
        <b>발달 부족</b> 쪽입니다. 프로파일 수정안이 이 값을 씁니다.`
     : (a<=5&&w>=10)
-    ? `<span class="pill warn">산미 ${a} · 단맛 ${w}</span> 산미가 눌리고 단맛만 남았습니다 —
+    ? `<span class="pill warn">${tag}</span> 산미가 눌리고 단맛만 남았습니다 —
        <b>과발달</b> 쪽입니다. 프로파일 수정안이 이 값을 씁니다.`
-    : `<span class="pill ok">산미 ${a} · 단맛 ${w}</span> 균형 범위입니다.`;
+    : `<span class="pill ok">${tag}</span> 균형 범위입니다.`;
 }
 $("c_descon").onchange=()=>{
-  $("cupdesc").hidden=!descOn();
+  $("cupdesc").hidden=$("c_descstd").hidden=!descOn();
   if(!descOn()) $("c_deschint").hidden=true; else descHint();
   DB.settings.cupDesc=descOn(); persist();
 };
@@ -2661,6 +2678,20 @@ CUP.forEach(([k])=>{
 });
 
 /* ---------- 향미 분류표 (SCA 플레이버 휠 대분류) ---------- */
+/* SCA 103 §6.3.1 — 「그 커피를 가장 잘 나타내는 다섯 개까지」를 고른다.
+   막지는 않는다 — 막으면 기록이 사라지니까. 다만 표준과 어긋난 것은 밝힌다. */
+function cataCount(){
+  const n=CATA.filter(([k])=>$("f_"+k)&&$("f_"+k).checked).length;
+  const e=$("c_catahint"); if(!e) return n;
+  if(!n){ e.hidden=true; return n; }
+  e.hidden=false;
+  e.innerHTML = n<=CATAMAX
+    ? `<span class="pill ok">${n}개</span> 표준 범위(${CATAMAX}개 이하)입니다.`
+    : `<span class="pill warn">${n}개</span> SCA 103 은 <b>${CATAMAX}개까지</b> 고르라고 합니다 — `
+     +`많이 고를수록 좋은 게 아니라 <b>고르는 행위 자체가 판단</b>입니다. `
+     +`가장 잘 드러나는 것만 남기셔도 됩니다. 그대로 두셔도 저장됩니다.`;
+  return n;
+}
 const CATA=[
   ["floral","꽃",["자스민","장미","히비스커스","라벤더","꽃","플로럴","floral","jasmine","rose","chamomile","오렌지꽃","베르가못","bergamot"]],
   ["berry","베리",["딸기","블루베리","라즈베리","블랙베리","크랜베리","베리","berry","strawberry","blueberry","raspberry","blackcurrant","블랙커런트"]],
@@ -2676,6 +2707,7 @@ const CATA=[
   ["sweetsp","단맛류",["캐러멜","흑설탕","갈색설탕","꿀","메이플","바닐라","당밀","조청","caramel","brown sugar","honey","maple","vanilla","molasses","설탕"]],
   ["other","기타",["차","홍차","얼그레이","레몬그라스","민트","tea","black tea","earl grey","mint"]]
 ];
+setTimeout(()=>CATA.forEach(([k])=>{ const e=$("f_"+k); if(e) e.addEventListener("change",cataCount); }),0);
 $("cata").innerHTML=`<div class="sliders">`+CATA.map(([k,n])=>
   `<label style="display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink)">
    <input type="checkbox" id="f_${k}" style="width:auto"> ${n}</label>`).join("")+`</div>`;
@@ -3963,16 +3995,34 @@ function ikHeatBefore(at, back){
   if(!pts.length) return null;
   return pts.reduce((a,p)=>a+p[1],0)/pts.length;
 }
+/* 기록에는 배출까지만 담긴다(cut2). 냉각 곡선을 통째로 넣으면 배치마다 몇 배씩 커지는데
+   정작 필요한 건 「얼마나 빨리 식었나」 하나뿐이다. 그래서 요약값만 뽑아 남긴다. */
+function ikCoolStat(){
+  if(ikDropAt==null||!ikCurve||ikCurve.length<3) return null;
+  const at=p=>{ let best=null;
+    ikCurve.forEach(x=>{ if(x[0]<=p&&(!best||x[0]>best[0])) best=x; }); return best; };
+  const a=at(ikDropAt), b=at(ikDropAt+60);
+  if(!a||!b||b[0]-a[0]<40) return null;                 // 60초를 못 채웠으면 말하지 않는다
+  const d60=a[1]-b[1];
+  let t100=null;
+  for(const x of ikCurve) if(x[0]>ikDropAt&&x[1]<=100){ t100=Math.round(x[0]-ikDropAt); break; }
+  return {d60:+d60.toFixed(1), t100, from:+a[1].toFixed(1)};
+}
 function ikCoach(){
   const c=ikCurve; if(!c||c.length<4) return null;
   /* 배출한 뒤에는 로스팅 판정을 멈춘다. 냉각 중에 「계획 초과」·「승온율 −152℃/분 하강」이
      쏟아지는데, 그건 결함이 아니라 식는 중이라는 뜻일 뿐이다. */
   if(ikDropAt!=null){
     const zz=ikZero();
-    return {notes:[{lv:"info",c:"phase",k:"cool",t:"로스팅 종료",
+    const ns=[{lv:"info",c:"phase",k:"cool",t:"로스팅 종료",
       d:`배출 ${fmt(Math.max(0,Math.round(ikDropAt-zz)))} 이후는 냉각 구간입니다 — `
-       +`판정하지 않습니다. 식으면 「이 배치를 기록에 담기」를 누르세요.`}],
-      marks:[],phase:null,pct:null};
+       +`곡선 판정은 멈춥니다. 식으면 「이 배치를 기록에 담기」를 누르세요. ${COOLNOTE}`}];
+    /* Baggenstoss §6 — 냉각 속도가 최종 배전도를 바꾼다. 그래서 여기서도 볼 것이 하나 있다. */
+    const cs=ikCoolStat(), say=cs&&coolSay(cs.d60);
+    if(say) ns.push({lv:say.k==="slow"?"warn":"ok",c:"phase",k:"coolrate",
+      t:`냉각 ${say.n}`,
+      d:say.d+(cs.t100!=null?` <span class="note">(100℃ 까지 ${cs.t100}초)</span>`:"")});
+    return {notes:ns,marks:[],phase:null,pct:null};
   }
   const z=ikZero();
   const t=c[c.length-1][0]-z, v=c[c.length-1][1];   // 투입을 0 으로 본 경과 시각
@@ -4025,9 +4075,13 @@ function ikCoach(){
          가장 많이 나는 구간이다. 둘은 다른 결함이고 고치는 방법도 다르다. */
       // 막바지(95% 이후)에는 승온율이 자연히 낮아진다 — 그때 경고해도 손쓸 시간이 없어 알리지 않는다.
       // 배치가 끝난 뒤의 최종 판정은 저장할 때 「후반 승온」으로 따로 알린다.
+      /* 크랙 직후의 정체라면 라오 p.46 이 원인을 짚어 준다 — 화력이 너무 낮았던 것이다. */
+      const inCrack=ikMarks.crack!=null&&t-ikMarks.crack<180;
+      const bl=inCrack?heatBlame(0,true):null;
       out.notes.push({lv:"warn",c:"ror",k:"bake",t:`승온율 ${now.toFixed(1)}℃/분`,
         d:"발달 구간인데 온도가 거의 안 오릅니다. <b>베이킹</b> 징후로, 향이 눌리고 밋밋해집니다. "
-         +"히터를 올리거나 조금 일찍 배출하세요."});
+         +"히터를 올리거나 조금 일찍 배출하세요."
+         +(bl?` <b>원인</b> — ${bl.d}`:"")});
     }else if(now<CANON.flaw.crash&&mid.length>3){
       /* 라오 p.30 「북유럽식 예외」 — 충분히 늦거나 완만한 크래시는 그래프가 시사하는 만큼
          베이크된 맛을 내지 않는다. 깊은 층의 발달을 바꿀 시간이 없었기 때문이다.
@@ -4044,6 +4098,7 @@ function ikCoach(){
       const hb=ikHeatBefore(z+rs[rs.length-1][0]);   // 크래시 전 히터 %
       const kind=crashKind(slope,bend,hb);
       const K=CRASHSAY[kind];
+      const blame=heatBlame(slope,false);          // p.46 — 원인을 곡선에서 되짚는다
       out.notes.push({lv:lateC?"info":"warn",c:"ror",k:lateC?"crash-late":"crash-"+kind,
         t:`${K.name} · 승온율 ${now.toFixed(1)}℃/분`,
         d:(lateC
@@ -4052,6 +4107,7 @@ function ikCoach(){
            +"기록해 두고 컵으로 확인하세요. "
           : "")
           +K.d
+          +(blame?` <b>${blame.k==="high"?"원인":"원인"}</b> — ${blame.d}`:"")
           +(hb!=null?` <span class="note">(크래시 전 히터 ${Math.round(hb)}%)</span>`:"")});
       out.marks.push({t:z+rs[rs.length-1][0],label:K.name,color:"var(--actual)"});
     }else if(now<0){
@@ -4261,7 +4317,16 @@ function showRec(){
     ${gradeTag("loss")}·${gradeTag("rule")} 가 ${gradeTag("dtr")} 보다 단단합니다.
     <b>「이견 있음」</b> 딱지는 저자들끼리 갈리는 대목입니다 — 바로 아래에 양쪽을 다 적었습니다.</p>`;
   html+=debateBox("dtr")+debateBox("phase")+debateBox("drop");
+  html+=`<details style="margin-top:10px"><summary class="tagline" style="cursor:pointer">
+    출처 전부 보기 — 이 앱의 숫자가 어디서 왔는가</summary>
+    <div class="extra" style="margin-top:7px">${srcAll()}</div></details>`;
 
+  html+=`<p class="note" style="margin:7px 0 0">${gradeTag("inlet")}
+    <b>이 곡선은 「원두 온도」가 아니라 「공기 온도」입니다.</b>
+    라오는 흡기온도를 두고 「가스 설정은 <b>입력</b>이고 흡기온도는 그 <b>결과</b>라
+    원두가 겪는 것을 더 곧게 비춘다」고 합니다(p.52).
+    IKAWA 프로파일이 바로 그 방식이라 — 드럼 로스터의 <b>원두 온도</b> 숫자와
+    그대로 견줄 수 없습니다. 밴드가 IKAWA 기준인 이유입니다.</p>`;
   html+=`<p class="tagline" style="margin-top:12px">2층 · 이 생두에 맞춘 경로 ${gradeTag("fix")}</p>`;
   html+=`<p class="note" style="margin:0 0 6px"><b>먼저 밝혀 둡니다</b> —
     라오는 「낯선 원두를 어떻게 볶을지 예측하는 <b>간단한 공식은 없다</b>」고 말합니다(p.4).
@@ -4831,6 +4896,26 @@ function selfTest(){
     ok("크랙 추정",e&&e.t>=280&&e.t<=380,
       e?`${fmt(e.t)} 로 추정 (골 ${fmt(e.trough)} · 극적임 ${e.dip})`:"못 찾음");
   });
+  chk("냉각 판정",()=>{
+    const f=coolSay(75), o=coolSay(45), sl=coolSay(20), n=coolSay(null);
+    ok("냉각 판정",
+      f&&f.k==="fast"&&o&&o.k==="ok"&&sl&&sl.k==="slow"&&n===null&&/배전도/.test(sl.d),
+      `60초에 75℃→${f&&f.n} · 45℃→${o&&o.n} · 20℃→${sl&&sl.n}`);
+  });
+  chk("출처 닿기",()=>{
+    /* 인용을 적어만 두고 화면에 안 보여 주면 검증할 길이 없다.
+       전수 점검에서 19개 중 13개가 죽어 있던 것을 잡았고, 다시 죽지 않게 못 박는다. */
+    const ks=Object.keys(SRC);
+    const noName=ks.filter(k=>!SRCNAME[k]);
+    const noGrade=ks.filter(k=>!CANONG[k]);
+    const html=srcAll();
+    const shown=ks.filter(k=>html.indexOf(SRC[k].slice(0,25))>=0);
+    ok("출처 닿기",
+      noName.length===0&&noGrade.length===0&&shown.length===ks.length,
+      noName.length||noGrade.length
+        ? `이름 없음 ${noName.join(",")||"-"} · 등급 없음 ${noGrade.join(",")||"-"}`
+        : `인용 ${ks.length}개 모두 화면에서 볼 수 있음`);
+  });
   chk("크래시 종류",()=>{
     /* 라오 p.49 — 둘을 가르는 것이 핵심이다.
        부드러운 것: 꺾이기 전부터 이미 내려오고 있었고 꺾임도 완만하다.
@@ -5185,7 +5270,7 @@ window.editRoast=i=>{
   CUP.forEach(([k])=>{ const v=c[k]||0; $("c_"+k).value=v; $("o_"+k).value=v?v:""; });
   const cd=c.d||{};
   CUPD.forEach(([k])=>{ const v=cd[k]||0; $("d_"+k).value=v; $("dn_"+k).value=v?v:""; });
-  if(c.d){ $("c_descon").checked=true; $("cupdesc").hidden=false; }
+  if(c.d){ $("c_descon").checked=true; $("cupdesc").hidden=$("c_descstd").hidden=false; }
   descHint();
   CATA.forEach(([k])=>$("f_"+k).checked=!!(c.flavors&&c.flavors.includes(k)));
   cupSum(); $("c_autohint").innerHTML=compareSeller();
@@ -5241,6 +5326,8 @@ $("r_save").onclick=()=>{
     gaps:(pendingLog&&pendingLog.gaps)||(editingId?(DB.roasts.find(x=>x.id===editingId)||{}).gaps:null)||null,
     heat:(pendingLog&&pendingLog.heat)||(editingId?(DB.roasts.find(x=>x.id===editingId)||{}).heat:null)||null,
     fanc:(pendingLog&&pendingLog.fan)||(editingId?(DB.roasts.find(x=>x.id===editingId)||{}).fanc:null)||null,
+    // Baggenstoss §6 — 느리게 식은 배치는 배전도가 더 깊다. 곱선은 안 담고 요약만.
+    cool:(pendingLog&&pendingLog.cool)||(editingId?(DB.roasts.find(x=>x.id===editingId)||{}).cool:null)||null,
     cup:Object.keys(cup).length?cup:null,
     cost:(()=>{ const b=DB.beans.find(x=>x.id===$("r_bean").value);
       const up=b?unitPrice(b):null, g=+$("r_in").value;
@@ -5326,6 +5413,12 @@ window.roastReport=id=>{
     return a>=75?"light":a>=65?"mlight":a>=55?"medium":"mdark"; })();
   const cn=CANON.level[lv];
   h+=vNote(r.v);
+  if(r.cool){
+    const cy=coolSay(r.cool.d60);
+    if(cy) h+=`<p class="note" style="margin:6px 0 0">${gradeTag("cool")}
+      <b>냉각 ${cy.n}</b> — ${cy.d}
+      ${r.cool.t100!=null?`<span class="note">(100℃ 까지 ${r.cool.t100}초)</span>`:""}</p>`;
+  }
   h+=`<p class="tagline" style="margin-top:12px">교과서 밴드 대비 <span class="pill">${cn.name}</span></p>`;
   const rows=[];
   const band=(label,v,lo,hi,unit,low,high)=>{
@@ -7176,7 +7269,8 @@ function ikSaveBatch(){
   const cut2=a=>a.filter(x=>x[0]>=t0+0&&x[0]<=t0+dur).map(x=>[Math.round(x[0]-t0),x[1]]);
   pendingLog={act:c, crackGuess, tl:ikTL.filter(x=>x.t<=dur+2).map(x=>({...x})),
               gaps:ikGaps.map(g=>[Math.round(g[0]-t0),Math.round(g[1]-t0)]).filter(g=>g[1]>=0),
-              heat:cut2(ikHeatCurve), fan:cut2(ikFanCurve), mror:cut2(ikRorCurve)};
+              heat:cut2(ikHeatCurve), fan:cut2(ikFanCurve), mror:cut2(ikRorCurve),
+              cool:ikCoolStat()};                   // 곡선은 안 담고 요약만
   recalc();
   $("ik_savemsg").innerHTML=`<span class="pill ok">옮겼습니다</span> 로스팅 기록 탭에서
     생두와 중량을 채우고 저장하세요. 실측 곡선 ${c.length}점${mk}이 함께 담깁니다.`
