@@ -11,7 +11,7 @@
 /* 판본 — 기록장·스튜디오가 「지금 쓰는 판정 코드가 몇 판인가」를 확인할 수 있게 박아 둔다.
    서비스워커가 옛 theory.js 를 계속 내주는 바람에 화면은 새것이고 판정만 옛것인 상태로
    돌던 적이 있다. 눈으로는 절대 못 알아챈다. 그래서 숫자로 맞춰 본다. */
-const THEORY_V="8.5";
+const THEORY_V="8.6";
 
 /* ── 1층 : 교과서 상수 ───────────────────────────────
    SCA 로스팅 커리큘럼과 로스팅 문헌에서 통용되는 값. 임의로 손대지 않는다.
@@ -93,6 +93,50 @@ const CANONG = {
   dtr:"conv", phase:"conv", flaw:"conv",
   fix:"est"
 };
+/* ── 저자들이 갈리는 지점 ─────────────────────────────
+   같은 실무 진영 안에서도 정면으로 갈리는 대목이 있다. 한쪽만 보여주면
+   그게 정설인 것처럼 읽힌다. 그래서 양쪽을 나란히 적고 판단은 사용자에게 맡긴다. */
+const DEBATE = {
+  phase:{ q:"메일라아드 구간 시간을 관리해야 하는가",
+    a:{who:"스콧 라오 (Best Practices p.65)",
+       say:"관리하지 않는다. 구간을 늘리면 중반 승온율이 눕어 오히려 <b>베이킹 위험이 커진다</b>. "
+          +"그 시간에 매끄럽게 감소하는 승온율을 맞추는 편이 낫다"},
+    b:{who:"Rob Hoos (Modulating the Flavor Profile)",
+       say:"이 구간을 바꾸는 것이 책 전체의 주제. 건조·발달·최종온도를 고정하고 "
+          +"메일라아드 시간만 바꾼 실험에서 <b>길수록 바디와 복합성이 늘었다</b>고 보고한다"},
+    mine:"이 앱은 구간 비율(50/30/20)을 <b>표시만</b> 하고 그것으로 프로파일을 고치지는 않습니다. "
+        +"두 사람이 갈리는 곳이라 어느 쪽으로도 밀지 않습니다." },
+  dtr:{ q:"DTR 을 지표로 써야 하는가",
+    a:{who:"스콧 라오 (p.33)",
+       say:"DTR 을 널리 알린 사람. <b>20~25%</b>를 권하되 「균형의 지표일 뿐」이며 "
+          +"<b>배출은 색도로 판단</b>하라고 못박는다"},
+    b:{who:"Rob Hoos",
+       say:"책에서 <b>DTR 이라는 말을 한 번도 쓰지 않는다</b>(development time 은 46회, DTR 은 0회). "
+          +"비율이 아니라 <b>절대 초</b>로 다루고, 10초 안팎의 차이는 컵에서 구별하기 어렵다고 본다"},
+    mine:"라오의 20~25%를 표시하되 배출 판단에는 쓰지 않습니다. "
+        +"크랙을 못 찍은 배치에서는 DTR 자체가 추정이라 더 약합니다." },
+  drop:{ q:"배출 시점은 무엇으로 판단하는가",
+    a:{who:"스콧 라오 (p.33, p.70)",
+       say:"<b>색도</b>가 완성도의 더 나은 지표. 감량률은 「같은 원두·같은 수분에서 배치끼리 견주는」 용도"},
+    b:{who:"Schenker 박사논문 (ETH, 2000)",
+       say:"배전도를 <b>로스팅 손실과 색도 두 가지</b>로 잡는다. 다만 "
+          +"<b>색은 신뢰도가 낮은 지표</b>라고 명시한다"},
+    mine:"둘 다 표시하고, 색도계가 없으면 감량률을 우선하도록 안내합니다." }
+};
+function debateTag(k){
+  const d=DEBATE[k]; if(!d) return "";
+  const txt=`이견 \u2014 ${d.q}\n\n\u00b7 ${d.a.who}\n  ${d.a.say}\n\n\u00b7 ${d.b.who}\n  ${d.b.say}\n\n\u2192 ${d.mine}`
+    .replace(/<[^>]+>/g,"").replace(/"/g,"&quot;");
+  return `<span class="pill warn" style="cursor:help" title="${txt}">이견 있음</span>`;
+}
+function debateBox(k){
+  const d=DEBATE[k]; if(!d) return "";
+  return `<div class="extra" style="margin-top:7px">
+    <p class="tagline" style="margin:0 0 5px">이견 \u2014 ${d.q}</p>
+    <p class="note" style="margin:0 0 4px">\u00b7 <b>${d.a.who}</b> \u2014 ${d.a.say}</p>
+    <p class="note" style="margin:0 0 4px">\u00b7 <b>${d.b.who}</b> \u2014 ${d.b.say}</p>
+    <p class="note" style="margin:0"><b>이 앱은</b> \u2014 ${d.mine}</p></div>`;
+}
 function gradeTag(k){
   const g=GRADE[CANONG[k]||k]; if(!g) return "";
   const s=SRC[k]?"\n\n출처 — "+SRC[k]:"";
