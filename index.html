@@ -128,7 +128,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v8.2</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v8.3</span>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 12px;font-size:13.5px;
@@ -922,10 +922,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
-<script src="theory.js?v=8.2"></script>
+<script src="theory.js?v=8.3"></script>
 <script>
 "use strict";
-const APP_V="8.2";                       // 화면 오른쪽 위 표시와 같아야 한다
+const APP_V="8.3";                       // 화면 오른쪽 위 표시와 같아야 한다
 const $=id=>document.getElementById(id);
 const DB={beans:[],roasts:[],profiles:[],settings:{}};
 let editingId=null;
@@ -3279,10 +3279,18 @@ function targetFor(b,use,level){
   const FIT={ filter:{best:["light","mlight"],ok:["medium"]},
               espresso:{best:["medium","mdark"],ok:["mlight"]},
               latte:{best:["medium","mdark"],ok:["mlight"]} };
+  /* 기준마다 근거 등급을 달아 둔다 — 같은 1층 안에서도 단단함이 다르다 */
   const canonWhy=[
-    `목표 배전도 ${canon.name} — 감량률 ${canon.loss[0]}~${canon.loss[1]}%, DTR ${canon.dtr[0]}~${canon.dtr[1]}% (교과서 밴드)`,
-    `구간 비율 건조 ${CANON.phase.dry}% · 메일라아드 ${CANON.phase.maillard}% · 발달 ${CANON.phase.dev}% (교과서)`,
-    CANON.rule+" (교과서)"
+    `${gradeTag("loss")} 감량률 <b>${canon.loss[0]}~${canon.loss[1]}%</b> — `
+      +`물이 빠진 무게라 기계·사람과 무관합니다. 배전도를 재는 가장 확실한 자입니다`,
+    `${gradeTag("dtr")} DTR <b>${canon.dtr[0]}~${canon.dtr[1]}%</b> — `
+      +`널리 쓰이지만 검증은 약합니다. 진단에 쓰고 목표로 쫓지는 마세요`,
+    `${gradeTag("drop")} 배출온도 <b>${canon.dropHint[0]}~${canon.dropHint[1]}℃</b> — `
+      +`IKAWA 배기 기준입니다. 드럼 로스터의 숫자와 그대로 비교할 수 없습니다`,
+    `${gradeTag("phase")} 구간 비율 건조 ${CANON.phase.dry}% · 메일라아드 ${CANON.phase.maillard}% · 발달 ${CANON.phase.dev}% — `
+      +`교육용 어림입니다. 가르치는 사람마다 다릅니다`,
+    `${gradeTag("rule")} ${CANON.rule} — `
+      +`원두가 열원 온도로 수렴하므로 물리에서 따라 나옵니다. 1층에서 가장 단단한 규칙입니다`
   ];
   const P=beanPhys(b||{});
   const why=[];
@@ -4047,9 +4055,12 @@ function showRec(){
   html+=`<p class="lead" style="margin:0">감량률 <b>${canon.loss[0]}~${canon.loss[1]}%</b> ·
     DTR <b>${canon.dtr[0]}~${canon.dtr[1]}%</b> ·
     구간 <b>건조 ${fmt(phase.dry)} / 메일라아드 ${fmt(phase.mai)} / 발달 ${fmt(phase.dev)}</b></p>
-    <p class="note">${canonWhy.map(w=>"· "+w).join("<br>")}</p>`;
+    <p class="note">${canonWhy.map(w=>"· "+w).join("<br>")}</p>
+    <p class="note" style="margin-top:5px">딱지에 마우스를 올리면 그 기준을 얼마나 믿어도 되는지 나옵니다.
+    <b>어긋났을 때는 등급이 높은 쪽을 먼저 믿으세요</b> —
+    ${gradeTag("loss")}·${gradeTag("rule")} 가 ${gradeTag("dtr")} 보다 단단합니다.</p>`;
 
-  html+=`<p class="tagline" style="margin-top:12px">2층 · 이 생두에 맞춘 경로 <span class="pill">물리</span></p>`;
+  html+=`<p class="tagline" style="margin-top:12px">2층 · 이 생두에 맞춘 경로 ${gradeTag("fix")}</p>`;
   /* 목표 계산에 쓴 물성이 실측인지 추정인지 먼저 밝힌다 — 추정이면 결과도 추정이다 */
   html+=`<p class="note" style="margin:0 0 6px"><b>쓰인 생두 물성</b><br>
     ${(phys||[]).map(x=>"· "+x).join("<br>")}</p>`;
@@ -4609,6 +4620,12 @@ function selfTest(){
     const e=crackFrom(c);
     ok("크랙 추정",e&&e.t>=280&&e.t<=360,e?`${fmt(e.t)} 로 추정 (골 ${e.dip.toFixed(2)})`:"못 찾음");
   });
+  chk("근거 등급",()=>{
+    const need=["loss","dtr","drop","phase","rule","agtron","fix"];
+    const miss=need.filter(k=>!GRADE[CANONG[k]]);
+    ok("근거 등급",miss.length===0&&/pill/.test(gradeTag("loss")),
+      miss.length?`등급이 없는 항목: ${miss.join(", ")}`:`${need.length}개 항목에 등급 있음`);
+  });
   chk("동기화 키 규칙",()=>{ const kre=/^[A-Za-z0-9_-]{8,64}$/;
     ok("동기화 키 규칙",kre.test("gwangho-roast-2026")&&!kre.test("짧음")&&!kre.test("한글키입니다"),
       "영문·숫자·_- 8~64자"); });
@@ -4761,10 +4778,15 @@ function renderCanon(){
   if(!isNaN(ror)) rows.push(["후반 승온",ror.toFixed(1)+"℃/분","1.0 이상",
     ror<1?'<span class="pill warn">베이킹 위험</span>':'<span class="pill ok">정상</span>']);
 
+  const GR={"감량률":"loss","DTR":"dtr","건조 구간 비율":"phase",
+            "색도 Agtron":"agtron","후반 승온":"rule"};
   $("canon_out").innerHTML=`<table><tr><th>항목</th><th class="num">실측</th>
-    <th class="num">${cn.name} 기준</th><th>판정</th></tr>`+
+    <th class="num">${cn.name} 기준</th><th>근거</th><th>판정</th></tr>`+
     rows.map(r=>`<tr><td>${r[0]}</td><td class="num">${r[1]}</td>
-      <td class="num">${r[2]}</td><td>${r[3]}</td></tr>`).join("")+`</table>
+      <td class="num">${r[2]}</td><td>${gradeTag(GR[r[0]]||"conv")}</td>
+      <td>${r[3]}</td></tr>`).join("")+`</table>
+    <p class="note">근거 딱지에 마우스를 올리면 그 기준을 얼마나 믿어도 되는지 나옵니다.
+    여러 항목이 함께 어긋났다면 <b>단단한 것부터</b> 맞추세요.</p>
     <p class="note">이 값들은 <b>볶아야 나옵니다.</b> 계획 탭의 1층은 목표고, 여기가 결과입니다.
     <b>건조 구간은 로그에 안 들어옵니다.</b> IKAWA는 배기 온도를 재기 때문에 온도로 추정할 수 없습니다 —
     로스팅 중 앱에서 <b>CC</b>를 누르고, 로스트 로그 화면에 표시된 시각을 위 칸에 적어주세요.</p>`;
@@ -5032,9 +5054,15 @@ window.roastReport=id=>{
     "건조가 빨랐습니다","건조가 길었습니다");
   if(r.ror!=null) rows.push(["후반 승온",r.ror.toFixed(1)+"℃/분","1.0 이상",
     r.ror<1?'<span class="pill warn">베이킹 위험</span>':'<span class="pill ok">정상</span>']);
-  h+=`<table><tr><th>항목</th><th class="num">실측</th><th class="num">기준</th><th>판정</th></tr>`+
+  const GR2={"감량률":"loss","DTR":"dtr","배출온도":"drop",
+             "건조 구간 비율":"phase","후반 승온":"rule"};
+  h+=`<table><tr><th>항목</th><th class="num">실측</th><th class="num">기준</th>
+      <th>근거</th><th>판정</th></tr>`+
     rows.map(x=>`<tr><td>${x[0]}</td><td class="num">${x[1]}</td>
-      <td class="num">${x[2]}</td><td>${x[3]}</td></tr>`).join("")+`</table>`;
+      <td class="num">${x[2]}</td><td>${gradeTag(GR2[x[0]]||"conv")}</td>
+      <td>${x[3]}</td></tr>`).join("")+`</table>
+    <p class="note">근거 딱지에 마우스를 올려 보세요. 여러 항목이 함께 어긋났다면
+    <b>단단한 것부터</b> 맞추세요 — 감량률을 맞추면 DTR 은 따라오는 경우가 많습니다.</p>`;
 
   // ④ 이 생두의 목표와 견주기
   if(b){
