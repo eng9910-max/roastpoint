@@ -128,7 +128,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v9.4</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v9.5</span>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 12px;font-size:13.5px;
@@ -948,10 +948,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
-<script src="theory.js?v=9.4"></script>
+<script src="theory.js?v=9.5"></script>
 <script>
 "use strict";
-const APP_V="9.4";                       // 화면 오른쪽 위 표시와 같아야 한다
+const APP_V="9.5";                       // 화면 오른쪽 위 표시와 같아야 한다
 const $=id=>document.getElementById(id);
 const DB={beans:[],roasts:[],profiles:[],settings:{}};
 let editingId=null;
@@ -1131,14 +1131,21 @@ const FIELDS=[
   ["b_farm",["농장명/농장주명","농장/농장주명","농장주명","농장명","생산자","농장","farm","producer","estate"]],
   ["b_region",["생산지역","재배지역","지역","region","area"]],
   ["b_alt",["재배고도","고도","해발","altitude","elevation"]],
+  /* 「가공상세」가 「가공」에 먼저 잡히면 값이 잘린다. 긴 라벨을 앞에 둔다. */
+  ["b_ferment",["가공상세","가공 상세","발효시간","발효","fermentation","ferment"]],
   ["b_proc",["가공방식","가공 방식","프로세싱","프로세스","가공","process","processing"]],
   ["b_var",["품종","변종","variety","varietal","cultivar"]],
   ["b_harvest",["수확시기","수확 시기","수확기","수확년도","크롭","harvest","crop"]],
   ["b_notes",["커핑노트","커핑 노트","컵노트","컵 노트","테이스팅노트","향미","플레이버","맛","cupping note","cupping notes","tasting note","tasting notes","flavor note","flavour note","flavor","cup profile"],true],
   ["b_grade",["등급","그레이드","grade"]],
   ["b_screen",["스크린","스크린사이즈","screen","screen size"]],
+  /* 같은 이유로 「수분활성도」가 「수분」보다 앞이다 */
+  ["b_aw",["수분활성도","수분활성","워터액티비티","water activity","aw"]],
   ["b_moist",["수분","수분함량","moisture"]],
-  ["b_dens",["밀도","density"]]
+  ["b_dens",["밀도","density"]],
+  /* 「종」 한 글자는 「종합」 같은 줄까지 잡으므로 쓰지 않는다 */
+  ["b_species",["커피종","스피시즈","species"]],
+  ["b_decaf",["디카페인방식","디카페인","decaf","decaffeination"]]
 ];
 const SKIP=/^(배송비|판매가|정가|상품재고|최소 구매수량|구매혜택|택배|장바구니|찜하기|바로 구매|로그인|회원가입)$/;
 function parseText(txt){
