@@ -128,7 +128,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v9.2</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v9.3</span>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 12px;font-size:13.5px;
@@ -197,6 +197,9 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
         <div><label>품종</label><input type="text" id="b_var"></div>
         <div><label>스크린</label><input type="text" id="b_screen"></div>
         <div><label>수확시기</label><input type="text" id="b_harvest" placeholder="1~2월 / 2025"></div>
+        <div><label>종</label><select id="b_species">
+          <option value="">모름</option><option>아라비카</option><option>로부스타</option>
+          <option>리베리카</option><option>블렌드</option></select></div>
         <div><label>수분 %</label><input type="number" step="0.1" id="b_moist"></div>
         <div><label>밀도 g/L</label><input type="number" step="1" id="b_dens"></div>
       </div>
@@ -210,6 +213,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
         <div><label>생산지역</label><input type="text" id="b_region"></div>
         <div><label>농장 · 농장주</label><input type="text" id="b_farm"></div>
         <div><label>등급</label><input type="text" id="b_grade"></div>
+        <div class="wide"><label>가공 상세 <span class="note">발효 시간 · 온도 · 보조제</span></label>
+          <input type="text" id="b_ferment" placeholder="펄핑 후 12시간 발효, 기계 건조"></div>
+        <div><label>수분활성도 (aw)</label><input type="number" step="0.01" id="b_aw" placeholder="0.53~0.59"></div>
+        <div><label>디카페인 방식</label><input type="text" id="b_decaf" placeholder="물 / CO₂ / EA"></div>
         <div><label>판매처</label><input type="text" id="b_seller"></div>
         <div><label>구입일</label><input type="date" id="b_bought"></div>
         <div><label>구입 중량 (g)</label><input type="number" step="1" id="b_qty" placeholder="1000"></div>
@@ -225,6 +232,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     </div>
 
     <div class="row" style="margin-top:11px">
+      <p class="note" id="b_sca" style="margin:0 0 7px"></p>
       <button id="b_save">생두 저장</button>
       <button class="ghost" id="b_clear">비우기</button>
       <span class="note" id="b_msg"></span>
@@ -940,10 +948,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
-<script src="theory.js?v=9.2"></script>
+<script src="theory.js?v=9.3"></script>
 <script>
 "use strict";
-const APP_V="9.2";                       // 화면 오른쪽 위 표시와 같아야 한다
+const APP_V="9.3";                       // 화면 오른쪽 위 표시와 같아야 한다
 const $=id=>document.getElementById(id);
 const DB={beans:[],roasts:[],profiles:[],settings:{}};
 let editingId=null;
@@ -1420,8 +1428,34 @@ $("b_notes").addEventListener("input",showBeanCats);
 /* ---------- 생두 저장 ---------- */
 const BF=["b_name","b_proc","b_alt","b_var","b_screen","b_harvest","b_moist","b_dens",
           "b_origin","b_region","b_farm","b_grade","b_seller","b_bought","b_qty","b_price",
-          "b_notes","b_memo","b_raw"];
+          "b_notes","b_memo","b_raw",
+          "b_species","b_ferment","b_aw","b_decaf"];
+/* SCA Standard 105-2025 는 생두에 대해 <b>무엇을 적어야 하는가</b>를 정해 둔다.
+   표준의 값어치는 여기 있다 — 값을 주는 게 아니라 <b>빠뜨린 것을 알려 준다</b>.
+   ※ 인증 정보는 로스팅 판단에 안 쓰이므로 넣지 않았다. */
+const SCA105=[
+  ["origin","원산지"],["region","생산지역"],["farm","농장 · 생산자"],
+  ["species","종"],["var","품종"],["harvest","수확시기"],
+  ["proc","가공"],["ferment","가공 상세"],["grade","등급"]
+];
+function sca105(b){
+  const have=SCA105.filter(([k])=>b&&String(b[k]||"").trim());
+  return {n:have.length, all:SCA105.length,
+          miss:SCA105.filter(([k])=>!(b&&String(b[k]||"").trim())).map(x=>x[1])};
+}
 let beanCats=[];
+/* 채운 만큼만 말한다. 다 채우라고 몰지 않는다 — 판매처가 안 알려 주는 항목이 많다. */
+function scaHint(){
+  const e=$("b_sca"); if(!e) return;
+  const o={}; BF.forEach(f=>o[f.slice(2)]=($(f)&&$(f).value||"").trim());
+  const r=sca105(o);
+  e.innerHTML=`<span class="pill${r.n>=7?" ok":""}">생두 기록 ${r.n}/${r.all}</span>
+    SCA Standard 105 가 적으라고 하는 항목 기준입니다.`
+    +(r.miss.length?` 빠진 것 — <b>${r.miss.join(" · ")}</b>.
+      <span class="note">판매처가 안 알려 주는 것도 많습니다. 아는 것만 채우셔도 됩니다.</span>`
+     :` 다 채우셨습니다.`);
+}
+setTimeout(()=>BF.forEach(f=>{ const e=$(f); if(e) e.addEventListener("input",scaHint); }),0);
 $("b_save").onclick=()=>{
   if(!$("b_name").value.trim()){ $("b_msg").textContent="이름은 필요합니다."; return; }
   const o=stamp({id:uid(),img:pendingImg||null,noteCats:beanCats.slice()});
@@ -4320,6 +4354,9 @@ function showRec(){
   html+=`<details style="margin-top:10px"><summary class="tagline" style="cursor:pointer">
     출처 전부 보기 — 이 앱의 숫자가 어디서 왔는가</summary>
     <div class="extra" style="margin-top:7px">${srcAll()}</div></details>`;
+  html+=`<details style="margin-top:7px"><summary class="tagline" style="cursor:pointer">
+    자료의 권리 관계 — 상용화를 생각한다면</summary>
+    <div class="extra" style="margin-top:7px">${rightsAll()}</div></details>`;
 
   html+=`<p class="note" style="margin:7px 0 0">${gradeTag("inlet")}
     <b>이 곡선은 「원두 온도」가 아니라 「공기 온도」입니다.</b>
@@ -4895,6 +4932,23 @@ function selfTest(){
     const e=crackFrom(c);
     ok("크랙 추정",e&&e.t>=280&&e.t<=380,
       e?`${fmt(e.t)} 로 추정 (골 ${fmt(e.trough)} · 극적임 ${e.dip})`:"못 찾음");
+  });
+  chk("권리 고지",()=>{
+    /* 자료를 하나 더 쓰면서 권리 줄을 빼먹으면 상용화 때 문제가 된다. */
+    const need=["SCA","ETH","Rao","Hoos","WCR","IKAWA"];
+    const html=rightsAll();
+    const miss=need.filter(k=>html.indexOf(k)<0);
+    const shape=RIGHTS.every(r=>r.n&&r.by&&r.lic&&r.use);
+    ok("권리 고지", miss.length===0&&shape&&/법률 자문은 아닙니다/.test(html),
+      miss.length?`빠진 자료: ${miss.join(", ")}`:`자료 ${RIGHTS.length}건에 권리·용법을 다 적음`);
+  });
+  chk("SCA 105 기록",()=>{
+    const full={origin:"브라질",region:"술데미나스",farm:"산타루시아",species:"아라비카",
+      var:"부르봐",harvest:"2025",proc:"펄프드 내추럴",ferment:"12시간",grade:"NY2"};
+    const a=sca105(full), b=sca105({origin:"브라질"}), c=sca105(null);
+    ok("SCA 105 기록",
+      a.n===a.all&&a.miss.length===0&&b.n===1&&b.miss.length===a.all-1&&c.n===0,
+      `다 채우면 ${a.n}/${a.all} · 하나만 ${b.n}/${b.all} · 빈 생두 ${c.n}/${c.all}`);
   });
   chk("냉각 판정",()=>{
     const f=coolSay(75), o=coolSay(45), sl=coolSay(20), n=coolSay(null);
