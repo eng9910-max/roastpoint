@@ -128,7 +128,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v8.8</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v8.9</span>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 12px;font-size:13.5px;
@@ -934,10 +934,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
-<script src="theory.js?v=8.8"></script>
+<script src="theory.js?v=8.9"></script>
 <script>
 "use strict";
-const APP_V="8.8";                       // 화면 오른쪽 위 표시와 같아야 한다
+const APP_V="8.9";                       // 화면 오른쪽 위 표시와 같아야 한다
 const $=id=>document.getElementById(id);
 const DB={beans:[],roasts:[],profiles:[],settings:{}};
 let editingId=null;
@@ -3955,6 +3955,14 @@ function rorSvg(series,tip,mach){
      · DEVSAY       구간별 편차가 무엇을 뜻하는지 (계획 vs 실측에서 쓰던 문구)
    기준 곡선은 머신에 올라가 있는 프로파일이다. 그게 없으면 구간 판정을 하지 않는다. */
 let ikRef=null;                     // 기준 프로파일 {name, pts}
+/* 라오 p.49 의 급한 크래시 판별에는 「크래시 훨씬 전에 이미 화력이 낮았는가」가 들어간다.
+   머신이 히터 %를 주므로 그걸 그대로 쓴다. 로그가 없으면 null 을 돌려 판별에서 빠진다. */
+function ikHeatBefore(at, back){
+  if(!ikHeatCurve||ikHeatCurve.length<2) return null;
+  const from=at-(back||90), pts=ikHeatCurve.filter(p=>p[0]>=from&&p[0]<=at);
+  if(!pts.length) return null;
+  return pts.reduce((a,p)=>a+p[1],0)/pts.length;
+}
 function ikCoach(){
   const c=ikCurve; if(!c||c.length<4) return null;
   /* 배출한 뒤에는 로스팅 판정을 멈춘다. 냉각 중에 「계획 초과」·「승온율 −152℃/분 하강」이
@@ -4011,7 +4019,10 @@ function ikCoach(){
          +`이번 반등 폭은 <b>${rise.toFixed(1)}℃/분</b>입니다. 로스티한 맛이 한 겹 붙습니다. `
          +`가스를 낮추거나 꺼도 생길 수 있습니다.`});
       out.marks.push({t:z+rs[rs.length-1][0],label:"플릭",color:"var(--actual)"});
-    }else if(now<1&&out.phase==="발달"&&(out.pct==null||out.pct<95)){
+    }else if(now<1&&now>=CANON.flaw.crash&&out.phase==="발달"&&(out.pct==null||out.pct<95)){
+      /* 음수가 아닌 때만 베이킹이다. 예전에는 이 조건이 now<1 뿐이라
+         발달 구간의 크래시가 전부 「베이킹」으로 잍혔다 — 하필 크래시가
+         가장 많이 나는 구간이다. 둘은 다른 결함이고 고치는 방법도 다르다. */
       // 막바지(95% 이후)에는 승온율이 자연히 낮아진다 — 그때 경고해도 손쓸 시간이 없어 알리지 않는다.
       // 배치가 끝난 뒤의 최종 판정은 저장할 때 「후반 승온」으로 따로 알린다.
       out.notes.push({lv:"warn",c:"ror",k:"bake",t:`승온율 ${now.toFixed(1)}℃/분`,
@@ -4021,16 +4032,28 @@ function ikCoach(){
       /* 라오 p.30 「북유럽식 예외」 — 충분히 늦거나 완만한 크래시는 그래프가 시사하는 만큼
          베이크된 맛을 내지 않는다. 깊은 층의 발달을 바꿀 시간이 없었기 때문이다.
          그래서 같은 크래시라도 언제 났는지로 무게를 달리 말한다. */
-      const late=out.pct!=null&&out.pct>=85;
-      out.notes.push({lv:late?"info":"warn",c:"ror",k:late?"crash-late":"crash",
-        t:`승온율 ${now.toFixed(1)}℃/분 (하강)`,
-        d:late
+      const lateC=out.pct!=null&&out.pct>=85;
+      /* p.49 — 부드러운 것인가 급한 것인가. 고치는 법이 다르므로 갈라서 말해야 한다.
+         꺾이기 전 구간의 추세와, 지금 얼마나 급하게 떨어졌는지를 견준다. */
+      const pre=rs.slice(-9,-3);                     // 꺾이기 전 대여섯 점
+      const slope=pre.length>2
+        ? (pre[pre.length-1][1]-pre[0][1])/Math.max(1/60,(pre[pre.length-1][0]-pre[0][0])/60)
+        : 0;
+      const nowSlope=(now-rs[rs.length-4][1])/Math.max(1/60,(rs[rs.length-1][0]-rs[rs.length-4][0])/60);
+      const bend=Math.abs(nowSlope-slope);
+      const hb=ikHeatBefore(z+rs[rs.length-1][0]);   // 크래시 전 히터 %
+      const kind=crashKind(slope,bend,hb);
+      const K=CRASHSAY[kind];
+      out.notes.push({lv:lateC?"info":"warn",c:"ror",k:lateC?"crash-late":"crash-"+kind,
+        t:`${K.name} · 승온율 ${now.toFixed(1)}℃/분`,
+        d:(lateC
           ? "온도가 내려가고 있지만 <b>배출 직전</b>입니다. 라오는 충분히 늦은 크래시는 "
            +"그래프가 시사하는 만큼 베이크된 맛을 내지 않는다고 봅니다(북유럽식 예외) — "
-           +"기록해 두고 컵으로 확인하세요."
-          : "온도가 내려가고 있습니다. <b>크래시</b>입니다 — 열이 모자랍니다. "
-           +"이른 크래시일수록 베이킹으로 이어지기 쉽습니다."});
-      out.marks.push({t:z+rs[rs.length-1][0],label:"크래시",color:"var(--actual)"});
+           +"기록해 두고 컵으로 확인하세요. "
+          : "")
+          +K.d
+          +(hb!=null?` <span class="note">(크래시 전 히터 ${Math.round(hb)}%)</span>`:"")});
+      out.marks.push({t:z+rs[rs.length-1][0],label:K.name,color:"var(--actual)"});
     }else if(now<0){
       /* 투입 직후의 하강은 결함이 아니라 터닝 포인트다 */
       out.notes.push({lv:"info",c:"ror",k:"turn",t:`승온율 ${now.toFixed(1)}℃/분 (터닝)`,
@@ -4106,6 +4129,22 @@ function ikCoach(){
     }
   }
 
+  /* 라오 p.46 — 크랙 시작 40~45초 전에 화력을 크게 낮추는 것이 좋은 어림.
+     아직 크랙을 안 찍었고 곡선에서 크랙을 미리 짚을 수 있을 때만 알린다. */
+  if(ikMarks.crack==null&&planDur>0){
+    // 예상 크랙 = 계획 총시간 × (1 − 권장 DTR 가운데값). 짐작이라고 밝힌다.
+    const dm=(band.canon.dtr[0]+band.canon.dtr[1])/2;
+    const exp=planDur*(1-dm/100), left=exp-t;
+    if(left<=50&&left>=-5)
+      out.notes.push({lv:"warn",c:"ror",k:"precrack",
+        t:`예상 1차 크랙까지 ${Math.max(0,Math.round(left))}초`,
+        d:"라오는 <b>크랙 시작 40~45초 전에 화력을 크게 낮추라</b>고 합니다 (p.46). "
+         +"그래야 크랙 앞뒤로 승온율이 매끄럽게 이어집니다. "
+         +"<b>다만 크랙이 시작되면 12% DTR 까지는 다시 내리지 마세요</b> — 그때는 크래시 위험 구간입니다. "
+         +`<span class="note">예상 시점은 계획 총시간과 권장 DTR 에서 잡은 짐작입니다 — `
+          +`생두와 날씨에 따라 쉬이 엇갈립니다.</span>`});
+  }
+
   // ⑥ 크랙을 찍었으면 DTR 이 어디까지 왔는지
   if(ikMarks.crack!=null&&t>ikMarks.crack){
     const dtrNow=(t-ikMarks.crack)/t*100;
@@ -4115,6 +4154,12 @@ function ikCoach(){
       d:`${band.canon.name} 권장 ${tgt[0]}~${tgt[1]}%. `
        +(dtrNow<tgt[0]?`권장 하한까지 ${Math.round(tgt[0]/100*t/(1-tgt[0]/100)-(t-ikMarks.crack))}초쯤 남았습니다.`
         :dtrNow>tgt[1]?"권장 범위를 넘었습니다 — 발달이 길어지고 있습니다.":"권장 범위 안입니다.")});
+    /* 라오 p.49~50 — 크랙 뒤의 위험은 DTR 을 따라 옮겨 간다.
+       배출 목표로서의 DTR 과는 다른 쓰임이라 따로 말한다. */
+    const risk=dtrRisk(dtrNow);
+    if(risk) out.notes.push({
+      lv:risk.k==="crash"?"info":risk.k==="flick"?"warn":"warn",
+      c:"ror", k:"dtrrisk-"+risk.k, t:`${risk.t} (DTR ${dtrNow.toFixed(0)}%)`, d:risk.d});
   }
   return out;
 }
@@ -4785,6 +4830,25 @@ function selfTest(){
     const e=crackFrom(c);
     ok("크랙 추정",e&&e.t>=280&&e.t<=380,
       e?`${fmt(e.t)} 로 추정 (골 ${fmt(e.trough)} · 극적임 ${e.dip})`:"못 찾음");
+  });
+  chk("크래시 종류",()=>{
+    /* 라오 p.49 — 둘을 가르는 것이 핵심이다.
+       부드러운 것: 꺾이기 전부터 이미 내려오고 있었고 꺾임도 완만하다.
+       급한 것: 꺾임이 급격하고, 미리 히터를 낮게 잡아 둔 채로 그러즌다. */
+    const soft=crashKind(-1.5, 2.0, 80);          // 이미 내려오던 중 완만한 꺾임
+    const hard=crashKind(-0.1, 9.0, 30);          // 평평하다 급격히, 히터도 이미 낮음
+    const hard2=crashKind(0.3, 9.0, null);        // 오르다 급격히 (히터 로그 없음)
+    const both=CRASHSAY.soft&&CRASHSAY.hard&&CRASHSAY.soft.d!==CRASHSAY.hard.d;
+    ok("크래시 종류", soft==="soft"&&hard==="hard"&&hard2==="hard"&&both,
+      `완만한 꺾임→${CRASHSAY[soft].name} · 급한 꺾임+낮은 히터→${CRASHSAY[hard].name} · `
+      +`평평하다 급격히→${CRASHSAY[hard2].name}`);
+  });
+  chk("DTR 위험 지도",()=>{
+    const a=dtrRisk(6), b=dtrRisk(14), c=dtrRisk(17), n=dtrRisk(null);
+    const cover=DTRRISK.every((r,i)=>i===0||r.lo===DTRRISK[i-1].hi);   // 틈이 없어야 한다
+    ok("DTR 위험 지도",
+      a&&a.k==="crash"&&b&&b.k==="flick"&&c&&c.k==="flickzone"&&n===null&&cover,
+      `6%→${a&&a.t} · 14%→${b&&b.t} · 17%→${c&&c.t}`);
   });
   chk("판정 내력",()=>{
     const old=vSince("8.5").length, now=vSince(THEORY_V).length;
