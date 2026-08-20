@@ -128,7 +128,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v8.6</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v8.7</span>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 12px;font-size:13.5px;
@@ -934,10 +934,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
-<script src="theory.js?v=8.6"></script>
+<script src="theory.js?v=8.7"></script>
 <script>
 "use strict";
-const APP_V="8.6";                       // 화면 오른쪽 위 표시와 같아야 한다
+const APP_V="8.7";                       // 화면 오른쪽 위 표시와 같아야 한다
 const $=id=>document.getElementById(id);
 const DB={beans:[],roasts:[],profiles:[],settings:{}};
 let editingId=null;
@@ -2503,6 +2503,11 @@ function applyAlog(A){
           :` <span class="pill warn">설정 곡선 없음</span> — 아티산에서 IKAWA의 <b>SP(설정온도)</b>를 보조 채널로 켜두면 계획과 겹쳐 볼 수 있습니다`);
 }
 
+/* 지금 고른 생두의 실측 수분. 없으면 null 이라 밴드가 그대로 남는다. */
+function curMoist(){
+  const b=DB.beans.find(x=>x.id===($("r_bean")&&$("r_bean").value));
+  return b&&b.moist>0?b.moist:null;
+}
 /* ---------- 계산 ---------- */
 function recalc(){
   const i=parseFloat($("r_in").value), o=parseFloat($("r_out").value);
@@ -2510,9 +2515,11 @@ function recalc(){
   const lv=$("r_level")?$("r_level").value:"mlight", cn=CANON.level[lv];
   const L=parseFloat($("r_loss").value);
   if(cn&&L){
-    const ok=L>=cn.loss[0]&&L<=cn.loss[1];
+    const sh=lossBand(cn,curMoist());        // 생두 수분만큼 밴드를 옮긴다
+    const ok=L>=sh.lo&&L<=sh.hi;
     $("r_loss").style.color=ok?"var(--ok)":"var(--actual)";
-    $("r_loss").title=ok?`${cn.name} 밴드 안`:`${cn.name} 기준 ${cn.loss[0]}~${cn.loss[1]}% 밖`;
+    $("r_loss").title=(ok?`${cn.name} 밴드 안`:`${cn.name} 기준 ${sh.lo}~${sh.hi}% 밖`)
+      +(sh.d?` (생두 수분 ${sh.m}% 라 밴드를 ${sh.d>0?"+":""}${sh.d}%p 옮김)`:"");
   }else if($("r_loss").style){ $("r_loss").style.color=""; }
   const d=parseFloat($("r_dur").value), c=parseFloat($("r_crack").value);
   $("r_dtr").value=(d>0&&c>0&&c<d)?((d-c)/d*100).toFixed(1):"";
@@ -2893,15 +2900,22 @@ function fixPlan(prof,r,b){
 
   /* ② 결과 보정 — 밴드를 벗어난 만큼 끝점을 옮긴다 */
   const k=lossToDrop(lv);
+  /* 밴드를 생두 수분만큼 옮긴 뒤에 견준다. 안 옮기면 수분 14% 짜리 생두를
+     볶고서 「과발달」이라는 소리를 듣게 된다 — 물이 더 빠졌을 뿐인데. */
+  const SH=lossBand(cn,(b&&b.moist>0)?b.moist:null);
   if(r.loss!=null&&!isNaN(r.loss)){
-    const mid=(cn.loss[0]+cn.loss[1])/2;
-    if(r.loss>cn.loss[1]||r.loss<cn.loss[0]){
+    const mid=(SH.lo+SH.hi)/2;
+    if(r.loss>SH.hi||r.loss<SH.lo){
       const d=Math.max(-4,Math.min(4,-(r.loss-mid)*k));
       dT[n-1]+=d;
-      W("phys",`감량률 ${r.loss.toFixed(1)}% 가 ${cn.name} 밴드(${cn.loss[0]}~${cn.loss[1]}%)를 `
-        +`${r.loss>cn.loss[1]?"넘었":"밑돌았"}습니다 → 배출점 <b>${d>0?"+":""}${d.toFixed(1)}℃</b>`
-        +` (이 배전도에서 배출 1℃ ≈ 감량률 ${(1/k).toFixed(2)}%p)`);
-    }
+      W("phys",`감량률 ${r.loss.toFixed(1)}% 가 ${cn.name} 밴드(${SH.lo}~${SH.hi}%)를 `
+        +`${r.loss>SH.hi?"넘었":"밑돌았"}습니다 → 배출점 <b>${d>0?"+":""}${d.toFixed(1)}℃</b>`
+        +` (이 배전도에서 배출 1℃ ≈ 감량률 ${(1/k).toFixed(2)}%p)`
+        +(SH.d?` <span class="note">생두 수분 ${SH.m}% 라 교과서 밴드 `
+          +`${cn.loss[0]}~${cn.loss[1]}% 를 ${SH.d>0?"+":""}${SH.d}%p 옮긴 값입니다</span>`:""));
+    }else if(SH.d)
+      W("phys",`감량률 ${r.loss.toFixed(1)}% 는 수분 보정 밴드(${SH.lo}~${SH.hi}%) 안입니다 — `
+        +`교과서 밴드 ${cn.loss[0]}~${cn.loss[1]}% 만 봤다면 벗어난 것으로 읽혔을 수 있습니다`);
   }
   const baking = r.ror!=null&&!isNaN(r.ror)&&r.ror<CANON.flaw.bake;
   if(r.dtr!=null&&!isNaN(r.dtr)&&r.crack>0&&r.dur>0){
@@ -3054,8 +3068,9 @@ function fixPlan(prof,r,b){
       +`베이킹 기준 ${CANON.flaw.bake} 아래입니다 (기존 ${was.rDev.toFixed(1)}). `
       +`배출 직전 제어점을 더 낮추거나 총시간을 줄이세요`);
   /* 한 점에 반대 방향 보정이 겹쳤으면 알린다 — 상쇄된 걸 모르면 결과를 못 읽는다 */
-  if(r.loss!=null&&r.cup&&r.cup.acid&&r.cup.sweet&&
-     ((r.loss>cn.loss[1]&&r.cup.acid>=7&&r.cup.sweet<=4)||(r.loss<cn.loss[0]&&r.cup.acid<=4&&r.cup.sweet>=6)))
+  const CD=(r.cup&&r.cup.d)||null;
+  if(r.loss!=null&&CD&&CD.acid&&CD.sweet&&
+     ((r.loss>SH.hi&&CD.acid>=10&&CD.sweet<=5)||(r.loss<SH.lo&&CD.acid<=5&&CD.sweet>=10)))
     warn.push("감량률과 컵이 서로 반대를 말합니다(깊게 갔는데 발달은 부족). "
       +"베이킹의 전형입니다 — 배출온도를 옮기기보다 <b>후반 기울기</b>를 살리는 데 무게를 두세요");
 
@@ -3372,11 +3387,16 @@ function targetFor(b,use,level){
   const FIT={ filter:{best:["light","mlight"],ok:["medium"]},
               espresso:{best:["medium","mdark"],ok:["mlight"]},
               latte:{best:["medium","mdark"],ok:["mlight"]} };
-  /* 기준마다 근거 등급을 달아 둔다 — 같은 1층 안에서도 단단함이 다르다 */
+  const P=beanPhys(b||{});
+  /* 기준마다 근거 등급을 달아 둔다 — 같은 1층 안에서도 단단함이 다르다.
+     감량률 밴드는 이 생두의 실측 수분을 반영하므로 P 가 먼저 나와야 한다. */
   const canonWhy=[
-    `${gradeTag("loss")} 감량률 <b>${canon.loss[0]}~${canon.loss[1]}%</b> — `
+    (()=>{ const sh=lossBand(canon,P.w.moist===1?P.moist:null);
+      return `${gradeTag("loss")} 감량률 <b>${sh.lo}~${sh.hi}%</b> — `
       +`물이 빠진 무게라 기계·사람과 무관합니다. 다만 <b>밴드 숫자는 관행</b>이고, `
-      +`가장 믿을 만한 쓰임은 <b>같은 원두 안에서 배치끼리 견주는 것</b>입니다`,
+      +`가장 믿을 만한 쓰임은 <b>같은 원두 안에서 배치끼리 견주는 것</b>입니다`
+      +(sh.d?`. ${lossNote(sh)}`
+            :`. 생두 수분을 입력하시면 이 밴드가 그만큼 옮겨집니다 ${gradeTag("lossmoist")}`); })(),
     `${gradeTag("dtr")} ${debateTag("dtr")} DTR <b>${canon.dtr[0]}~${canon.dtr[1]}%</b> — `
       +`<b>배전도와 무관하게 하나의 범위</b>입니다. 「균형 잡힌 로스팅의 지표일 뿐」이고, `
       +`<b>배출은 DTR 이 아니라 색도·감량률로 판단</b>하세요 (라오 p.33)`,
@@ -3388,7 +3408,6 @@ function targetFor(b,use,level){
     `${gradeTag("rule")} ${CANON.rule} — `
       +`원두가 열원 온도로 수렴하므로 물리에서 따라 나옵니다. 1층에서 가장 단단한 규칙입니다`
   ];
-  const P=beanPhys(b||{});
   const why=[];
   const cl=(v,l)=>Math.max(-l,Math.min(l,v));
   const sg=(v,d)=>{ const r=+v.toFixed(d==null?1:d)||0; return (r>0?"+":"")+r.toFixed(d==null?1:d); };
@@ -3436,11 +3455,17 @@ function targetFor(b,use,level){
   // ③ 수분 — 증발 잠열. 물 1g 을 말리는 데 2.26kJ 이 든다.
   /* 계수를 올렸다 — 라오는 알 크기와 함께 수분을 가장 크게 변하는 두 변수로 꼽는다(p.2).
      수증기가 콩 표면을 식히고 다가오는 열풍을 튕겨내 열전달을 방해한다고 설명한다. */
-  const kM=(P.moist-REF.moist)*P.w.moist;
+  /* Baggenstoss 2008 표 5.1 — 수분에 따른 색도·밀도·유기물 감량의 차이는
+     라이트에서 뚜렷하고 다크로 가면 사라진다. 그래서 배전도가 깊을수록 보정을 줄인다.
+     감량률 밴드 쪽은 반대로 다크에서도 남으므로 거긴 안 줄인다(lossBand 참고). */
+  const wM=moistW(level);
+  const kM=(P.moist-REF.moist)*P.w.moist*wM;
   if(Math.abs(kM)>=0.15)
     add({dur:cl(16*kM,45), rEarly:cl(0.9*kM,2.5)},
         `수분 ${P.moist}% (기준 ${REF.moist}) — 물 1g 증발에 2.26kJ. `
         +`수증기가 표면을 식히고 열풍을 튕겨낸다`
+        +(wM<1?` <span class="note">(「${canon.name}」 배전도라 ${Math.round(wM*100)}%만 반영 — `
+          +`수분의 영향은 다크로 갈수록 사라집니다)</span>`:"")
         +(P.w.moist<1?" <span class=\"note\">(추정값이라 절반만 반영)</span>":""));
 
   // ④ 고도 — 세포벽 치밀도. 밀도로 이미 상당 부분 들어갔으므로 계수를 작게 둔다(이중 계산 방지).
@@ -4619,7 +4644,10 @@ function guide(){
     /* 궤도에 올랐다 — 이제 한 번에 한 가지만 바꾸게 이끈다 */
     const cand=[];
     const bad=withLoss.filter(r=>{ const c=CANON.level[r.level||"mlight"];
-      return c&&(r.loss<c.loss[0]||r.loss>c.loss[1]); });
+      if(!c) return false;
+      const bb=DB.beans.find(x=>x.id===r.beanId);
+      const sh=lossBand(c,(bb&&bb.moist>0)?bb.moist:null);
+      return r.loss<sh.lo||r.loss>sh.hi; });
     const baked=R.filter(r=>r.ror!=null&&r.ror<CANON.flaw.bake);
     if(baked.length) cand.push(`후반 승온이 ${CANON.flaw.bake} 아래인 배치가 <b>${baked.length}건</b> — `
       +"베이킹입니다. 배출 직전 제어점이나 배출 시점을 먼저 손보세요");
@@ -4757,6 +4785,22 @@ function selfTest(){
     const e=crackFrom(c);
     ok("크랙 추정",e&&e.t>=280&&e.t<=380,
       e?`${fmt(e.t)} 로 추정 (골 ${fmt(e.trough)} · 극적임 ${e.dip})`:"못 찾음");
+  });
+  chk("감량률 · 수분",()=>{
+    const cn=CANON.level.medium;                       // 13~15%
+    const dry=lossBand(cn,7), wet=lossBand(cn,14), same=lossBand(cn,10.5);
+    /* 수분 14% 생두를 16.5% 감량으로 볶았다면 물이 더 빠진 것뿐이다 —
+       교과서 밴드(13~15%)는 넘지만 수분 보정 밴드(16~18%) 안에 들어야 한다.
+       반대로 수분 7% 생두를 12% 로 볶으면 교과서로는 덜 익은 셈이지만 보정하면 밴드 안이다. */
+    const outOld=16.5>cn.loss[1], inNew=16.5>=wet.lo&&16.5<=wet.hi;
+    const dryOld=12<cn.loss[0],  dryNew=12>=dry.lo&&12<=dry.hi;
+    // 배전도가 깊을수록 수분의 프로파일 보정이 줄어야 한다
+    const taper=moistW("light")>moistW("medium")&&moistW("medium")>moistW("mdark");
+    ok("감량률 · 수분",
+      same.d===0 && wet.d>0 && dry.d<0 && outOld && inNew && dryOld && dryNew && taper,
+      `수분 7% → ${dry.lo}~${dry.hi}% · 10.5% → ${same.lo}~${same.hi}% · `
+      +`14% → ${wet.lo}~${wet.hi}% (교과서 ${cn.loss[0]}~${cn.loss[1]}%) · `
+      +`프로파일 보정 라이트 ${moistW("light")} → 미디엄다크 ${moistW("mdark")}`);
   });
   chk("이견 표시",()=>{
     const need=["phase","dtr","drop"];
@@ -4923,7 +4967,8 @@ function renderCanon(){
       ok?'<span class="pill ok">밴드 안</span>'
         :`<span class="pill warn">${v<lo?"낮음":"높음"}</span> ${note||""}`]);
   };
-  band("감량률",L,cn.loss[0],cn.loss[1],"%",L<cn.loss[0]?"덜 익었을 수 있습니다":"예상보다 깊습니다");
+  const SH=lossBand(cn,curMoist());
+  band("감량률",L,SH.lo,SH.hi,"%",L<SH.lo?"덜 익었을 수 있습니다":"예상보다 깊습니다");
   band("DTR",D,cn.dtr[0],cn.dtr[1],"%",D<cn.dtr[0]?"발달이 짧습니다":"발달이 깁니다");
   if(dry!=null) band("건조 구간 비율",dry,CANON.phase.dry-10,CANON.phase.dry+10,"%",
        dry<CANON.phase.dry-10?"건조가 빨랐습니다":"건조가 길었습니다");
@@ -5215,7 +5260,8 @@ window.roastReport=id=>{
       ok?'<span class="pill ok">밴드 안</span>'
         :`<span class="pill warn">${v<lo?"낮음":"높음"}</span> <span class="note">${v<lo?low:high}</span>`]);
   };
-  band("감량률",r.loss,cn.loss[0],cn.loss[1],"%","덜 익었을 수 있습니다","예상보다 깊습니다");
+  const SH=lossBand(cn,(b&&b.moist>0)?b.moist:null);
+  band("감량률",r.loss,SH.lo,SH.hi,"%","덜 익었을 수 있습니다","예상보다 깊습니다");
   band("DTR",r.dtr,cn.dtr[0],cn.dtr[1],"%","발달이 짧습니다","발달이 깁니다");
   band("배출온도",r.drop,cn.dropHint[0],cn.dropHint[1],"℃","얕게 끊겼습니다","깊게 갔습니다");
   if(r.cc&&r.dur) band("건조 구간 비율",r.cc/r.dur*100,CANON.phase.dry-10,CANON.phase.dry+10,"%",
