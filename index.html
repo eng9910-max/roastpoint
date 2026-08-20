@@ -128,7 +128,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v8.4</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v8.5</span>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 12px;font-size:13.5px;
@@ -922,10 +922,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
-<script src="theory.js?v=8.4"></script>
+<script src="theory.js?v=8.5"></script>
 <script>
 "use strict";
-const APP_V="8.4";                       // 화면 오른쪽 위 표시와 같아야 한다
+const APP_V="8.5";                       // 화면 오른쪽 위 표시와 같아야 한다
 const $=id=>document.getElementById(id);
 const DB={beans:[],roasts:[],profiles:[],settings:{}};
 let editingId=null;
@@ -3347,9 +3347,12 @@ function targetFor(b,use,level){
   /* ① 밀도 — 투입은 50g 정량이므로 데워야 할 질량은 같다. 달라지는 것은
      겉면적과 세포벽이다. 밀도가 높으면 같은 50g 이 더 작은 부피에 들어가
      열을 받는 겉면적이 작고, 세포벽이 단단해 크랙에 더 큰 내부압이 필요하다. */
+  /* 계수를 낮췄다. 라오 p.3 — 「고지대 스페셜티만 다루는 로스터는 밀도 추적에 느슨해도 된다.
+     가스 설정을 바꿀 만큼 변하는 일이 드물다」. 게다가 우리가 쓰는 부피밀도(g/L)는
+     알 크기·모양이 충전율에 섞여 들어가 부정확하다고 그가 지적한다. */
   const kD=(P.dens-REF.dens)/100*P.w.dens;
   if(Math.abs(kD)>=0.05)
-    add({rEarly:cl(3.0*kD,4), pre:cl(6.0*kD,8), dur:cl(40*kD,60)},
+    add({rEarly:cl(2.5*kD,3.5), pre:cl(5.0*kD,7), dur:cl(35*kD,50)},
         `밀도 ${P.dens}g/L (기준 ${REF.dens}) — 밀도가 높으면 열 받는 겉면적이 작고 세포벽이 단단하다`
         +(P.w.dens<1?" <span class=\"note\">(추정값이라 절반만 반영)</span>":""));
 
@@ -3364,12 +3367,23 @@ function targetFor(b,use,level){
         `알 크기 스크린 ${P.scr} (기준 ${REF.scr}) — 중심까지의 열 지연 `
         +`τ=r²/α ≈ ${Math.round(TAU*rr*rr)}초 (기준 ${TAU}초)`
         +(P.w.scr<1?" <span class=\"note\">(추정값이라 절반만 반영)</span>":""));
+  /* 알 크기는 시간만이 아니라 **열량**도 바꾼다. 라오 p.2 — 같은 농장의 케냐 AA 는 가스 80%,
+     피베리는 65% 로 같은 배전도에 맞춘다. 스크린 5 차이에 화력 15%p 였으므로
+     스크린 1 당 약 0.55℃/분으로 옮긴다. 그는 「알 크기와 수분」을 가장 큰 두 변수로 꼽는다. */
+  const kS=(P.scr-REF.scr)*P.w.scr;
+  if(Math.abs(kS)>=0.2)
+    add({rEarly:cl(0.55*kS,2.5)},
+        `알 크기 스크린 ${P.scr} — 큰 알일수록 열이 더 든다 `
+        +`(같은 농장 케냐 AA 80% · 피베리 65% 로 맞추는 예)`);
 
   // ③ 수분 — 증발 잠열. 물 1g 을 말리는 데 2.26kJ 이 든다.
+  /* 계수를 올렸다 — 라오는 알 크기와 함께 수분을 가장 크게 변하는 두 변수로 꼽는다(p.2).
+     수증기가 콩 표면을 식히고 다가오는 열풍을 튕겨내 열전달을 방해한다고 설명한다. */
   const kM=(P.moist-REF.moist)*P.w.moist;
   if(Math.abs(kM)>=0.15)
-    add({dur:cl(12*kM,40), rEarly:cl(0.5*kM,2)},
-        `수분 ${P.moist}% (기준 ${REF.moist}) — 물 1g 증발에 2.26kJ 이 든다`
+    add({dur:cl(16*kM,45), rEarly:cl(0.9*kM,2.5)},
+        `수분 ${P.moist}% (기준 ${REF.moist}) — 물 1g 증발에 2.26kJ. `
+        +`수증기가 표면을 식히고 열풍을 튕겨낸다`
         +(P.w.moist<1?" <span class=\"note\">(추정값이라 절반만 반영)</span>":""));
 
   // ④ 고도 — 세포벽 치밀도. 밀도로 이미 상당 부분 들어갔으므로 계수를 작게 둔다(이중 계산 방지).
@@ -3378,6 +3392,11 @@ function targetFor(b,use,level){
     add({rEarly:cl(0.5*kA,1.2), pre:cl(1.2*kA,3)},
         `고도 ${P.alt}m (기준 ${REF.alt}) — 고지대는 세포벽이 치밀해 크랙에 더 큰 내부압이 필요하다`
         +(P.w.alt<1?" <span class=\"note\">(추정값이라 절반만 반영)</span>":""));
+
+  if(P.moist<8||P.moist>12)
+    why.push(`<span class="pill warn">수분 ${P.moist}%</span> 생두 수분은 보통 <b>8~12%</b>입니다 — `
+      +(P.moist<8?"그 아래는 속 빈 짚 같은 맛이 나기 쉽습니다"
+                 :"12% 위는 보관 중 미생물 번식 위험이 있습니다")+" (라오 p.2~3)");
 
   // ⑤ 가공 — 표면 잔여당과 발효산
   const ph=PROCADJ.find(([re])=>re.test(String((b&&b.proc)||"")));
@@ -3429,7 +3448,10 @@ function targetFor(b,use,level){
     why.push(`초반 열량은 ${t.rEarly.toFixed(1)}℃/분이 상한입니다 — `
       +`예열 ${t.pre.toFixed(0)}℃에서 배출 ${t.drop.toFixed(1)}℃까지 오를 폭이 ${rise.toFixed(0)}℃뿐인데 `
       +`총시간이 ${fmt(Math.round(t.dur))}이라, ${was.toFixed(1)}℃/분을 넣으면 중간 구간에서 온도가 내려가야 합니다. `
-      +`고밀도·대립종에 열을 더 주는 몫은 <b>시간</b>으로 이미 나갔습니다`);
+      +`고밀도·대립종에 열을 더 주는 몫은 <b>시간</b>으로 이미 나갔습니다. `
+      +`<span class="note">예열 ${t.pre.toFixed(0)}℃에서 출발해 ${fmt(Math.round(t.dur))} 안에 `
+      +`배출온도까지 가려면 초반 열량에 여유가 거의 없습니다 — `
+      +`이 구간에서는 생두마다 목표가 서로 비슷해집니다.</span>`);
   }
 
   const fit=FIT[use]||FIT.filter;
@@ -3901,9 +3923,11 @@ function ikCoach(){
     const lowest=late.length>3?Math.min(...late.slice(0,-1).map(x=>x[1])):null;
     const rise=lowest!=null?now-lowest:0;
     if(lowest!=null&&rise>CANON.flaw.flick&&late.length>5){
-      out.notes.push({lv:"warn",c:"ror",k:"flick",t:`승온율 반전 ${now.toFixed(1)}℃/분`,
-        d:`후반에 한 번 내려갔다 다시 올랐습니다(최저 ${lowest.toFixed(1)}). `
-         +`교과서가 결함으로 보는 <b>플릭</b>입니다 — ${CANON.rule}`});
+      out.notes.push({lv:"warn",c:"ror",k:"flick",t:`플릭 +${rise.toFixed(1)}℃/분`,
+        d:`후반에 ${lowest.toFixed(1)} 까지 내려갔다 ${now.toFixed(1)}℃/분으로 다시 올랐습니다. `
+         +`라오는 <b>숫자 기준을 주지 않고 「플릭이 클수록 영향도 크다」</b>고만 합니다(p.30) — `
+         +`이번 반등 폭은 <b>${rise.toFixed(1)}℃/분</b>입니다. 로스티한 맛이 한 겹 붙습니다. `
+         +`가스를 낮추거나 꺼도 생길 수 있습니다.`});
       out.marks.push({t:z+rs[rs.length-1][0],label:"플릭",color:"var(--actual)"});
     }else if(now<1&&out.phase==="발달"&&(out.pct==null||out.pct<95)){
       // 막바지(95% 이후)에는 승온율이 자연히 낮아진다 — 그때 경고해도 손쓸 시간이 없어 알리지 않는다.
@@ -3912,8 +3936,18 @@ function ikCoach(){
         d:"발달 구간인데 온도가 거의 안 오릅니다. <b>베이킹</b> 징후로, 향이 눌리고 밋밋해집니다. "
          +"히터를 올리거나 조금 일찍 배출하세요."});
     }else if(now<CANON.flaw.crash&&mid.length>3){
-      out.notes.push({lv:"warn",c:"ror",k:"crash",t:`승온율 ${now.toFixed(1)}℃/분 (하강)`,
-        d:"온도가 내려가고 있습니다. <b>크래시</b>입니다 — 열이 모자랍니다."});
+      /* 라오 p.30 「북유럽식 예외」 — 충분히 늦거나 완만한 크래시는 그래프가 시사하는 만큼
+         베이크된 맛을 내지 않는다. 깊은 층의 발달을 바꿀 시간이 없었기 때문이다.
+         그래서 같은 크래시라도 언제 났는지로 무게를 달리 말한다. */
+      const late=out.pct!=null&&out.pct>=85;
+      out.notes.push({lv:late?"info":"warn",c:"ror",k:late?"crash-late":"crash",
+        t:`승온율 ${now.toFixed(1)}℃/분 (하강)`,
+        d:late
+          ? "온도가 내려가고 있지만 <b>배출 직전</b>입니다. 라오는 충분히 늦은 크래시는 "
+           +"그래프가 시사하는 만큼 베이크된 맛을 내지 않는다고 봅니다(북유럽식 예외) — "
+           +"기록해 두고 컵으로 확인하세요."
+          : "온도가 내려가고 있습니다. <b>크래시</b>입니다 — 열이 모자랍니다. "
+           +"이른 크래시일수록 베이킹으로 이어지기 쉽습니다."});
       out.marks.push({t:z+rs[rs.length-1][0],label:"크래시",color:"var(--actual)"});
     }else if(now<0){
       /* 투입 직후의 하강은 결함이 아니라 터닝 포인트다 */
@@ -4100,6 +4134,11 @@ function showRec(){
     ${gradeTag("loss")}·${gradeTag("rule")} 가 ${gradeTag("dtr")} 보다 단단합니다.</p>`;
 
   html+=`<p class="tagline" style="margin-top:12px">2층 · 이 생두에 맞춘 경로 ${gradeTag("fix")}</p>`;
+  html+=`<p class="note" style="margin:0 0 6px"><b>먼저 밝혀 둡니다</b> —
+    라오는 「낯선 원두를 어떻게 볶을지 예측하는 <b>간단한 공식은 없다</b>」고 말합니다(p.4).
+    대신 <b>비슷한 원두를 볶아 본 경험</b>에서 출발하라고 합니다.
+    아래 값은 예측이 아니라 <b>가장 닮은 산지 원형에서 뽑은 출발점</b>입니다 —
+    님의 기록이 쌓이면 그 기록이 이 값을 대신합니다.</p>`;
   /* 목표 계산에 쓴 물성이 실측인지 추정인지 먼저 밝힌다 — 추정이면 결과도 추정이다 */
   html+=`<p class="note" style="margin:0 0 6px"><b>쓰인 생두 물성</b><br>
     ${(phys||[]).map(x=>"· "+x).join("<br>")}</p>`;
