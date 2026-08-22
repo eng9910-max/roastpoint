@@ -11,7 +11,7 @@
 /* 판본 — 기록장·스튜디오가 「지금 쓰는 판정 코드가 몇 판인가」를 확인할 수 있게 박아 둔다.
    서비스워커가 옛 theory.js 를 계속 내주는 바람에 화면은 새것이고 판정만 옛것인 상태로
    돌던 적이 있다. 눈으로는 절대 못 알아챈다. 그래서 숫자로 맞춰 본다. */
-const THEORY_V="9.5";
+const THEORY_V="9.6";
 
 /* ── 1층 : 교과서 상수 ───────────────────────────────
    SCA 로스팅 커리큘럼과 로스팅 문헌에서 통용되는 값. 임의로 손대지 않는다.
@@ -109,6 +109,13 @@ const SRC = {
        +"물 담금질은 훨씬 빠르지만 수분이 올라 보관 안정성을 해친다(§10.4-4). "
        +"**60초 강하 ℃ 기준은 문헌에 없다 — IKAWA 50g 기준으로 이 앱이 잡은 어림이고, "
        +"쓰임은 절대 판정이 아니라 같은 원두 배치끼리의 비교다**",
+  pop:"ROEST(2020~ 상용 탑재)와 공개 모델 syamaner/coffee-first-crack-detection(Apache 2.0)이 "
+       +"함께 쓰는 얼개다 — <b>온도 게이트 + 개별 크랙 카운트 + 트리거 개수</b>. "
+       +"서로 무관한 두 팀이 <b>min_pops 3~5</b> 라는 같은 값에 이르렀다. "
+       +"ROEST 는 원두 185℃ 에서 창을 열고 5개째에 1차 크랙으로 확정한다. "
+       +"학술 근거는 Wilson, 『Coffee roasting acoustics』 JASA 135(6), 2014 — "
+       +"진폭 문턱값만으로도 검출 가능하며 1차 크랙이 2차보다 진폭이 크고 저역이 많다. "
+       +"**대역·배율·게이트 온도는 이 앱이 실제 녹음 두 건으로 맞춘 값이다**",
   crack:"라오 p.62~63 — 배기온도 승온율(ETROR)이 깊은 골에서 **급격히 다시 오르기 시작하는 순간**이 "
        +"1차 크랙의 객관적 지표. 그 골·반등은 로스팅 중 가장 극적이어야 한다. "
        +"내추럴·디카페인은 신호가 뚜렷하지 않을 수 있다"
@@ -321,6 +328,51 @@ function coolSay(d60){
 }
 const COOLNOTE = "배출로 로스팅이 끝나지 않습니다 — <b>첫 15초 동안 콩 안의 발열 반응이 계속됩니다</b>. "
   +"다만 IKAWA 는 <b>공랭</b>이라 물 담금질처럼 수분이 올라 보관 중 향이 무너지는 일은 없습니다.";
+/* ── 소리로 1차 크랙 찾기 ─────────────────────────────
+   실제 로스팅 녹음 두 건(10:28 · 6:10)으로 옛 방식을 시험해 보고 다시 짰다.
+   녹음에는 크랙이 분명히 있었다 — 터짐 480회가 8:31~9:07 에만 몰려 있고
+   나머지 10분은 0회였다. 그런데 옛 검출기는 둘 다 놓쳤다. 이유가 셋이었다.
+
+   ① 기준을 시작 1초에 고정했다. prev 가 0 에서 출발해 초기 jump 가 증분이 아니라
+      절대 에너지라 부풀어 있었고, 기준이 실제보다 <b>5~8배</b> 크게 잡혔다.
+   ② 그 기준이 적응하지 않았다. IKAWA 팬은 로스팅 중 소리가 두 배 커지는데
+      (실측 0.020→0.044) 기준은 그대로여서 <b>크랙이 나는 시점에 가장 둔해졌다.</b>
+   ③ 오디오의 21% 만 봤다. 1024 표본(21ms)을 100ms 마다 한 번 읽으니
+      짧은 파열음이 표본 사이로 빠졌다. 같은 파일에서 연속 분석은 480회를 셌는데
+      옛 방식은 1회를 셌다. <b>임계값 문제가 아니라 구조 문제다.</b>
+
+   고친 방식은 ROEST(2020~ 상용)와 공개 모델이 함께 쓰는 얼개를 따른다.
+   둘은 서로 무관한 팀인데 <b>같은 값(min_pops 3~5)</b>에 이르렀다.
+
+   · <b>온도 게이트</b> — 일정 온도 아래에서는 아예 세지 않는다. ROEST 는 원두 185℃.
+     우리는 배기온도를 재므로 그 값으로 창을 연다. 이게 「기계가 꺼진 뒤의 정적을
+     크랙으로 오인」하는 문제까지 함께 막는다 — 실제로 겪었다.
+   · <b>min_pops</b> — 한 번 튀었다고 크랙이라 하지 않는다. 다섯 개째가 크랙이다.
+   · <b>크랙 시각은 무리가 시작된 곳</b> — 옛 코드는 8초 창의 <b>가운데</b>를 돌려줘
+     늘 4초쯤 늦었다. 무리의 시작을 돌려준다. */
+const POPCFG = {
+  lo:1200, hi:8000,      // 대역 — 팬 저역과 마이크 고역잡음을 함께 깎는다
+  ratio:4,               // 국소 바닥 대비 몇 배면 터짐인가
+  floorSec:30,           // 국소 바닥을 잡는 창(초)
+  runK:1.1,              // 세션 중앙값 대비 — 기계가 도는 수준일 때만 센다
+  minPops:5,             // ROEST 기본 5, 권장 3~5. 공개 모델도 같은 값
+  gateET:185,            // 배기온도 게이트(℃)
+  rateWin:8              // 밀도를 재는 창(초)
+};
+/* 터짐 시각 목록에서 「무리가 시작된 곳」을 찾는다. */
+function popCrack(pops, cfg){
+  const C=Object.assign({},POPCFG,cfg||{});
+  if(!pops||pops.length<C.minPops) return null;
+  /* minPops 개가 rateWin 초 안에 들어온 첫 지점 — 그 무리의 <b>첫</b> 터짐이 크랙이다 */
+  for(let i=0;i+C.minPops-1<pops.length;i++){
+    const a=pops[i], b=pops[i+C.minPops-1];
+    if(b-a<=C.rateWin){
+      let n=0; for(const p of pops) if(p>=a&&p<=a+C.rateWin) n++;
+      return {t:Math.round(a), n, rate:+(n/C.rateWin).toFixed(1)};
+    }
+  }
+  return null;
+}
 const GRADE = {
   meas:{n:"측정", c:"ok",   d:"물리적으로 잰 값입니다 — 기계와 사람에 무관합니다. 어긋나면 이쪽을 먼저 믿으세요."},
   phys:{n:"물리", c:"ok",   d:"물리에서 따라 나옵니다. 원두는 열원 온도로 수렴하므로 승온율은 자연히 줄어듭니다."},
@@ -333,7 +385,7 @@ const CANONG = {
   loss:"meas", agtron:"meas", lossmoist:"meas",
   crashkind:"conv", dtrrisk:"conv", precrack:"conv", cvai:"meas",
   size:"conv", dens:"conv", moist:"conv", form:"conv", early:"conv", transfer:"conv", inlet:"mach",
-  crack:"conv", flick:"conv", crash:"conv", dur:"conv", cool:"est",
+  crack:"conv", flick:"conv", crash:"conv", dur:"conv", cool:"est", pop:"conv",
   rule:"phys",
   drop:"mach", pre:"mach",
   dtr:"conv", phase:"conv", flaw:"conv",
@@ -404,7 +456,7 @@ const SRCNAME = {
   drop:"배출온도", crack:"1차 크랙 추정", flick:"플릭", crash:"크래시",
   size:"알 크기", dens:"밀도", moist:"생두 수분", form:"물성 → 프로파일 공식",
   lossmoist:"감량률 × 생두 수분", early:"초반 승온율", transfer:"드럼 → 열풍 이식",
-  inlet:"흡기온도 — IKAWA 프로파일의 정체", cool:"냉각 속도",
+  inlet:"흡기온도 — IKAWA 프로파일의 정체", cool:"냉각 속도", pop:"소리로 1차 크랙 찾기",
   crashkind:"크래시 두 종류", dtrrisk:"DTR 위험 지도", precrack:"크랙 직전 화력",
   cvai:"CVA 강도 눈금"
 };
