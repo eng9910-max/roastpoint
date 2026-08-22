@@ -11,7 +11,7 @@
 /* 판본 — 기록장·스튜디오가 「지금 쓰는 판정 코드가 몇 판인가」를 확인할 수 있게 박아 둔다.
    서비스워커가 옛 theory.js 를 계속 내주는 바람에 화면은 새것이고 판정만 옛것인 상태로
    돌던 적이 있다. 눈으로는 절대 못 알아챈다. 그래서 숫자로 맞춰 본다. */
-const THEORY_V="9.6";
+const THEORY_V="9.7";
 
 /* ── 1층 : 교과서 상수 ───────────────────────────────
    SCA 로스팅 커리큘럼과 로스팅 문헌에서 통용되는 값. 임의로 손대지 않는다.
@@ -372,6 +372,38 @@ function popCrack(pops, cfg){
     }
   }
   return null;
+}
+/* ── 한 곡선에 배치가 둘 들어 있을 때 ─────────────────
+   연결을 끊지 않고 두 배치를 잇달아 볶으면 곡선이 하나로 이어져 버렸다.
+   투입 시각(ikRoastT0)과 배출 시각(ikDropAt)을 <b>한 번만</b> 잡고 있었기 때문이다.
+   라이브 쪽은 고쳤지만, 이미 그렇게 저장된 기록은 나눠 줘야 한다.
+
+   나누는 단서는 <b>식었다가 다시 오르는 지점</b>이다. 배출하면 온도가 뚝 떨어지고,
+   다음 생두를 넣으면 다시 올라간다. 그 골이 배치의 경계다. */
+function splitBatches(act, opt){
+  const O=Object.assign({drop:40, rise:30, minLen:120}, opt||{});
+  if(!act||act.length<40) return [];
+  /* 앞선 봉우리에서 O.drop℃ 이상 떨어졌다가 <b>골에서</b> O.rise℃ 이상 다시 오르는 곳.
+     처음에는 「봉우리를 넘어설 때」로 봤는데, 그러면 두 번째 배치가 첫 배치보다
+     높이 올라가야만 잡힌다. 실제로는 더 얕게 볶는 일이 흔하다 — 기준은 <b>골</b>이어야 한다. */
+  const cuts=[]; let peak=act[0][1], troughI=-1, trough=Infinity;
+  for(let i=1;i<act.length;i++){
+    const v=act[i][1];
+    if(troughI>=0){
+      if(v<trough){ trough=v; troughI=i; }
+      else if(v-trough>=O.rise){ cuts.push(troughI); troughI=-1; trough=Infinity; peak=v; }
+    }else{
+      if(v>peak) peak=v;
+      if(peak-v>=O.drop){ trough=v; troughI=i; }
+    }
+  }
+  if(!cuts.length) return [];
+  const segs=[]; let s=0;
+  for(const c of cuts.concat([act.length-1])){
+    if(act[c][0]-act[s][0]>=O.minLen) segs.push([s,c]);
+    s=c;
+  }
+  return segs.length>1?segs:[];
 }
 const GRADE = {
   meas:{n:"측정", c:"ok",   d:"물리적으로 잰 값입니다 — 기계와 사람에 무관합니다. 어긋나면 이쪽을 먼저 믿으세요."},

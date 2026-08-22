@@ -128,7 +128,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v9.6</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v9.7</span>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 12px;font-size:13.5px;
@@ -948,10 +948,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
-<script src="theory.js?v=9.6"></script>
+<script src="theory.js?v=9.7"></script>
 <script>
 "use strict";
-const APP_V="9.6";                       // 화면 오른쪽 위 표시와 같아야 한다
+const APP_V="9.7";                       // 화면 오른쪽 위 표시와 같아야 한다
 const $=id=>document.getElementById(id);
 const DB={beans:[],roasts:[],profiles:[],settings:{}};
 let editingId=null;
@@ -3226,6 +3226,33 @@ function fixBlock(prof,r,b){
 }
 /* 수정안을 그대로 스튜디오로 — 이미 고친 곡선 위에서 손으로 더 다듬게 한다.
    예전에는 「배출점 −4.0℃」라고 말만 하고 끝이라, 사람이 스튜디오에서 감으로 옮겨야 했다. */
+/* 이어 붙은 기록에서 한 배치만 떼어 새 기록으로 만든다. 원본은 안 건드린다. */
+window.splitTake=(roastId,idx)=>{
+  const r=DB.roasts.find(x=>x.id===roastId); if(!r||!r.act) return;
+  const segs=splitBatches(r.act); const g=segs[idx]; if(!g) return;
+  const seg=r.act.slice(g[0],g[1]+1);
+  const t0=seg[0][0];
+  const act=seg.map(x=>[+(x[0]-t0).toFixed(1),x[1]]);
+  const cut=(a)=>(a||[]).filter(x=>x[0]>=g[0]&&x[0]<=r.act[g[1]][0])
+                        .map(x=>[+(x[0]-t0).toFixed(1),x[1]]);
+  const o=stamp(Object.assign({},r,{
+    id:uid(), v:APP_V,
+    prof:(r.prof||"")+` (${idx+1}번째 배치)`,
+    act, heat:cut(r.heat), fan:cut(r.fan), mror:cut(r.mror),
+    dur:Math.round(seg[seg.length-1][0]-t0),
+    drop:+seg[seg.length-1][1].toFixed(1),
+    pre:+seg[0][1].toFixed(1),
+    // 아래 값들은 어느 배치 것인지 알 수 없다 — 비우고 다시 넣게 한다
+    crack:null, dtr:null, cc:null, inG:null, outG:null, loss:null, cool:null,
+    note:((r.note||"")+` [원본 ${r.id} 에서 ${idx+1}번째 배치만 떼어냄]`).trim(),
+    tl:null, gaps:null, cup:null
+  }));
+  DB.roasts.push(o); persist(); renderRoasts();
+  alert(`${idx+1}번째 배치를 새 기록으로 담았습니다.\n`
+    +`투입량·배출량·1차 크랙은 <b>어느 배치 것인지 알 수 없어</b> 비워 뒀습니다 — 채워 주세요.`
+      .replace(/<[^>]+>/g,""));
+  roastReport(o.id);
+};
 window.fixStudio=async(profId,roastId)=>{
   const prof=DB.profiles.find(x=>x.id===profId), r=DB.roasts.find(x=>x.id===roastId);
   if(!prof||!r) return;
@@ -4957,6 +4984,19 @@ function selfTest(){
       a.n===a.all&&a.miss.length===0&&b.n===1&&b.miss.length===a.all-1&&c.n===0,
       `다 채우면 ${a.n}/${a.all} · 하나만 ${b.n}/${b.all} · 빈 생두 ${c.n}/${c.all}`);
   });
+  chk("배치 나누기",()=>{
+    /* 한 배치짜리는 나누면 안 되고, 두 배치짜리는 갈라야 한다 */
+    const one=[],two=[];
+    for(let t=0;t<=400;t+=5) one.push([t, 140+ (t<60? -40*t/60 : 72*(t-60)/340)]);
+    for(let t=0;t<=400;t+=5) two.push([t, 140+ (t<60? -40*t/60 : 72*(t-60)/340)]);
+    // 두 번째 배치 — 식었다가(45℃ 하강) 다시 오른다
+    let last=two[two.length-1][1];
+    for(let t=405;t<=460;t+=5) two.push([t, last-(last-90)*(t-400)/60]);
+    for(let t=465;t<=800;t+=5) two.push([t, 90+120*(t-460)/340]);
+    const a=splitBatches(one), b=splitBatches(two);
+    ok("배치 나누기", a.length===0 && b.length===2,
+      `한 배치 → ${a.length||"안 나눔"} · 두 배치 → ${b.length}개로 나눔`);
+  });
   chk("크랙 소리",()=>{
     /* 실제 녹음에서 확인한 모양 — 조용하다가 한 무리가 몰려온다.
        ① 흩어진 터짐은 크랙이 아니다 ② 무리의 <b>첫</b> 터짐을 돌려줘야 한다 */
@@ -5484,6 +5524,28 @@ window.roastReport=id=>{
   const lv=(()=>{ const a=+r.agt; if(!a) return "mlight";
     return a>=75?"light":a>=65?"mlight":a>=55?"medium":"mdark"; })();
   const cn=CANON.level[lv];
+  /* 두 배치가 한 곡선에 들어 있으면 여기서 알리고 나눠 준다 */
+  const segs=r.act?splitBatches(r.act):[];
+  if(segs.length>1){
+    h+=`<div class="extra" style="margin-top:8px">
+      <p class="tagline" style="margin:0 0 5px">
+        <span class="pill warn">배치 ${segs.length}개</span> 이 기록에 로스팅이 여럿 들어 있습니다</p>
+      <p class="note" style="margin:0 0 6px">식었다가 다시 오르는 지점이
+      <b>${segs.length-1}군데</b> 있습니다 — 연결을 끊지 않고 잇달아 볶으면 이렇게 이어집니다
+      (v9.7 부터는 자동으로 갈립니다). 아래 판정은 <b>이어 붙은 곡선 전체</b>를 보고 있어서
+      배출온도·총시간·DTR 이 모두 어긋납니다.</p>
+      ${segs.map((g,i)=>{
+        const a=r.act[g[0]], b=r.act[g[1]];
+        const seg=r.act.slice(g[0],g[1]+1);
+        const hi=Math.max(...seg.map(x=>x[1]));
+        return `<p class="note" style="margin:0 0 4px">
+          <b>${i+1}번째</b> — ${fmt(Math.round(a[0]))} ~ ${fmt(Math.round(b[0]))}
+          (${fmt(Math.round(b[0]-a[0]))}) · 최고 ${hi.toFixed(1)}℃
+          <button class="ghost sm" onclick="splitTake('${r.id}',${i})">이 배치만 남기기</button></p>`;
+      }).join("")}
+      <p class="note" style="margin:5px 0 0">「이 배치만 남기기」는 <b>새 기록으로 저장</b>합니다 —
+      원본은 그대로 둡니다.</p></div>`;
+  }
   h+=vNote(r.v);
   if(r.cool){
     const cy=coolSay(r.cool.d60);
@@ -6541,6 +6603,8 @@ function ikEvent(kind,title,detail,lv,key){
    냉각 도중에 페이지를 새로 고치면 로스팅 구간을 통째로 놓친 채 냉각만 161점씩 쌓인다.
    그걸 기록으로 옮기면 배출온도가 냉각 끝 온도(50℃ 쯤)로 들어가 배치가 망가진다. */
 let ikSawRoast=false;
+/* 한 연결에서 끝낸 배치들. 담지 않고 다음 배치를 시작해도 잃지 않는다. */
+let ikSegs=[];
 /* 화면·판정이 함께 쓰는 원점. 투입 시각을 알면 그것을, 모르면 대기 구간을 잘라낸 지점을 쓴다. */
 function ikZero(){
   if(ikRoastT0!=null) return ikRoastT0;
@@ -6739,6 +6803,17 @@ function ikOnStatus(st){
     /* 로스팅이 끝나는 순간을 잡아 둔다. 냉각 온도까지 곡선에 들어가면
        기록의 「배출온도」가 냉각 끝 온도(25℃ 쯤)로 잡혀 버린다. */
     if(st.state===3) ikSawRoast=true;
+    /* 이미 한 배치를 끝낸 뒤 다시 「로스팅 중」이 되면 <b>새 배치</b>다.
+       예전에는 투입 시각과 배출 시각을 한 번만 잡아서 두 배치가 한 곡선에 이어 붙었다.
+       앞 배치를 아직 안 담으셨을 수 있으므로 지우지 않고 <b>따로 떼어 둔다.</b> */
+    if(st.state===3&&ikDropAt!=null){
+      ikSegs.push({t0:ikRoastT0, drop:ikDropAt, n:ikSegs.length+1});
+      ikRoastT0=null; ikDropAt=null;
+      ikMarks={cc:null,crack:null}; ikTL=[];
+      if(typeof micPops!=="undefined"){ micPops=[]; micCurve=[]; }
+      ikLog(`■ 새 배치가 시작됐습니다 — 앞 배치(${ikSegs.length}번째)는 따로 떼어 뒀습니다`);
+      ikEvent("state","새 배치 시작",`앞 배치는 「지난 배치 담기」에서 담을 수 있습니다`,"act");
+    }
     if(st.state===3&&ikRoastT0==null){
       ikRoastT0=Math.round(t);
       ikLog(`■ 투입 — 여기를 0:00 으로 셉니다 (연결 후 ${fmt(ikRoastT0)} 지점)`);
@@ -7157,7 +7232,7 @@ function simStart(){
   if(simR!==r||simI>=r.act.length-1){
     simR=r; simI=0;
     ikCurve=[];ikFanCurve=[];ikHeatCurve=[];ikInlet=[];ikHasInlet=false;
-    ikT0=null;ikTBase=0;ikTPrev=null;ikDropAt=null;ikSawRoast=true;
+    ikT0=null;ikTBase=0;ikTPrev=null;ikDropAt=null;ikSawRoast=true;ikSegs=[];
     ikRoastT0=0;ikTL=[];ikTLLast={};
     ikGaps=(r.gaps||[]).map(g=>[g[0],g[1]]);
     ikMarks={cc:r.cc||null,crack:r.crack||null};
@@ -7332,6 +7407,9 @@ window.micTake=t=>{
 
 function ikSaveBatch(){
   if(ikCurve.length<5) return;
+  /* 앞 배치가 있으면 이번 배치의 시작점부터만 본다 — 안 그러면 둘이 한 곡선이 된다 */
+  if(ikSegs.length&&ikRoastT0!=null)
+    ikCurve=ikCurve.filter(x=>x[0]>=ikSegs[ikSegs.length-1].drop);
   /* 냉각 구간을 먼저 떼어낸다. 안 떼면 마지막 점이 냉각 끝 온도라
      배출온도·총시간이 둘 다 엉뚱해진다. */
   let src=ikCurve, tail=0;
@@ -7455,7 +7533,7 @@ function ikInit(){
   $("ik_selftest").onclick=ikSelfTest;
   $("ik_clear").onclick=()=>{ ikCurve=[]; ikPlanCurve=[]; ikFanCurve=[]; ikHeatCurve=[];
     ikInlet=[]; ikRorCurve=[]; ikHasInlet=false; ikT0=null; ikNow=0; $("ik_coachbox").hidden=true;
-    ikTBase=0; ikTPrev=null; ikDropAt=null; ikRoastT0=null; ikSawRoast=false;
+    ikTBase=0; ikTPrev=null; ikDropAt=null; ikRoastT0=null; ikSawRoast=false; ikSegs=[];
     ikGaps=[]; ikTL=[]; ikTLLast={}; micCurve=[]; micDraw();
     ikMarks={cc:null,crack:null}; $("ik_chart").innerHTML=""; $("ik_elapsed").textContent="";
     $("ik_save").disabled=true; $("ik_savemsg").textContent="";
