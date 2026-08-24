@@ -69,6 +69,16 @@ th,td{border:1px solid var(--rule);padding:7px 9px;text-align:left;background:#f
 th{background:var(--paper-2);font-size:11px;letter-spacing:.05em;text-transform:uppercase;
   color:var(--ink-2);font-weight:600}
 td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
+.tbl th{cursor:pointer;user-select:none}
+.tbl th:hover{color:var(--ink);background:var(--rule)}
+#ik_fields th{cursor:default}
+#ik_fields th:hover{color:var(--ink-2);background:var(--paper-2)}
+.sarrow{font-size:9px;color:var(--actual)}
+body.copyedit [data-ck]{outline:1px dashed var(--setpoint);outline-offset:2px;
+  border-radius:2px;cursor:text;white-space:pre-wrap}
+body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
+#cp_hint{position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--ink);color:var(--paper);
+  padding:7px 14px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .pill{display:inline-block;font-size:11.5px;border:1px solid var(--rule);border-radius:2px;
   padding:0 5px;color:var(--ink-2)}
 .pill.ok{border-color:var(--ok);color:var(--ok)}
@@ -128,7 +138,8 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v9.7</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v9.8</span>
+  <button class="ghost sm" id="cp_toggle" style="align-self:center">글 편집</button>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
     <a href="studio.html" style="display:flex;align-items:center;padding:0 12px;font-size:13.5px;
@@ -143,6 +154,11 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
   </nav>
 </header>
 
+<div id="cp_hint" hidden>
+  <b>글 편집 중</b>
+  <span>문장을 눌러 고치세요 · <b>비우면</b> 원래대로 · <b>*굵게*</b> · <b>~작은 회색~</b></span>
+  <button class="ghost sm" id="cp_done" style="margin-left:auto">편집 끝내기</button>
+</div>
 <main>
 
 <!-- ================= 생두 ================= -->
@@ -218,6 +234,8 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
         <div><label>수분활성도 (aw)</label><input type="number" step="0.01" id="b_aw" placeholder="0.53~0.59"></div>
         <div><label>디카페인 방식</label><input type="text" id="b_decaf" placeholder="물 / CO₂ / EA"></div>
         <div><label>판매처</label><input type="text" id="b_seller"></div>
+        <div class="wide"><label>판매처 주소 <span class="note">— 같은 로트를 다시 살 때 바로 열립니다</span></label>
+          <input type="url" id="b_url" placeholder="https://…"></div>
         <div><label>구입일</label><input type="date" id="b_bought"></div>
         <div><label>구입 중량 (g)</label><input type="number" step="1" id="b_qty" placeholder="1000"></div>
         <div><label>구입 가격 (원)</label><input type="number" step="100" id="b_price"></div>
@@ -234,6 +252,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     <div class="row" style="margin-top:11px">
       <p class="note" id="b_sca" style="margin:0 0 7px"></p>
       <button id="b_save">생두 저장</button>
+      <button class="ghost" id="b_cancel" hidden>고치기 취소</button>
       <button class="ghost" id="b_clear">비우기</button>
       <span class="note" id="b_msg"></span>
     </div>
@@ -241,6 +260,8 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 
   <div class="block">
     <h2>③ 등록된 생두 <span id="b_count" class="pill"></span></h2>
+    <p class="note" style="margin-top:0">이름을 누르면 적어 둔 것이 전부 펼쳐지고, 거기서 고칠 수 있습니다.</p>
+    <div id="b_detail" class="core" hidden style="margin-bottom:11px"></div>
     <div class="scrollx"><div class="tbl"><table id="b_table"></table></div></div>
   </div>
 </section>
@@ -729,6 +750,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     그 시각이 곡선에 표시되고, 기록에 담을 때 <b>1차 크랙 초</b>와 <b>컬러 변환 초</b>로 들어갑니다.</p>
     <div class="row" style="margin-top:9px">
       <button id="ik_save" disabled>이 배치를 기록에 담기</button>
+      <button class="ghost" id="ik_saveprev" hidden></button>
       <button class="ghost" id="ik_clear">곡선 지우기</button>
       <span class="note" id="ik_savemsg"></span>
     </div>
@@ -766,6 +788,7 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
       <button class="ghost" id="mic_off" disabled>끄기</button>
       <span class="note" id="mic_msg">소리는 <b>저장하지 않습니다</b> — 터짐이 난 <b>시각</b>만 셉니다.</span>
     </div>
+    <p class="note" id="mic_hint" style="margin:5px 0 0"></p>
     <div id="mic_meter" style="margin-top:8px"></div>
   </div>
 
@@ -823,10 +846,49 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
         margin:8px 0 0;white-space:pre-wrap"></pre>
     </div>
 
+    <div class="extra" style="margin-bottom:10px">
+      <p class="tagline">감시 모드 <span class="pill">끊김 원인 찾기</span></p>
+      <p class="note" style="margin:0 0 8px">볶지 않고 <b>연결만 해 둔 채</b> 오래 지켜봅니다.
+      볶는 동안에는 히터·팬·금속·사람이 한꺼번에 바뀌어 무엇이 끊었는지 가릴 수가 없습니다.
+      가만히 붙여 두고 기다리면 <b>끊긴 그 순간에 무엇이 있었는지</b>만 남습니다.<br>
+      <b>브라우저는 다른 앱이 무엇을 하는지 못 봅니다.</b> 창 가려짐·전원·네트워크 상태·긴 멈춤까지는
+      스스로 잡지만, 「지금 큰 파일을 받기 시작했다」 같은 것은
+      <b>「지금 표시」</b>로 직접 남겨 주셔야 합니다.<br>
+      창을 옮기거나 다른 앱을 쓰는 것만으로는 <b>링크가 흔들리지 않습니다</b> — 무선 연결은
+      운영체제가 쥐고 있습니다. 다만 <b>이 탭을 닫거나 새로 고치거나, 브라우저가 배경 탭을
+      얼리면</b> 그때는 실제로 끊깁니다. 그 순간도 여기에 남습니다.</p>
+      <div class="row" style="margin-bottom:7px">
+        <button class="ghost sm" id="ik_watchstart">감시 시작</button>
+        <input type="text" id="ik_watchnote" placeholder="지금 무엇을 했는지 (예: 유튜브 재생 시작)"
+          style="flex:1;min-width:180px">
+        <button class="ghost sm" id="ik_watchmark">지금 표시</button>
+        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:13px;color:var(--ink)">
+          <input type="checkbox" id="ik_wake" style="width:auto"> 화면 꺼짐 방지
+        </label>
+        <button class="ghost sm" id="ik_watchcopy">기록 복사</button>
+        <button class="ghost sm" id="ik_watchclear">비우기</button>
+      </div>
+      <p class="note" id="ik_watchstat" style="margin:0 0 6px"></p>
+      <pre id="ik_watchlog" class="mono" style="font-size:11.5px;background:#fff;
+        border:1px solid var(--rule);padding:9px;max-height:200px;overflow:auto;
+        margin:0;white-space:pre-wrap;user-select:text"></pre>
+    </div>
+
+    <div class="extra" style="margin-bottom:10px">
+      <p class="tagline">연결 이력 <span class="pill">노후화 판단</span></p>
+      <p class="note" style="margin:0 0 8px">연결할 때마다 한 줄씩 남습니다.
+      <b>「처음엔 안 그랬는데 요즘 끊긴다」는 기록 없이는 확인할 수 없습니다</b> —
+      사람의 기억은 잘 되던 날을 세지 않아 나빠진 쪽을 과장합니다.
+      몇 주 쌓이면 노후화인지 그날의 일인지 스스로 갈립니다.</p>
+      <p class="note" id="ik_linksay" style="margin:0 0 7px"></p>
+      <div class="scrollx"><div class="tbl"><table id="ik_linktable"></table></div></div>
+    </div>
+
     <p class="tagline" style="margin-top:12px">통신 기록</p>
     <div class="row" style="margin-bottom:7px">
       <button class="ghost sm" id="ik_pause">멈춤</button>
       <button class="ghost sm" id="ik_copy">복사</button>
+      <button class="ghost sm" id="ik_dropcopy">끊김 진단 복사</button>
       <button class="ghost sm" id="ik_dl">파일로 저장</button>
       <button class="ghost sm" id="ik_logclear">비우기</button>
       <span class="note" id="ik_logmsg">연결 중에는 계속 흐릅니다 — <b>「멈춤」</b>을 눌러 세운 뒤 복사하세요.</span>
@@ -847,6 +909,10 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
     다만 브라우저 저장 영역이라 <b>기기를 바꾸거나 데이터를 지우면 사라지니</b>, 가끔 파일로 내보내 백업하세요.
     내보낸 JSON은 나중에 파이썬으로 옮길 때도 그대로 읽힙니다.</p>
     <div class="row">
+      <button class="ghost sm" id="cp_export">고친 문장 내보내기</button>
+      <button class="ghost sm" id="cp_reset">고친 문장 전부 되돌리기</button>
+      <p class="note" id="cp_stat" style="width:100%;margin:6px 0 0"></p>
+      <div id="cp_orphan" style="width:100%"></div>
       <button id="d_save">전체 저장</button>
       <button class="ghost" id="d_load">불러오기 (합치기)</button>
       <input type="file" id="d_file" accept=".json">
@@ -948,12 +1014,12 @@ td.num,th.num{text-align:right;font-family:ui-monospace,Menlo,monospace}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
-<script src="theory.js?v=9.7"></script>
+<script src="theory.js?v=9.8"></script>
 <script>
 "use strict";
-const APP_V="9.7";                       // 화면 오른쪽 위 표시와 같아야 한다
+const APP_V="9.8";                       // 화면 오른쪽 위 표시와 같아야 한다
 const $=id=>document.getElementById(id);
-const DB={beans:[],roasts:[],profiles:[],settings:{}};
+const DB={beans:[],roasts:[],profiles:[],settings:{},trash:{},link:[]};
 let editingId=null;
 let pendingLog=null, pendingImg=null;
 const fmt=s=>`${Math.floor(s/60)}:${String(Math.round(s%60)).padStart(2,"0")}`;
@@ -1120,85 +1186,217 @@ function scanValues(txt){
     if(v&&+v>=500&&+v<=1000){ $("b_dens").value=v; n++; }
   }
   if(!$("b_harvest").value){
-    const m=txt.match(/(20\d{2}\s*\/\s*\d{2}|20\d{2}\s*(?:crop|하베스트|수확|년))|(\d{1,2}\s*[~\-]\s*\d{1,2}\s*월)/i);
+    const m=txt.match(/(20\d{2}\s*\/\s*(?:20)?\d{2}|20\d{2}\s*(?:crop|하베스트|수확|년))|(\d{1,2}\s*[~\-]\s*\d{1,2}\s*월)/i);
     if(m){ $("b_harvest").value=m[0].trim(); n++; }
+  }
+  /* 상세페이지를 통째로 복사하면 주소가 같이 딸려 오는 일이 많다 */
+  if($("b_url")&&!$("b_url").value){
+    const m=txt.match(/https?:\/\/[^\s"'<>)\]]+/i);
+    if(m){ $("b_url").value=m[0]; n++; }
   }
   return n;
 }
-/* ---------- 생두 파서 ---------- */
+/* ---------- 생두 파서 ----------
+   판매처 상세페이지는 거의 다 2단 표다. 그 표를 복사하거나 OCR로 뽑으면
+   ① 라벨과 값이 탭으로 갈린 한 줄이 되거나 ② 라벨이 줄줄이 먼저 오고 값이 뒤따르거나
+   둘 중 하나로 눌린다. 두 경우를 각각 다르게 읽는다. */
 const FIELDS=[
-  ["b_origin",["원산지","생산국","국가","origin","country"]],
+  ["b_origin",["원산지","생산국","생산 국가","국가","나라","origin","country"]],
   ["b_farm",["농장명/농장주명","농장/농장주명","농장주명","농장명","생산자","농장","farm","producer","estate"]],
   ["b_region",["생산지역","재배지역","지역","region","area"]],
-  ["b_alt",["재배고도","고도","해발","altitude","elevation"]],
+  ["b_alt",["재배고도","재배 고도","고도","해발","해발고도","altitude","elevation"]],
   /* 「가공상세」가 「가공」에 먼저 잡히면 값이 잘린다. 긴 라벨을 앞에 둔다. */
   ["b_ferment",["가공상세","가공 상세","발효시간","발효","fermentation","ferment"]],
-  ["b_proc",["가공방식","가공 방식","프로세싱","프로세스","가공","process","processing"]],
+  ["b_proc",["가공방식","가공 방식","가공방법","프로세싱","프로세스","가공","process","processing"]],
   ["b_var",["품종","변종","variety","varietal","cultivar"]],
-  ["b_harvest",["수확시기","수확 시기","수확기","수확년도","크롭","harvest","crop"]],
+  /* 「수학년도」는 판매처 표에 흔한 오타다. 원문이 그렇게 적혀 오므로 그대로 받아 준다. */
+  ["b_harvest",["수확시기","수확 시기","수확기","수확년도","수확연도","수학년도","생산년도","크롭","harvest","crop"]],
   ["b_notes",["커핑노트","커핑 노트","컵노트","컵 노트","테이스팅노트","향미","플레이버","맛","cupping note","cupping notes","tasting note","tasting notes","flavor note","flavour note","flavor","cup profile"],true],
   ["b_grade",["등급","그레이드","grade"]],
-  ["b_screen",["스크린","스크린사이즈","screen","screen size"]],
+  ["b_screen",["스크린사이즈","스크린 사이즈","스크린","screen size","screen","scr"]],
   /* 같은 이유로 「수분활성도」가 「수분」보다 앞이다 */
   ["b_aw",["수분활성도","수분활성","워터액티비티","water activity","aw"]],
-  ["b_moist",["수분","수분함량","moisture"]],
-  ["b_dens",["밀도","density"]],
+  ["b_moist",["수분량","수분함량","함수율","수분","moisture content","moisture"]],
+  ["b_dens",["밀도","density","bulk density"]],
   /* 「종」 한 글자는 「종합」 같은 줄까지 잡으므로 쓰지 않는다 */
   ["b_species",["커피종","스피시즈","species"]],
   ["b_decaf",["디카페인방식","디카페인","decaf","decaffeination"]]
 ];
 const SKIP=/^(배송비|판매가|정가|상품재고|최소 구매수량|구매혜택|택배|장바구니|찜하기|바로 구매|로그인|회원가입)$/;
+/* 「농장 소개」의 「소개」처럼, 라벨 뒤에 이것만 남으면 값이 아니라 문단 제목이 잘린 것이다. */
+const SECTION=/^(소개|정보|이야기|설명|안내|노트|note|information|info|story)$/i;
+/* 값 블록 사이에 끼어드는 문단 제목. 값으로 세면 그 뒤가 전부 한 칸씩 밀린다. */
+const NOISE=/^(coffee information|coffee info|cup ?note|green ?bean ?info(rmation)?|farm ?story)$/i;
+const isNoise=l=>NOISE.test(l)||(l.length<=12&&/(소개|정보|안내)$/.test(l));
+/* 라벨에 붙은 단위 표기를 떼어낸다 — 「수분량( %)」 「밀도(grm/L)」 「스크린 사이즈(SC)」 */
+const delabel=s=>s.replace(/\([^)]*\)/g," ").replace(/\s+/g," ").trim();
+const flatKey=s=>delabel(s).toLowerCase().replace(/[\s:·・.\-()]/g,"");
+/* 한 줄을 라벨과 값으로 가른다. 탭(표의 칸 경계) → 콜론 순으로 본다. */
+function splitKV(line){
+  if(line.includes("\t")){
+    const c=line.split("\t").map(x=>x.trim());
+    return [c[0], c.slice(1).filter(Boolean).join(", ")];
+  }
+  const m=line.match(/^([^:：]{1,24})[:：]\s*(.+)$/);
+  if(m) return [m[1].trim(), m[2].trim()];
+  return [line, ""];
+}
+/* 「1차 9.7 / 2차 9.7 / 3차 9.6」은 같은 로트를 세 번 잰 것이므로 평균이 그 로트의 값이다.
+   숫자 칸(type=number)에 이 문자열을 그대로 넣으면 브라우저가 통째로 버려 빈칸이 됐다. */
+function numAvg(v,lo,hi,dec){
+  const ns=String(v).replace(/\d+\s*차/g," ").match(/\d+(?:\.\d+)?/g);
+  if(!ns) return null;
+  const ok=ns.map(Number).filter(x=>x>=lo&&x<=hi);
+  if(!ok.length) return null;
+  const p=Math.pow(10,dec);
+  return String(Math.round(ok.reduce((a,b)=>a+b,0)/ok.length*p)/p);
+}
+const CLEAN={
+  b_moist:v=>numAvg(v,5,20,1),
+  b_dens:v=>numAvg(v,500,1000,0),
+  b_aw:v=>numAvg(v,0.3,1,2),
+  b_screen:v=>v.replace(/\s*([:：])\s*/g,":").replace(/\s+%/g,"%").replace(/\s*\/\s*/g," / ").trim()
+};
+/* 마지막 검증층 — 규칙이 무엇을 뽑아 왔든 여기를 통과해야 칸에 앉는다.
+   「무엇이 맞다」가 아니라 「이건 확실히 값이 아니다」만 본다. 사전이 모르는 산지·품종을
+   버리지 않으려면 이쪽이어야 한다. 판매처 형식은 계속 새로 나오지만 값이 값답지 않은 꼴은
+   몇 가지뿐이다 — 문장이거나, 너무 길거나, 라벨 자체이거나, 숫자 칸인데 숫자가 아니거나. */
+const PROSE=/[.。]$|니다$|습니다|하세요|입니다/;
+/* 칸마다 값이 길어질 수 있는 정도가 다르다. 품종은 여러 개가 나열되고 스크린은 분포가 통째로 온다. */
+const MAXLEN={b_notes:120,b_screen:120,b_var:80,b_ferment:80,b_region:60,b_farm:60};
+const ALL_LABELS=FIELDS.flatMap(f=>f[1].map(s=>s.toLowerCase().replace(/[\s:·・.\-()]/g,"")));
+function plausible(id,v){
+  if(SKIP.test(v)||SECTION.test(v)) return false;
+  if(ALL_LABELS.includes(flatKey(v))) return false;      // 라벨을 값으로 잡은 것
+  if(CLEAN[id]&&id!=="b_screen") return true;            // 숫자 칸은 범위 검증이 더 엄하다
+  return !PROSE.test(v)&&v.length<=(MAXLEN[id]||40);
+}
+/* 검증에 떨어진 값은 채운 것으로 세지 않는다 — 그래야 「못 찾음」에 정직하게 뜬다.
+   틀린 값이 앉아 있는 것보다 빈칸이 낫다. 빈칸은 눈에 띄지만 틀린 값은 안 띈다. */
+function setField(id,val){
+  let v=String(val).trim();
+  if(!plausible(id,v)) return false;
+  const f=CLEAN[id];
+  if(f){ v=f(v); if(v==null||v==="") return false; }
+  $(id).value=v;
+  return $(id).value!=="";
+}
 function parseText(txt){
-  const lines=txt.split(/\r?\n/).map(l=>l.replace(/\s+/g," ").trim()).filter(Boolean);
-  const bare=lines.map(l=>l.toLowerCase().replace(/[\s:·・.\-()]/g,""));
-  const allLabels=FIELDS.flatMap(f=>f[1].map(x=>x.toLowerCase().replace(/[\s:·・.\-()]/g,"")));
-  const isLabelLine=i=>allLabels.some(l=>bare[i]===l||bare[i].indexOf(l)===0)
-    || /^(로스팅추천포인트|로스팅포인트|최소구매수량|포장단위|판매가|배송비|상품재고)/.test(bare[i]);
+  /* 탭은 표의 칸 경계다 — 다른 공백과 함께 뭉개면 라벨과 값이 한 덩어리가 된다 */
+  const lines=txt.split(/\r?\n/)
+    .map(l=>l.replace(/[^\S\t]+/g," ").replace(/ *\t */g,"\t").trim())
+    .filter(Boolean);
+  const KV=lines.map(splitKV);
+  const keys=KV.map(kv=>flatKey(kv[0]));
+  const allLabels=FIELDS.flatMap(f=>f[1].map(flatKey));
+  const exact=i=>allLabels.includes(keys[i]);
+  const isLabelLine=i=>allLabels.some(l=>keys[i]===l||keys[i].indexOf(l)===0)
+    || /^(로스팅추천포인트|로스팅포인트|최소구매수량|포장단위|판매가|배송비|상품재고)/.test(keys[i]);
+  const idsFor=i=>FIELDS.filter(f=>f[1].some(l=>flatKey(l)===keys[i])).map(f=>f[0]);
   let hit=0;
+
+  /* ① 라벨과 값이 한 줄에 있는 경우.
+     라벨은 「똑같을 때만」 인정한다. 「농장」이 「농장 소개」에 걸려 값이 "소개"가 되던 일을 막는다. */
+  for(const [id,labels] of FIELDS){
+    if($(id).value) continue;
+    for(let i=0;i<lines.length;i++){
+      if(!KV[i][1]||!labels.some(l=>flatKey(l)===keys[i])) continue;
+      const v=KV[i][1].replace(/\t/g,", ").trim();
+      if(!v||v.length>300||SKIP.test(v)||SECTION.test(v)) continue;
+      if(setField(id,v)) hit++;
+      break;
+    }
+  }
+
+  /* ② 2단 표가 한 줄로 눌린 경우 — 라벨 N개가 잇달아 나오면 그 뒤 N줄이 순서대로 그 값이다.
+     사이에 낀 문단 제목(COFFEE INFORMATION 따위)을 값으로 세면 그 뒤가 전부 밀린다. */
+  for(let i=0;i<lines.length;i++){
+    if(!exact(i)||KV[i][1]) continue;
+    let j=i; const run=[];
+    while(j<lines.length&&exact(j)&&!KV[j][1]){ run.push(j); j++; }
+    if(run.length>=3){
+      const vals=[];
+      for(let k=j;k<lines.length&&vals.length<run.length;k++){
+        if(isNoise(lines[k])||exact(k)) continue;
+        vals.push(lines[k]);
+      }
+      run.forEach((li,idx)=>{
+        const v=vals[idx];
+        if(!v||SKIP.test(v)) return;
+        for(const id of idsFor(li)) if(!$(id).value&&setField(id,v)) hit++;
+      });
+    }
+    i=j;
+  }
+
+  /* ③ 라벨이 값보다 뒤에 오는 경우 — 표가 눌리면서 순서가 뒤집힌 것이다. 바로 옆 줄을 본다. */
+  for(const [id,labs] of [["b_moist",["수분량","수분"]],["b_dens",["밀도"]]]){
+    if($(id).value) continue;
+    for(let i=0;i<lines.length;i++){
+      if(KV[i][1]||!labs.some(l=>keys[i].indexOf(flatKey(l))===0)) continue;
+      let done=false;
+      for(const k of [i+1,i-1]){
+        if(k<0||k>=lines.length||exact(k)) continue;
+        if(setField(id,lines[k])){ hit++; done=true; break; }
+      }
+      if(done) break;
+    }
+  }
+
+  /* ④ 라벨 뒤에 값이 그냥 이어지는 줄(「원산지 에티오피아」)과 다음 줄에 값이 오는 경우 */
   for(const [id,labels,multi] of FIELDS){
     if($(id).value) continue;
     let got=null;
     outer:
     for(let i=0;i<lines.length;i++){
       for(const lab of labels.slice().sort((x,y)=>y.length-x.length)){
-        const key=lab.toLowerCase().replace(/[\s:·・.\-()]/g,"");
-        if(bare[i].indexOf(key)!==0) continue;              // 공백 있는 라벨도 잡는다
+        const key=flatKey(lab);
+        if(keys[i].indexOf(key)!==0) continue;              // 공백 있는 라벨도 잡는다
         // 라벨 글자 수만큼 앞을 걷어내고 남은 것이 값 (공백·구두점은 건너뛴다)
         const skip=" :·・.-()\t";
-        let need=key.length, k=0;
+        let need=key.length, k=0, gap=false;
         while(k<lines[i].length&&need>0){
           const ch=lines[i][k];
           if(skip.includes(ch)){ k++; continue; }
           need--; k++;
         }
-        let rest=lines[i].slice(k).replace(/^[\s:·・.\-()]+/,"").trim();
+        // 라벨 바로 뒤에 단위 표기가 붙어 있으면 그것까지 걷어낸다 — 「밀도(grm/L)」
+        let rest=lines[i].slice(k).replace(/^\s*\([^)]*\)\s*/,"");
+        gap=rest!==lines[i].slice(k)||skip.includes(lines[i][k]||" ");
+        rest=rest.replace(/^[\s:·・.\-()\t]+/,"").trim();
+        // 「수분량」의 "량"처럼 라벨이 더 긴 낱말의 앞부분일 뿐인 경우를 걸러낸다
+        if(rest&&!gap) continue;
         if(!rest){
           // 다음 줄부터 값 — 여러 줄이면 이어붙인다
           const acc=[];
           for(let j=i+1;j<lines.length&&acc.length<(multi?6:1);j++){
-            if(!lines[j]||SKIP.test(lines[j])||isLabelLine(j)) break;
-            acc.push(lines[j]);
+            if(!lines[j]||SKIP.test(lines[j])||isLabelLine(j)||isNoise(lines[j])) break;
+            acc.push(lines[j].replace(/\t/g,", "));
           }
           rest=acc.join(", ");
         }else if(multi){
           const acc=[rest];
           for(let j=i+1;j<lines.length&&acc.length<6;j++){
-            if(!lines[j]||SKIP.test(lines[j])||isLabelLine(j)) break;
+            if(!lines[j]||SKIP.test(lines[j])||isLabelLine(j)||isNoise(lines[j])) break;
             if(lines[j].length>24) break;                   // 문장은 값이 아니다
-            acc.push(lines[j]);
+            acc.push(lines[j].replace(/\t/g,", "));
           }
           rest=acc.join(", ");
         }
-        if(rest && rest.length<=300 && !SKIP.test(rest)){ got=rest; break outer; }
+        if(rest&&rest.length<=300&&!SKIP.test(rest)&&!SECTION.test(rest)){ got=rest; break outer; }
       }
     }
-    if(got){ $(id).value=got; hit++; }
+    if(got&&setField(id,got)) hit++;
   }
+
+  /* ⑤ 이름 — 라벨이 없는 유일한 칸이다. 상세페이지는 로트 이름을 맨 위에 큰 글씨로 두므로
+     「가장 긴 줄」이 아니라 「위에서 첫 줄」이 맞다. 긴 줄 규칙은 농장 소개 문단에 늘 졌다. */
   if(!$("b_name").value){
-    const cand=lines.slice(0,25).filter(l=>/[가-힣]/.test(l)&&l.length>=6&&l.length<=60
+    const prose=/[.。]$|니다$|습니다|하세요|입니다/;
+    const cand=lines.slice(0,25).filter((l,i)=>/[가-힣]/.test(l)&&l.length>=6&&l.length<=60
+      &&!l.includes("\t")&&!isLabelLine(i)&&!isNoise(l)&&!prose.test(l)
       &&!/원산지|가공|품종|고도|커핑|배송|판매가|장바구니|로그인|구매/.test(l));
-    if(cand.length) $("b_name").value=cand.sort((a,b)=>b.length-a.length)[0]
-      .replace(/^\[[^\]]*\]\s*/,"").trim();
+    if(cand.length) $("b_name").value=cand[0].replace(/^\[[^\]]*\]\s*/,"").trim();
   }
   hit += scanValues(txt);                       // 라벨이 없어도 값으로 채운다
   const fixed=normalizeFields();                // 오인식 교정
@@ -1398,7 +1596,7 @@ function normalizeFields(){
 $("b_auto").onclick=()=>{
   const parts=[$("b_origin").value,$("b_farm").value,$("b_var").value,$("b_proc").value]
     .map(x=>(x||"").split(",")[0].trim()).filter(Boolean);
-  const yr=($("b_harvest").value.match(/20\d{2}(\s*\/\s*\d{2})?/)||[])[0];
+  const yr=($("b_harvest").value.match(/20\d{2}(\s*\/\s*(?:20)?\d{2})?/)||[])[0];
   if(!parts.length){ $("parsemsg").textContent="먼저 아래 항목이 채워져야 합니다."; return; }
   $("b_name").value=parts.join(" ")+(yr?" "+yr.replace(/\s/g,""):"");
 };
@@ -1434,7 +1632,7 @@ $("b_notes").addEventListener("input",showBeanCats);
 
 /* ---------- 생두 저장 ---------- */
 const BF=["b_name","b_proc","b_alt","b_var","b_screen","b_harvest","b_moist","b_dens",
-          "b_origin","b_region","b_farm","b_grade","b_seller","b_bought","b_qty","b_price",
+          "b_origin","b_region","b_farm","b_grade","b_seller","b_url","b_bought","b_qty","b_price",
           "b_notes","b_memo","b_raw",
           "b_species","b_ferment","b_aw","b_decaf"];
 /* SCA Standard 105-2025 는 생두에 대해 <b>무엇을 적어야 하는가</b>를 정해 둔다.
@@ -1463,12 +1661,49 @@ function scaHint(){
      :` 다 채우셨습니다.`);
 }
 setTimeout(()=>BF.forEach(f=>{ const e=$(f); if(e) e.addEventListener("input",scaHint); }),0);
+/* 고치는 중인 생두. 로스팅 기록이 id 로 생두를 가리키므로 고칠 때 id 를 새로 만들면
+   지난 기록이 통째로 끊긴다. 반드시 같은 id 위에 덮어쓴다. */
+let editingBean=null;
 $("b_save").onclick=()=>{
   if(!$("b_name").value.trim()){ $("b_msg").textContent="이름은 필요합니다."; return; }
+  if(editingBean){
+    const o=DB.beans.find(b=>b.id===editingBean);
+    if(!o){ editingBean=null; $("b_msg").textContent="고치려던 생두가 사라졌습니다."; return; }
+    BF.forEach(f=>o[f.slice(2)]=$(f).value.trim());
+    if(pendingImg) o.img=pendingImg;
+    o.noteCats=beanCats.slice(); stamp(o);
+    endEdit(); renderBeans(); persist(); clearBean();
+    showBean(DB.beans.findIndex(b=>b.id===o.id));
+    $("b_msg").textContent="고쳤습니다. 이 생두를 쓴 로스팅 기록은 그대로 이어집니다.";
+    return;
+  }
   const o=stamp({id:uid(),img:pendingImg||null,noteCats:beanCats.slice()});
   BF.forEach(f=>o[f.slice(2)]=$(f).value.trim());
   DB.beans.push(o); renderBeans(); persist(); clearBean();
   $("b_msg").textContent="저장했습니다. 데이터 탭에서 파일로 내보내는 걸 잊지 마세요.";
+};
+function endEdit(){
+  editingBean=null;
+  $("b_save").textContent="생두 저장";
+  $("b_cancel").hidden=true;
+}
+$("b_cancel").onclick=()=>{ endEdit(); clearBean(); $("b_msg").textContent="고치기를 그만뒀습니다 — 저장된 내용은 그대로입니다."; };
+/* 목록에서 고치기 — ② 칸을 그 생두로 채우고 저장 단추의 뜻을 바꾼다 */
+window.editBean=i=>{
+  const b=DB.beans[i]; if(!b) return;
+  clearBean();
+  BF.forEach(f=>{ const e=$(f); if(e) e.value=b[f.slice(2)]==null?"":b[f.slice(2)]; });
+  if(b.img){ pendingImg=b.img; $("thumb").src=b.img; $("thumb").hidden=false; }
+  beanCats=(b.noteCats||[]).slice();
+  if(typeof showBeanCats==="function") showBeanCats();
+  if(typeof scaHint==="function") scaHint();
+  editingBean=b.id;
+  $("b_save").textContent="고친 내용 저장";
+  $("b_cancel").hidden=false;
+  $("b_msg").textContent=`「${b.name||"이름 없음"}」을 고치는 중입니다.`;
+  $("b_detail").hidden=true;
+  $("b_name").scrollIntoView({block:"center"});
+  $("b_name").focus();
 };
 function clearBean(){
   BF.forEach(f=>$(f).value=""); $("paste").value="";
@@ -1476,10 +1711,15 @@ function clearBean(){
   $("parsemsg").textContent=""; $("ocrmsg").textContent="";
   beanCats=[]; $("b_notecats").innerHTML="";
 }
-$("b_clear").onclick=()=>{clearBean();$("b_msg").textContent="";};
+$("b_clear").onclick=()=>{endEdit();clearBean();$("b_msg").textContent="";};
 
 function usedG(id){ return DB.roasts.filter(r=>r.beanId===id).reduce((a,r)=>a+(r.inG||0),0); }
 function unitPrice(b){ const q=+b.qty,p=+b.price; return (q>0&&p>0)?p/q:null; }
+/* 저장된 주소를 그대로 링크로 쓰면 javascript: 같은 것도 열린다. http(s) 만 통과시킨다. */
+function safeUrl(u){
+  const s=String(u||"").trim();
+  return /^https?:\/\/[^\s"'<>]+$/i.test(s)?s.replace(/&/g,"&amp;").replace(/"/g,"&quot;"):"";
+}
 function renderBeans(){
   $("b_count").textContent=DB.beans.length+"종";
   $("b_table").innerHTML=`<tr><th>이름</th><th>가공</th><th>품종</th><th>고도</th>
@@ -1490,13 +1730,16 @@ function renderBeans(){
         ? `<span class="pill warn">${left.toFixed(0)}</span>`
         : left.toFixed(0)) : "–";
       return `<tr>
-      <td>${b.name||""}${b.img?' <span class="pill ok">사진</span>':''}</td>
+      <td><a href="#" onclick="showBean(${i});return false" title="펼쳐 보기">${b.name||"(이름 없음)"}</a>${
+        b.img?' <span class="pill ok">사진</span>':''}${
+        safeUrl(b.url)?` <a href="${safeUrl(b.url)}" target="_blank" rel="noopener noreferrer" title="판매처 열기">↗</a>`:""}</td>
       <td>${b.proc||""}</td><td>${b.var||""}</td>
       <td>${b.alt||""}${b.dens?` <span class="pill">${b.dens}g/L</span>`:""}${b.moist?` <span class="pill">${b.moist}%</span>`:""}</td>
       <td class="num">${used?used.toFixed(0):"–"}</td>
       <td class="num">${lowPill}</td>
       <td class="num">${up?up.toFixed(1)+"원":"–"}</td>
-      <td><button class="ghost sm" onclick="delBean(${i})">삭제</button></td></tr>`;
+      <td><button class="ghost sm" onclick="editBean(${i})">고치기</button>
+          <button class="ghost sm" onclick="delBean(${i})">삭제</button></td></tr>`;
     }).join("")
       :`<tr><td colspan="8" style="color:var(--muted)">아직 없습니다</td></tr>`);
   const opts=`<option value="">— 생두 선택 —</option>`+
@@ -1507,7 +1750,63 @@ function renderBeans(){
   });
   if($("p_nobean")) $("p_nobean").hidden=DB.beans.length>0;
 }
-window.delBean=i=>{ if(confirm("삭제할까요?")){ DB.beans.splice(i,1); renderBeans(); persist(); } };
+window.delBean=i=>{
+  const b=DB.beans[i]; if(!b) return;
+  const n=DB.roasts.filter(r=>r.beanId===b.id).length;
+  if(!confirm(n?`이 생두로 볶은 기록이 ${n}건 있습니다.\n생두를 지워도 기록은 남지만 어떤 생두였는지 알 수 없게 됩니다.\n\n삭제할까요?`
+               :"삭제할까요?")) return;
+  if(editingBean===b.id){ endEdit(); clearBean(); }
+  tombstone(b.id);
+  DB.beans.splice(i,1); $("b_detail").hidden=true; renderBeans(); persist();
+};
+
+/* ---------- 생두 한 종을 펼쳐 보기 ----------
+   목록은 좁아서 몇 칸만 보인다. 적어 둔 것을 다시 보려면 여기로 온다. */
+const bEsc=s=>String(s==null?"":s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const BDET=[["origin","원산지"],["region","생산지역"],["farm","농장 · 농장주"],["alt","재배고도"],
+  ["var","품종"],["species","종"],["proc","가공"],["ferment","가공 상세"],["grade","등급"],
+  ["screen","스크린"],["harvest","수확시기"],["moist","수분 %"],["dens","밀도 g/L"],
+  ["aw","수분활성도 (aw)"],["decaf","디카페인 방식"],["seller","판매처"],
+  ["bought","구입일"],["qty","구입 중량 (g)"],["price","구입 가격 (원)"]];
+window.showBean=i=>{
+  const b=DB.beans[i], e=$("b_detail");
+  if(!b){ e.hidden=true; return; }
+  const used=usedG(b.id), q=+b.qty||0, up=unitPrice(b);
+  const nR=DB.roasts.filter(r=>r.beanId===b.id).length;
+  const r=sca105(b);
+  const cells=BDET.filter(([k])=>String(b[k]==null?"":b[k]).trim())
+    .map(([k,n])=>`<div><label>${n}</label><div>${bEsc(b[k])}</div></div>`).join("");
+  const url=safeUrl(b.url);
+  const cat=(typeof classifyText==="function"&&b.notes)?classifyText(b.notes).cats:[];
+  e.hidden=false;
+  e.innerHTML=`<p class="tagline" style="margin:0 0 8px">적어 둔 것 전부</p>
+    <div class="row" style="justify-content:space-between;align-items:flex-start;gap:10px">
+      <b style="font-size:17px">${bEsc(b.name)||"(이름 없음)"}</b>
+      <span class="row" style="gap:6px">
+        <button class="ghost sm" onclick="editBean(${i})">고치기</button>
+        <button class="ghost sm" onclick="document.getElementById('b_detail').hidden=true">닫기</button>
+      </span>
+    </div>
+    <p class="note" style="margin:6px 0 10px">
+      <span class="pill${r.n>=7?" ok":""}">생두 기록 ${r.n}/${r.all}</span>
+      ${r.miss.length?`빠진 것 — ${r.miss.join(" · ")}`:"SCA 105 항목을 다 채우셨습니다."}</p>
+    ${b.img?`<img src="${bEsc(b.img)}" class="thumb" alt="라벨 사진" style="margin-bottom:9px">`:""}
+    <div class="grid g5">${cells||'<div class="wide note">아직 적힌 것이 없습니다.</div>'}
+      ${url?`<div class="wide"><label>판매처 주소</label>
+        <div><a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a></div></div>`:""}
+      ${b.notes?`<div class="wide"><label>판매처 컵노트</label><div>${bEsc(b.notes)}
+        ${cat.length?`<br><span class="note">분류: ${cat.map(c=>`<span class="pill ok">${c.n}</span>`).join(" ")}</span>`:""}</div></div>`:""}
+      ${b.memo?`<div class="wide"><label>추가 정보</label><div>${bEsc(b.memo)}</div></div>`:""}
+    </div>
+    <p class="note" style="margin:10px 0 0">
+      이 생두로 볶은 기록 <b>${nR}건</b> · 쓴 양 <b>${used?used.toFixed(0):0}g</b>
+      ${q?` · 남은 양 <b>${(q-used).toFixed(0)}g</b>`:""}
+      ${up?` · g당 <b>${up.toFixed(1)}원</b>`:""}</p>
+    ${b.raw?`<details style="margin-top:8px"><summary class="note">붙여넣은 원문 보기</summary>
+      <p class="note" style="white-space:pre-wrap;margin:6px 0 0">${bEsc(b.raw)}</p></details>`:""}`;
+  e.scrollIntoView({block:"nearest"});
+};
 
 
 /* ---------- 기종별 열 매핑 ---------- */
@@ -1618,9 +1917,7 @@ async function ghDown(quiet){
     if(!j){ if(!quiet) $("y_msg").textContent="저장소에 아직 파일이 없습니다. 먼저 올리세요."; return; }
     const d=JSON.parse(b64dec(j.content||""));
     const nb=DB.beans.length, nr=DB.roasts.length;
-    DB.beans=mergeList(DB.beans,d.beans);
-    DB.roasts=mergeList(DB.roasts,d.roasts);
-    DB.profiles=mergeList(DB.profiles,d.profiles);
+    mergeAll(d);
     { const st=Object.assign({},d.settings||{}); delete st.g_token; delete st.syncKey;
       DB.settings=Object.assign({},st,DB.settings); }
     applySettings(); renderBeans(); renderRoasts(); renderProfiles(); renderWaiting(); stats(); persist();
@@ -1674,7 +1971,8 @@ function tokState(){
 function dbForExport(){
   const st=Object.assign({},DB.settings);
   delete st.g_token; delete st.syncKey;
-  return { beans:DB.beans, roasts:DB.roasts, profiles:DB.profiles, settings:st };
+  return { beans:DB.beans, roasts:DB.roasts, profiles:DB.profiles, settings:st,
+           trash:DB.trash||{}, link:DB.link||[] };
 }
 
 /* ---------- 기기 간 동기화 ----------
@@ -1690,15 +1988,47 @@ function mergeList(a,b){
   });
   return [...m.values()];
 }
+/* ---------- 지운 것을 지운 채로 두기 ----------
+   합치기는 id 기준 합집합이다. 그래서 「지웠다」는 사실을 따로 적어 두지 않으면
+   서버·다른 기기에는 그 항목이 아직 있고, 다음 동기화에서 그대로 돌아온다.
+   지운 생두가 계속 살아나던 것이 이 때문이다. 올리기가 「내려받아 합친 뒤 올리기」라
+   지운 것이 다시 올라가기까지 했다.
+   그래서 지울 때 무덤(id → 지운 시각)을 남기고, 합친 뒤 그것을 걷어낸다. */
+const TRASH_KEEP=400*24*3600*1000;        // 400일이면 가끔 켜는 기기도 한 번은 동기화된다
+function tombstone(id){
+  if(!id) return;
+  DB.trash=DB.trash||{};
+  DB.trash[id]=Date.now();
+}
+/* 지운 뒤에 다른 기기에서 더 고친 항목이면 되살린다 —
+   그쪽의 나중 작업을 여기서 죽이면 그게 더 큰 손실이다. */
+function applyTrash(list,trash){
+  if(!trash) return list;
+  return (list||[]).filter(x=>{ const t=trash[x.id]; return !(t&&(x.mt||0)<=t); });
+}
+function mergeTrash(a,b){
+  const m=Object.assign({},a||{});
+  for(const k in (b||{})) if(!m[k]||b[k]>m[k]) m[k]=b[k];
+  const cut=Date.now()-TRASH_KEEP;
+  for(const k in m) if(m[k]<cut) delete m[k];
+  return m;
+}
+/* 합치기는 세 군데(깃허브·서버·파일)에서 일어난다. 규칙이 갈리지 않게 한 곳에 둔다. */
+function mergeAll(d){
+  DB.trash=mergeTrash(DB.trash,d&&d.trash);
+  DB.beans=applyTrash(mergeList(DB.beans,d&&d.beans),DB.trash);
+  DB.roasts=applyTrash(mergeList(DB.roasts,d&&d.roasts),DB.trash);
+  DB.profiles=applyTrash(mergeList(DB.profiles,d&&d.profiles),DB.trash);
+  /* 연결 이력은 기기마다 따로 쌓이므로 합집합이 맞다 — 오래된 것부터 잘라 300건만 둔다 */
+  DB.link=mergeList(DB.link,d&&d.link).sort((a,b)=>(a.at||0)-(b.at||0)).slice(-300);
+}
 function syncKey(){ return ($("y_key").value||"").trim(); }
 /* 서버에서 받은 덩어리를 로컬에 합친다 — 올릴 때도 내려받을 때도 같은 규칙을 쓴다.
    id 기준 합집합, 같은 id면 마지막으로 고친 쪽(mt)이 남는다. */
 function mergeInto(d){
   if(!d) return null;
   const was={b:DB.beans.length,r:DB.roasts.length,p:DB.profiles.length};
-  DB.beans=mergeList(DB.beans,d.beans);
-  DB.roasts=mergeList(DB.roasts,d.roasts);
-  DB.profiles=mergeList(DB.profiles,d.profiles);
+  mergeAll(d);
   { const st=Object.assign({},d.settings||{}); delete st.g_token; delete st.syncKey;
     DB.settings=Object.assign({},st,DB.settings); }
   applySettings(); renderBeans(); renderRoasts(); renderProfiles(); renderWaiting(); stats();
@@ -1742,9 +2072,7 @@ async function syncDown(quiet){
     const d=await r.json();
     if(!d){ if(!quiet) $("y_msg").textContent="서버에 저장된 내용이 없습니다."; return; }
     const nb=DB.beans.length, nr=DB.roasts.length;
-    DB.beans=mergeList(DB.beans,d.beans);
-    DB.roasts=mergeList(DB.roasts,d.roasts);
-    DB.profiles=mergeList(DB.profiles,d.profiles);
+    mergeAll(d);
     { const st=Object.assign({},d.settings||{}); delete st.g_token; delete st.syncKey;
       DB.settings=Object.assign({},st,DB.settings); }
     applySettings(); renderBeans(); renderRoasts(); renderProfiles(); renderWaiting(); stats(); persist();
@@ -1885,6 +2213,10 @@ window.bkRestore=async k=>{
         {at:Date.now(),db:JSON.parse(JSON.stringify(DB))}); }catch(e){}
   DB.beans=d.beans||[]; DB.roasts=d.roasts||[]; DB.profiles=d.profiles||[];
   DB.settings=Object.assign({},d.settings||{},{syncKey:DB.settings.syncKey});  // 키는 이 기기 것을 지킨다
+  /* 되돌리기는 「그때 있던 것을 되살리는 일」이다. 무덤은 그대로 두되(다른 기기에서 지운 것은
+     계속 지운 채로), 되살아난 것은 무덤보다 나중으로 도장을 찍어 다시 죽지 않게 한다. */
+  DB.trash=mergeTrash(DB.trash,d.trash);
+  [...DB.beans,...DB.roasts,...DB.profiles].forEach(x=>{ if(DB.trash[x.id]) stamp(x); });
   persist(); renderBeans(); renderRoasts(); renderProfiles(); renderWaiting(); stats(); bkRender();
   alert("되돌렸습니다.");
 };
@@ -1920,7 +2252,7 @@ async function restore(){
     const d=await idbGet("db");
     if(d&&(d.beans||d.roasts)){
       DB.beans=d.beans||[]; DB.roasts=d.roasts||[]; DB.profiles=d.profiles||[];
-      DB.settings=d.settings||{};
+      DB.settings=d.settings||{}; DB.trash=d.trash||{}; DB.link=d.link||[];
       $("savestate").textContent=`불러옴 · 생두 ${DB.beans.length} · 로스팅 ${DB.roasts.length}`;
       $("savestate").className="pill ok";
     }else{
@@ -2251,7 +2583,8 @@ window.archProfile=i=>{
   const p=DB.profiles[i]; if(!p) return;
   p.archived=!p.archived; p.mt=Date.now(); renderProfiles(); persist();
 };
-window.delProfile=i=>{ if(confirm("삭제할까요? 기록은 남습니다.")){ DB.profiles.splice(i,1); renderProfiles(); persist(); } };
+window.delProfile=i=>{ if(confirm("삭제할까요? 기록은 남습니다.")){
+  tombstone((DB.profiles[i]||{}).id); DB.profiles.splice(i,1); renderProfiles(); persist(); } };
 
 ["pf_sort","pf_arch","pf_bean","pf_country","pf_var"].forEach(id=>{
   const e=$(id); if(e) e.addEventListener("change",renderProfiles); });
@@ -4233,15 +4566,24 @@ function ikCoach(){
         out.notes.push({lv:"ok",t:`${bean.name} 기준 총시간 적정`,
           d:`목표 ${fmt(Math.round(tg.t.dur))} · 계획 ${fmt(planDur)} — 허용폭 안입니다.`});
     }
-    // 지금까지의 초반 열량이 이 생두 목표에 맞나 (건조 구간을 지난 뒤에만 말한다)
-    if(planDur>0&&t>=planDur*0.40){
-      const at40=curveAt(c,planDur*0.40), pre=c[0][1];
-      const rE=(at40-pre)/((planDur*0.40)/60);
-      const d=rE-tg.t.rEarly;
-      if(Math.abs(d)>1.6)
-        out.notes.push({lv:"warn",t:`초반 열량 ${rE.toFixed(1)}℃/분 (목표 ${tg.t.rEarly.toFixed(1)})`,
-          d:d<0?"이 생두에는 초반이 약했습니다 — 속이 덜 익을 수 있습니다."
-               :"이 생두에는 초반이 셌습니다 — 표면이 탈 수 있습니다."});
+    /* 지금까지의 초반 열량이 이 생두 목표에 맞나 (건조 구간을 지난 뒤에만 말한다)
+       목표값은 profChar 와 같은 정의다 — <b>투입 온도</b>에서 총시간 40% 지점까지의 기울기.
+       그런데 여기서는 곡선의 첫 표본(c[0])을 기준으로 삼고 있었다. 그건 연결한 순간,
+       보통 <b>찬 머신</b>이다. 그래서 예열 상승분이 통째로 얹혔고, 시간축도 머신 시계
+       그대로라 40% 지점이 투입 전으로 갔다. 목표 14℃/분 짜리 배치가 60℃/분으로 뜬 것이
+       이 때문이다 — 잰 것이 로스팅이 아니라 예열이었다.
+       투입 시각을 모르면(ikRoastT0 이 없으면) 잴 수가 없으므로 아예 말하지 않는다. */
+    if(planDur>0&&ikRoastT0!=null&&t>=planDur*0.40){
+      const at40=curveAt(c,z+planDur*0.40), pre=curveAt(c,z);
+      if(at40!=null&&pre!=null){
+        const rE=(at40-pre)/((planDur*0.40)/60);
+        const d=rE-tg.t.rEarly;
+        if(Math.abs(d)>1.6)
+          out.notes.push({lv:"warn",t:`초반 열량 ${rE.toFixed(1)}℃/분 (목표 ${tg.t.rEarly.toFixed(1)})`,
+            d:(d<0?"이 생두에는 초반이 약했습니다 — 속이 덜 익을 수 있습니다."
+                  :"이 생두에는 초반이 셌습니다 — 표면이 탈 수 있습니다.")
+              +` <span class="note">투입 ${pre.toFixed(0)}℃ → ${fmt(Math.round(planDur*0.40))} 지점 ${at40.toFixed(0)}℃</span>`});
+      }
     }
     // 계획 배출온도가 목표 배전도 밴드에 있나
     if(planDrop!=null){
@@ -4288,22 +4630,37 @@ function ikCoach(){
   return out;
 }
 /* 팬(%)과 히터(%)를 한 축에 그린다. 온도가 왜 그렇게 움직였는지는 여기 있다. */
-function powerSvg(fan,heat,tMaxIn){
+/* 팬·히터. 온도·승온율 그래프와 <b>같은 규칙으로 공백에서 끊는다.</b>
+   예전에는 끊긴 구간을 직선으로 이어 그렸다. 값을 지어낸 것은 아니지만 —
+   그 사이 표본은 애초에 들어오지 않았다 — 히터가 그동안 일정했던 것처럼 보였다.
+   모르는 구간은 모르는 채로 보여야 한다. */
+function powerSvg(fan,heat,tMaxIn,gaps){
   if((!fan||fan.length<3)&&(!heat||heat.length<3)) return "";
   const W=640,H=120,L=36,R=8,T=8,B=14;
   const all=(fan||[]).concat(heat||[]);
   const tMax=tMaxIn||Math.max(...all.map(p=>p[0]))||1;
   const hi=Math.max(100,...all.map(p=>p[1]));
   const X=t=>L+(W-L-R)*t/tMax, Y=v=>H-B-(H-T-B)*v/hi;
-  const path=c=>(c&&c.length>1)?c.map((p,i)=>(i?"L":"M")+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1)).join(" "):"";
+  const path=c=>{
+    if(!c||c.length<2) return "";
+    let d="",prev=null;
+    c.forEach(p=>{ const cmd=(prev==null||p[0]-prev>15)?"M":"L";
+      d+=(d?" ":"")+cmd+X(p[0]).toFixed(1)+" "+Y(p[1]).toFixed(1); prev=p[0]; });
+    return d; };
   const line=(c,col)=>path(c)?`<path d="${path(c)}" fill="none" stroke="${col}" stroke-width="1.5"/>`:"";
+  const band=(gaps||[]).filter(g=>g[1]>g[0]).map(g=>
+    `<rect x="${X(Math.max(0,g[0])).toFixed(1)}" y="${T}"
+       width="${Math.max(1,X(g[1])-X(Math.max(0,g[0]))).toFixed(1)}" height="${H-T-B}"
+       fill="var(--rule)" opacity=".45"/>`).join("");
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:#fff;
       border:1px solid var(--rule);border-top:0" role="img" aria-label="팬과 히터">
+    ${band}
     <text x="4" y="${(Y(hi)+9).toFixed(1)}" font-size="10" fill="var(--muted)">${hi}</text>
     <text x="4" y="${(Y(0)).toFixed(1)}" font-size="10" fill="var(--muted)">0</text>
     ${line(fan,"var(--setpoint)")}${line(heat,"var(--actual)")}
     <text x="${L+4}" y="${T+9}" font-size="10" fill="var(--muted)">
-      <tspan fill="var(--setpoint)">━ 팬</tspan>  <tspan fill="var(--actual)">━ 히터</tspan>  %</text>
+      <tspan fill="var(--setpoint)">━ 팬</tspan>  <tspan fill="var(--actual)">━ 히터</tspan>  %
+      ${(gaps||[]).length?'<tspan fill="var(--muted)">  · 회색 띠 = 끊겨서 못 받은 구간</tspan>':""}</text>
   </svg>`;
 }
 /* 이 프로파일로 볶은 배치들의 실측 곡선 */
@@ -4928,6 +5285,19 @@ function selfTest(){
                    :`공백 직후 표본에서 값을 내지 않음 (총 ${rs.length}점)`);
   });
   chk("곡선 보간",()=>ok("곡선 보간",curveAt([[0,100],[100,200]],50)===150,"중간값 150℃"));
+  /* 초반 열량은 「투입 온도 기준」이어야 한다. 곡선 첫 표본(연결한 순간 = 찬 머신)을
+     기준으로 삼으면 예열 상승분이 통째로 얹혀 목표의 네 배 같은 값이 나온다.
+     실제로 목표 14.3 짜리 배치에 60.8℃/분 이 떴다. 다시는 그러지 않게 여기서 잡는다. */
+  chk("초반 열량 기준점",()=>{
+    const c=[], z=130, planDur=300;
+    for(let t=0;t<=120;t+=5) c.push([t,25+(146-25)*t/120]);      // 예열 25→146℃
+    c.push([z,146]);
+    for(let t=10;t<=planDur;t+=5) c.push([z+t,146+14.3*(t/60)]); // 투입 뒤 14.3℃/분
+    const rE=(curveAt(c,z+planDur*0.40)-curveAt(c,z))/((planDur*0.40)/60);
+    ok("초반 열량 기준점",Math.abs(rE-14.3)<0.3,
+      `투입 온도 기준 ${rE.toFixed(1)}℃/분 (곡선 첫 표본 기준이면 `
+      +`${((curveAt(c,planDur*0.40)-c[0][1])/((planDur*0.40)/60)).toFixed(1)} 이 나온다)`);
+  });
   chk("배전도 판정",()=>ok("배전도 판정",
     dropBand(203).level==="light"||dropBand(203).level==="mlight",
     `203℃ → ${LVNAME[dropBand(203).level]}`));
@@ -4983,6 +5353,12 @@ function selfTest(){
     ok("SCA 105 기록",
       a.n===a.all&&a.miss.length===0&&b.n===1&&b.miss.length===a.all-1&&c.n===0,
       `다 채우면 ${a.n}/${a.all} · 하나만 ${b.n}/${b.all} · 빈 생두 ${c.n}/${c.all}`);
+  });
+  chk("마이크 상태",()=>{
+    const a=popHealth(69,300), b=popHealth(3.5,300), c=popHealth(7,300), d=popHealth(69,30);
+    ok("마이크 상태",
+      a&&a.k==="ok"&&b&&b.k==="bad"&&c&&c.k==="weak"&&d===null&&/20~30cm/.test(b.d),
+      `69배→${a&&a.k} · 7배→${c&&c.k} · 3.5배→${b&&b.k} · 30초→아직 말하지 않음`);
   });
   chk("배치 나누기",()=>{
     /* 한 배치짜리는 나누면 안 되고, 두 배치짜리는 갈라야 한다 */
@@ -5496,11 +5872,15 @@ window.roastReport=id=>{
     (r.gaps||[]).forEach(g=>marks.push({gap:true,t:g[0],t2:g[1]}));
     (r.tl||[]).filter(x=>x.lv==="warn").forEach(x=>
       marks.push({t:x.t,label:"!",color:"var(--actual)"}));
+    /* 머신이 준 승온율과 팬·히터도 함께 담아 두었다. 안 그리면 담아 둔 뜻이 없다 —
+       베이킹이 곡선 탓인지 머신 한계인지는 그때 히터가 몇 %였는지를 봐야 갈린다. */
     h+=(prof&&prof.pts?curveSvg(prof.pts,[r.act],marks):curveSvg(r.act,[],marks))
-      +rorSvg(rorSeries(r.act,30));
+      +rorSvg(rorSeries(r.act,30),null,r.mror)
+      +powerSvg(r.fan,r.heat,null,r.gaps);
     h+=`<p class="note" style="margin-top:5px">
       ${prof?'<span style="color:var(--setpoint)">━</span> 계획 · ':""}
-      <span style="color:var(--actual)">━</span> 실측 · 세로선은 CC·1차 크랙</p>`;
+      <span style="color:var(--actual)">━</span> 실측 · 세로선은 CC·1차 크랙
+      ${(r.mror&&r.mror.length)?' · 승온율의 <span style="color:var(--setpoint)">┄</span> 은 머신이 준 값':""}</p>`;
   }else{
     h+=`<p class="note">실측 곡선이 없는 배치입니다. 로그를 올리거나 머신에 직접 연결하면 곡선이 담깁니다.</p>`;
   }
@@ -5668,7 +6048,8 @@ function renderRoasts(){
         <button class="ghost sm" onclick="delRoast(${i})">삭제</button></td></tr>`;
     }).join(""):`<tr><td colspan="11" style="color:var(--muted)">아직 없습니다</td></tr>`);
 }
-window.delRoast=i=>{ if(confirm("삭제할까요?")){ DB.roasts.splice(i,1); renderRoasts(); renderWaiting(); persist(); } };
+window.delRoast=i=>{ if(confirm("삭제할까요?")){
+  tombstone((DB.roasts[i]||{}).id); DB.roasts.splice(i,1); renderRoasts(); renderWaiting(); persist(); } };
 
 /* ---------- 데이터 ---------- */
 $("d_save").onclick=()=>{
@@ -5683,12 +6064,15 @@ $("d_load").onclick=()=>$("d_file").click();
 $("d_file").onchange=async e=>{
   try{
     const d=JSON.parse(await e.target.files[0].text());
+    /* 파일에도 무덤이 실려 있다. 먼저 합쳐야 지운 것이 파일로 되살아나지 않는다. */
+    DB.trash=mergeTrash(DB.trash,d.trash);
+    const dead=x=>{ const t=DB.trash[x.id]; return t&&(x.mt||0)<=t; };
     const have=new Set(DB.beans.map(x=>x.id));
-    (d.beans||[]).forEach(x=>{if(!have.has(x.id))DB.beans.push(x)});
+    (d.beans||[]).forEach(x=>{if(!have.has(x.id)&&!dead(x))DB.beans.push(x)});
     const hr=new Set(DB.roasts.map(x=>x.id));
-    (d.roasts||[]).forEach(x=>{if(!hr.has(x.id))DB.roasts.push(x)});
+    (d.roasts||[]).forEach(x=>{if(!hr.has(x.id)&&!dead(x))DB.roasts.push(x)});
     const hp=new Set(DB.profiles.map(x=>x.id));
-    (d.profiles||[]).forEach(x=>{if(!hp.has(x.id))DB.profiles.push(x)});
+    (d.profiles||[]).forEach(x=>{if(!hp.has(x.id)&&!dead(x))DB.profiles.push(x)});
     renderProfiles();
     if(d.settings){ const st=Object.assign({},d.settings);
       delete st.g_token; delete st.syncKey;
@@ -6583,7 +6967,32 @@ let ikRoastT0=null, ikLastSt=null;
 /* 연결 품질 — 웹 블루투스는 「연결된」 기기의 전파 세기(RSSI)를 읽을 수 없다.
    그래서 우리가 실제로 겪는 것으로 대신 잰다: 응답 지연, 놓친 요청, 끊긴 횟수.
    전파가 약해지면 지연이 먼저 늘고 그다음 응답이 빠지므로, 실용적으로는 RSSI 보다 낫다. */
-let ikQ={lat:[], asked:0, got:0, drops:0, reAt:0, reTry:0, lastAsk:0};
+let ikQ={lat:[], asked:0, got:0, drops:0, reAt:0, reTry:0, lastAsk:0, lastRx:0, upAt:0, log:[]};
+/* ---------- 끊긴 이유를 좁힌다 ----------
+   웹 블루투스는 끊긴 이유를 알려주지 않는다. 그래서 「끊기기 직전에 무슨 일이 있었나」로 가른다.
+   전파 문제면 응답이 먼저 늦어지다 빠지고, 그 뒤에 링크가 죽는다(감독 시간 초과).
+   호스트 문제(USB 노이즈·드라이버·전원 관리)면 직전까지 멀쩡하다가 한순간에 끊긴다.
+   둘은 대처가 완전히 다르므로 — 하나는 놓는 자리, 하나는 컴퓨터 설정 — 반드시 갈라야 한다. */
+function ikDropReason(){
+  const now=Date.now();
+  const silent=ikQ.lastRx?now-ikQ.lastRx:null;          // 마지막 응답 이후 침묵한 시간
+  const up=ikQ.upAt?now-ikQ.upAt:null;                  // 이번 연결이 버틴 시간
+  const avg=ikQ.lat.length?ikQ.lat.reduce((a,b)=>a+b,0)/ikQ.lat.length:null;
+  const loss=ikQ.asked?Math.max(0,1-ikQ.got/ikQ.asked):0;
+  let verdict, why;
+  if(silent==null){ verdict="알 수 없음"; why="응답을 한 번도 못 받은 채 끊겼습니다."; }
+  else if(silent>=2500){
+    verdict="전파 쪽";
+    why=`끊기기 전 ${(silent/1000).toFixed(1)}초 동안 응답이 없었습니다 — 링크가 먼저 나빠졌습니다. `
+       +`머신과 컴퓨터 사이를 막는 금속·사람, 2.4GHz 간섭(공유기·전자레인지·무선 동글)을 의심하세요.`;
+  }else{
+    verdict="컴퓨터 쪽";
+    why=`끊기기 ${(silent/1000).toFixed(1)}초 전까지 응답이 정상이었는데 한순간에 끊겼습니다 — `
+       +`전파가 약해서라기보다 블루투스 어댑터가 잠깐 죽은 쪽입니다. `
+       +`USB 3.0 기기를 옆에서 치우고, 장치 관리자에서 어댑터의 절전(“전원을 절약하기 위해…”)을 끄세요.`;
+  }
+  return {silent, up, avg, loss, verdict, why};
+}
 let ikGaps=[];                        // 표본이 비어 있는 구간 [[t1,t2],…]
 let ikTL=[], ikTLLast={};             // 사건 타임라인 — 복기용
 function ikEvent(kind,title,detail,lv,key){
@@ -6624,6 +7033,277 @@ const ikLog=(s)=>{
    폰이 올리면 PC에서 앱을 열 때 같이 내려와 파일로 뽑을 수 있다.
    저장이 잦으면 동기화가 시끄러워지므로 10초에 한 번으로 묶는다. */
 let ikSyncAt=0;
+/* 끊김만 추린 요약. 「왜 끊기나」를 남에게 물을 때 이 글 하나면 된다. */
+/* ---------- 연결 이력 ----------
+   「처음엔 안 그랬는데 요즘 끊긴다」는 느낌은 기록이 없으면 확인할 길이 없다.
+   사람의 기억은 나빠진 쪽을 과장한다 — 잘 되던 날은 세지 않기 때문이다.
+   그래서 연결할 때마다 한 줄씩 남긴다. 몇 주 쌓이면 노후화인지 그날의 일인지 스스로 갈린다.
+   곡선·기록과 같은 저장소에 두므로 기기 간 동기화·내보내기에 그대로 실린다. */
+let ikSess=null;
+function ikSessStart(){
+  DB.link=DB.link||[];
+  ikSess=stamp({id:uid(), at:Date.now(), dev:(ikDev&&ikDev.name)||"",
+                mins:0, drops:0, avg:null, loss:0, radio:0, host:0});
+  DB.link.push(ikSess);
+  if(DB.link.length>300) DB.link.shift();
+  persist(); ikLinkRender();
+}
+function ikSessUpdate(){
+  if(!ikSess) return;
+  ikSess.mins=Math.round((Date.now()-ikSess.at)/60000);
+  ikSess.avg=ikQ.lat.length?Math.round(ikQ.lat.reduce((a,b)=>a+b,0)/ikQ.lat.length):null;
+  ikSess.loss=ikQ.asked?+Math.max(0,1-ikQ.got/ikQ.asked).toFixed(3):0;
+  ikSess.drops=ikQ.log.length;
+  ikSess.radio=ikQ.log.filter(x=>x.verdict==="전파 쪽").length;
+  ikSess.host=ikQ.log.filter(x=>x.verdict==="컴퓨터 쪽").length;
+  stamp(ikSess); persist(); ikLinkRender();
+}
+/* 시간당 끊김으로 견준다. 짧게 붙였다 만 날과 세 시간 붙여 둔 날을 그냥 견주면
+   오래 쓴 날이 늘 나빠 보인다. 10분 미만은 표본으로 치지 않는다. */
+function ikLinkTrend(){
+  const L=(DB.link||[]).filter(x=>x.mins>=10);
+  if(L.length<6) return {n:L.length, say:null};
+  const rate=x=>x.drops/(x.mins/60);
+  const k=Math.max(3,Math.floor(L.length/3));
+  const old=L.slice(0,k), now=L.slice(-k);
+  const ro=old.reduce((a,b)=>a+rate(b),0)/k, rn=now.reduce((a,b)=>a+rate(b),0)/k;
+  const ao=old.map(x=>x.avg).filter(x=>x!=null), an=now.map(x=>x.avg).filter(x=>x!=null);
+  const mo=ao.length?ao.reduce((a,b)=>a+b,0)/ao.length:null;
+  const mn=an.length?an.reduce((a,b)=>a+b,0)/an.length:null;
+  return {n:L.length, ro, rn, mo, mn,
+    worse: rn>ro+0.5 || (mo!=null&&mn!=null&&mn>mo*1.4)};
+}
+function ikLinkRender(){
+  const e=$("ik_linktable"); if(!e) return;
+  const L=(DB.link||[]).slice().reverse();
+  if(!L.length){
+    e.innerHTML=`<tr><td style="color:var(--muted)">아직 없습니다 — 연결하면 한 줄씩 쌓입니다</td></tr>`;
+    $("ik_linksay").innerHTML=`<span class="pill">표본 0/6</span>
+      10분 넘게 붙인 연결이 여섯 번 쌓이면 <b>나빠지고 있는지</b>를 견줘 드립니다.`;
+    return;
+  }
+  e.innerHTML=`<tr><th>연결한 날</th><th class="num">유지</th><th class="num">끊김</th>
+    <th class="num">시간당</th><th class="num">평균 응답</th><th class="num">놓침</th><th>갈래</th></tr>`
+    +L.slice(0,20).map(x=>{
+      const per=x.mins>=10?(x.drops/(x.mins/60)).toFixed(1):"–";
+      return `<tr><td>${new Date(x.at).toISOString().slice(0,16).replace("T"," ")}</td>
+      <td class="num">${x.mins}분</td>
+      <td class="num">${x.drops?`<span class="pill warn">${x.drops}</span>`:"0"}</td>
+      <td class="num">${per}</td>
+      <td class="num">${x.avg!=null?x.avg+"ms":"–"}</td>
+      <td class="num">${Math.round((x.loss||0)*100)}%</td>
+      <td class="note">${x.radio?`전파 ${x.radio}`:""}${x.radio&&x.host?" · ":""}${x.host?`컴퓨터 ${x.host}`:""}</td></tr>`;
+    }).join("");
+  const t=ikLinkTrend();
+  $("ik_linksay").innerHTML = t.say===null&&t.n<6
+    ? `<span class="pill">표본 ${t.n}/6</span> 10분 넘게 붙인 연결이 여섯 번 쌓이면
+       <b>나빠지고 있는지</b>를 견줘 드립니다. 그때까지는 판단하지 않습니다.`
+    : (t.worse
+      ? `<span class="pill warn">나빠지는 중</span> 초기 ${t.ro.toFixed(1)}회/시간 →
+         최근 <b>${t.rn.toFixed(1)}회/시간</b>${t.mo!=null&&t.mn!=null
+           ?` · 평균 응답 ${Math.round(t.mo)}ms → <b>${Math.round(t.mn)}ms</b>`:""}.
+         응답이 함께 느려졌다면 <b>전파나 머신 쪽</b>이 실제로 나빠진 것입니다.
+         응답은 그대로인데 끊김만 늘었다면 <b>컴퓨터·환경</b> 쪽을 보세요.`
+      : `<span class="pill ok">비슷함</span> 초기 ${t.ro.toFixed(1)}회/시간 →
+         최근 ${t.rn.toFixed(1)}회/시간. <b>노후화로 볼 근거는 아직 없습니다</b> —
+         나빠졌다는 느낌은 기억 쪽일 수 있습니다.`);
+}
+/* ---------- 감시 모드 ----------
+   로스팅과 떼어 놓고 링크만 오래 지켜본다. 볶는 동안에는 변수가 너무 많다 —
+   히터·팬·금속 몸체·사람의 움직임이 한꺼번에 바뀌므로 무엇이 끊었는지 가릴 수가 없다.
+   가만히 붙여 두고 끊길 때까지 기다리면, 끊긴 그 순간에 무엇이 있었는지만 남는다.
+
+   브라우저는 다른 앱이 무엇을 하는지 볼 수 없다. 그래서 자동으로 잡을 수 있는 것만 잡고
+   (창 가려짐·포커스·네트워크 추정치·전원·긴 멈춤), 나머지는 사용자가 직접 표시하게 한다.
+   추측해서 채우는 것보다 「모르는 자리」로 비워 두는 편이 진단에 낫다. */
+let ikWatch={on:false, t0:0, rows:[], hb:null, drift:null, po:null, lock:null, last:{}};
+const IKWMAX=600;
+function ikWatchRow(kind,text){
+  if(!ikWatch.on) return;
+  const at=Date.now();
+  ikWatch.rows.push({at, up:ikQ.upAt?at-ikQ.upAt:null, kind, text});
+  if(ikWatch.rows.length>IKWMAX) ikWatch.rows.shift();
+  ikWatchRender();
+}
+const IKWICON={link:"■", app:"·", net:"~", power:"⚡", stall:"!", mark:"▶", beat:" "};
+function ikWatchRender(){
+  const e=$("ik_watchlog"); if(!e) return;
+  const p=n=>String(n).padStart(2,"0");
+  e.textContent=ikWatch.rows.slice().reverse().map(r=>{
+    const d=new Date(r.at);
+    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())} `
+      +`${IKWICON[r.kind]||"·"} ${r.text}`;
+  }).join("\n");
+  const drops=ikWatch.rows.filter(r=>r.kind==="link"&&/끊김/.test(r.text)).length;
+  $("ik_watchstat").innerHTML=ikWatch.on
+    ? `<span class="pill ok">감시 중</span> ${Math.round((Date.now()-ikWatch.t0)/60000)}분 ·
+       기록 ${ikWatch.rows.length}줄 · 끊김 ${drops}회`
+    : `<span class="pill">멈춤</span> 기록 ${ikWatch.rows.length}줄`;
+}
+/* 네트워크는 「이 컴퓨터가 실제로 쓰는 양」이 아니라 브라우저의 추정치다.
+   그래도 Wi-Fi 가 갑자기 나빠지는 순간은 대체로 여기에 먼저 나타난다. */
+function ikNetNow(){
+  const c=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+  if(!c) return null;
+  return {type:c.effectiveType||c.type||"?", down:c.downlink||null, rtt:c.rtt||null};
+}
+function ikNetText(n){
+  return n?`${n.type}${n.down?` · ${n.down}Mbps`:""}${n.rtt?` · 왕복 ${n.rtt}ms`:""}`:"알 수 없음";
+}
+async function ikWatchStart(){
+  if(ikWatch.on) return;
+  ikWatch.on=true; ikWatch.t0=Date.now(); ikWatch.last={};
+  $("ik_watchstart").textContent="감시 멈춤";
+  ikWatchRow("mark",`감시 시작 — ${navigator.userAgent.replace(/^Mozilla\/[\d.]+ /,"")}`);
+  ikWatchRow("net","네트워크 "+ikNetText(ikNetNow()));
+  if(!ikLive()) ikWatchRow("link","아직 연결되지 않았습니다 — 위에서 「머신 연결」을 누르세요");
+  else ikWatchRow("link","연결된 상태로 감시를 시작합니다");
+
+  /* ① 창이 가려지거나 포커스를 잃는 순간 — 다른 일을 시작했다는 가장 확실한 신호다 */
+  ikWatch.h1=()=>ikWatchRow("app",document.hidden?"이 창이 가려졌습니다":"이 창이 다시 보입니다");
+  document.addEventListener("visibilitychange",ikWatch.h1);
+  ikWatch.h2=()=>ikWatchRow("app","다른 창으로 갔습니다");
+  ikWatch.h3=()=>ikWatchRow("app","이 창으로 돌아왔습니다");
+  addEventListener("blur",ikWatch.h2); addEventListener("focus",ikWatch.h3);
+
+  /* 창을 옮기거나 다른 앱을 쓰는 것으로는 링크가 흔들리지 않는다 — 링크는 운영체제가 쥐고 있다.
+     다만 브라우저가 배경 탭을 <b>얼리거나 버리면</b> 그때는 연결이 실제로 끊긴다.
+     이건 네이티브 앱에는 없고 브라우저에만 있는 위험이라, 따로 잡아 둔다. */
+  ikWatch.h6=()=>ikWatchRow("app","브라우저가 이 페이지를 얼렸습니다 — 이 경우 연결이 끊깁니다");
+  ikWatch.h7=()=>ikWatchRow("app","페이지가 다시 깨어났습니다");
+  document.addEventListener("freeze",ikWatch.h6);
+  document.addEventListener("resume",ikWatch.h7);
+  ikWatch.h8=()=>ikWatchRow("app","페이지를 떠납니다(새로 고침·닫기) — 연결은 여기서 끝납니다");
+  addEventListener("pagehide",ikWatch.h8);
+
+  /* ② 네트워크 상태가 바뀌는 순간 */
+  const cn=navigator.connection;
+  if(cn){ ikWatch.h4=()=>ikWatchRow("net","네트워크 바뀜 — "+ikNetText(ikNetNow()));
+    cn.addEventListener("change",ikWatch.h4); }
+
+  /* ③ 전원 — 배터리로 넘어가면 윈도우가 어댑터 절전을 시작한다. 끊김의 흔한 원인이다. */
+  try{
+    if(navigator.getBattery){
+      const b=await navigator.getBattery();
+      ikWatch.bat=b;
+      ikWatchRow("power",`전원 ${b.charging?"연결됨(충전 중)":"배터리"} · ${Math.round(b.level*100)}%`);
+      ikWatch.h5=()=>ikWatchRow("power",b.charging
+        ? "전원이 연결됐습니다"
+        : "전원이 빠졌습니다 — 배터리로 넘어가면 어댑터 절전이 켜질 수 있습니다");
+      b.addEventListener("chargingchange",ikWatch.h5);
+    }
+  }catch(e){}
+
+  /* ④ 이 컴퓨터가 버거워지는 순간. 긴 작업이 몰리면 알림 처리도 밀린다. */
+  try{
+    ikWatch.po=new PerformanceObserver(list=>{
+      const long=list.getEntries().filter(x=>x.duration>=200);
+      if(long.length){
+        const ms=Math.round(Math.max(...long.map(x=>x.duration)));
+        if(Date.now()-(ikWatch.last.longAt||0)>10000){
+          ikWatch.last.longAt=Date.now();
+          ikWatchRow("stall",`이 창이 ${ms}ms 동안 멈췄습니다 (컴퓨터가 바빴습니다)`);
+        }
+      }
+    });
+    ikWatch.po.observe({entryTypes:["longtask"]});
+  }catch(e){}
+
+  /* ⑤ 시계 밀림 — 창이 보이는데도 1초 타이머가 늦으면 컴퓨터 전체가 눌린 것이다.
+     가려져 있을 때는 브라우저가 일부러 늦추므로 세지 않는다. */
+  let exp=Date.now()+1000;
+  ikWatch.drift=setInterval(()=>{
+    const now=Date.now(), late=now-exp; exp=now+1000;
+    if(late>3000&&!document.hidden&&Date.now()-(ikWatch.last.driftAt||0)>10000){
+      ikWatch.last.driftAt=now;
+      ikWatchRow("stall",`시계가 ${(late/1000).toFixed(1)}초 밀렸습니다 — 컴퓨터가 크게 바빴습니다`);
+    }
+  },1000);
+
+  /* ⑥ 1분마다 한 줄 — 아무 일도 없었다는 것도 기록이다.
+     끊긴 시각 앞뒤로 응답이 어떻게 변했는지는 이 줄들로만 되짚을 수 있다. */
+  ikWatch.hb=setInterval(()=>{
+    ikSessUpdate();
+    const avg=ikQ.lat.length?Math.round(ikQ.lat.reduce((a,b)=>a+b,0)/ikQ.lat.length):null;
+    const loss=ikQ.asked?Math.round(Math.max(0,1-ikQ.got/ikQ.asked)*100):0;
+    ikWatchRow("beat",ikLive()
+      ? `연결 유지 ${Math.round((Date.now()-(ikQ.upAt||Date.now()))/60000)}분`
+        +`${avg!=null?` · 평균 응답 ${avg}ms`:""} · 놓침 ${loss}% · ${ikNetText(ikNetNow())}`
+      : "끊긴 채로 기다리는 중");
+  },60000);
+  ikWatchRender();
+}
+function ikWatchStop(){
+  if(!ikWatch.on) return;
+  ikWatchRow("mark","감시 멈춤");
+  ikWatch.on=false;
+  document.removeEventListener("visibilitychange",ikWatch.h1);
+  removeEventListener("blur",ikWatch.h2); removeEventListener("focus",ikWatch.h3);
+  document.removeEventListener("freeze",ikWatch.h6);
+  document.removeEventListener("resume",ikWatch.h7);
+  removeEventListener("pagehide",ikWatch.h8);
+  if(navigator.connection&&ikWatch.h4) navigator.connection.removeEventListener("change",ikWatch.h4);
+  if(ikWatch.bat&&ikWatch.h5) ikWatch.bat.removeEventListener("chargingchange",ikWatch.h5);
+  try{ ikWatch.po&&ikWatch.po.disconnect(); }catch(e){}
+  clearInterval(ikWatch.drift); clearInterval(ikWatch.hb);
+  $("ik_watchstart").textContent="감시 시작";
+  ikWatchRender();
+}
+/* 화면이 꺼지거나 절전에 들어가면 그것 자체가 끊는 원인이 된다.
+   감시하는 동안만이라도 막아 둔다 — 다만 이걸 켜면 「절전 때문이었나」는 시험할 수 없다. */
+async function ikWakeLock(on){
+  try{
+    if(on){ ikWatch.lock=await navigator.wakeLock.request("screen");
+      ikWatch.lock.addEventListener("release",()=>ikWatchRow("power","화면 꺼짐 방지가 풀렸습니다"));
+      ikWatchRow("power","화면 꺼짐 방지를 켰습니다"); }
+    else if(ikWatch.lock){ await ikWatch.lock.release(); ikWatch.lock=null;
+      ikWatchRow("power","화면 꺼짐 방지를 껐습니다"); }
+  }catch(e){ ikWatchRow("power","화면 꺼짐 방지를 쓸 수 없습니다: "+e.message); }
+}
+/* 감시 기록 전체 — 끊김 진단과 함께 이것만 보내면 된다 */
+function ikWatchReport(){
+  const NL="\n";
+  const p=n=>String(n).padStart(2,"0");
+  const head=`로스트포인트 감시 기록 — ${new Date().toISOString().slice(0,16).replace("T"," ")}`+NL
+    +`앱 v${typeof APP_V!=="undefined"?APP_V:"?"} · ${navigator.userAgent}`+NL
+    +`기기: ${(ikDev&&ikDev.name)||"(연결한 적 없음)"}`+NL
+    +`감시 ${ikWatch.t0?Math.round((Date.now()-ikWatch.t0)/60000):0}분 · 기록 ${ikWatch.rows.length}줄`+NL;
+  if(!ikWatch.rows.length) return head+NL+"기록이 없습니다.";
+  const body=ikWatch.rows.map(r=>{
+    const d=new Date(r.at);
+    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())} ${IKWICON[r.kind]||"·"} ${r.text}`;
+  }).join(NL);
+  return head+NL+body+NL+NL+ikDropReport();
+}
+function ikDropReport(){
+  const L=ikQ.log, NL="\n";
+  const head=`로스트포인트 끊김 진단 — ${new Date().toISOString().slice(0,16).replace("T"," ")}`+NL
+    +`앱 v${typeof APP_V!=="undefined"?APP_V:"?"} · ${navigator.userAgent}`+NL
+    +`기기: ${(ikDev&&ikDev.name)||"(연결한 적 없음)"}`+NL;
+  if(!L.length) return head+NL+"아직 끊긴 적이 없습니다.";
+  const rows=L.map((x,i)=>{
+    const bits=[
+      x.roastT!=null?`로스팅 ${fmt(x.roastT)} 지점`:"로스팅 전",
+      x.verdict,
+      x.up!=null?`버팀 ${Math.round(x.up/1000)}초`:null,
+      x.silent!=null?`마지막 응답 뒤 ${(x.silent/1000).toFixed(1)}초`:null,
+      x.avg!=null?`평균 응답 ${Math.round(x.avg)}ms`:null,
+      `놓침 ${Math.round((x.loss||0)*100)}%`
+    ].filter(Boolean);
+    return `${i+1}. ${new Date(x.at).toTimeString().slice(0,8)} · ${bits.join(" · ")}`;
+  }).join(NL);
+  /* 같은 시각대에 몰렸는지 — 몰렸다면 전파가 아니라 그때 벌어지는 일이 원인이다 */
+  const rt=L.map(x=>x.roastT).filter(x=>x!=null).sort((a,b)=>a-b);
+  let cluster="";
+  for(let i=1;i<rt.length;i++) if(rt[i]-rt[i-1]<=20){
+    cluster=NL+`※ ${fmt(rt[i-1])}~${fmt(rt[i])} 로 같은 시각대에 몰렸습니다 — `
+      +`전파보다 그 시점에 벌어지는 일(팬·히터 최대, 단계 전환)을 먼저 보세요.`;
+    break;
+  }
+  const rf=L.filter(x=>x.verdict==="전파 쪽").length;
+  return head+NL+`연결 유지 중 끊김 ${L.length}회 (전파 쪽 ${rf} · 컴퓨터 쪽 ${L.length-rf})`+NL
+    +rows+cluster;
+}
 function ikSyncLog(force){
   const now=Date.now();
   if(!force&&now-ikSyncAt<10000) return;
@@ -6750,6 +7430,7 @@ function ikOnProfileBack(pf){
 }
 function ikOnStatus(st){
   ikSetState("연결됨","pill ok");
+  ikQ.lastRx=Date.now();
   if(ikQ.lastAsk){ const dt=Date.now()-ikQ.lastAsk;
     ikQ.lat.push(dt); if(ikQ.lat.length>60) ikQ.lat.shift(); ikQ.got++; ikQ.lastAsk=0; }
   // 곡선 쌓기 — 머신이 주는 time 이 있으면 그걸, 없으면 우리 시계를 쓴다
@@ -6807,7 +7488,8 @@ function ikOnStatus(st){
        예전에는 투입 시각과 배출 시각을 한 번만 잡아서 두 배치가 한 곡선에 이어 붙었다.
        앞 배치를 아직 안 담으셨을 수 있으므로 지우지 않고 <b>따로 떼어 둔다.</b> */
     if(st.state===3&&ikDropAt!=null){
-      ikSegs.push({t0:ikRoastT0, drop:ikDropAt, n:ikSegs.length+1});
+      ikSegs.push({t0:ikRoastT0, drop:ikDropAt, n:ikSegs.length+1,
+                   marks:Object.assign({},ikMarks), tl:ikTL.map(x=>Object.assign({},x))});
       ikRoastT0=null; ikDropAt=null;
       ikMarks={cc:null,crack:null}; ikTL=[];
       if(typeof micPops!=="undefined"){ micPops=[]; micCurve=[]; }
@@ -6862,10 +7544,14 @@ function ikBanner(st){
     const avg=ikQ.lat.reduce((a,b)=>a+b,0)/ikQ.lat.length;
     const loss=ikQ.asked?Math.max(0,1-ikQ.got/ikQ.asked):0;
     const bad=avg>600||loss>0.15||ikQ.drops>0;
+    /* 끊긴 적이 있으면 「어느 쪽이 문제였나」까지 붙인다 — 대처가 갈리기 때문이다 */
+    const last=ikQ.log[ikQ.log.length-1];
+    const rf=ikQ.log.filter(x=>x.verdict==="전파 쪽").length;
     bits.push(`<span style="color:${bad?"var(--actual)":"var(--muted)"}">`
       +`연결 ${avg<250?"좋음":avg<600?"보통":"약함"} · 응답 ${Math.round(avg)}ms`
       +(loss>0.02?` · 놓침 ${Math.round(loss*100)}%`:"")
-      +(ikQ.drops?` · 끊김 ${ikQ.drops}회`:"")+`</span>`);
+      +(ikQ.drops?` · 끊김 ${ikQ.drops}회`
+        +(last?` (${rf>=ikQ.log.length-rf?"전파 쪽":"컴퓨터 쪽"})`:""):"")+`</span>`);
   }
   $("ik_now").innerHTML=
     `<p class="lead" style="margin:0 0 4px;font-size:22px;color:${col}">${n.t}</p>
@@ -6899,6 +7585,10 @@ function ikRenderLive(st){
       : '<span class="pill">배기 센서만</span> 이 기종은 흡기(인렛) 온도를 보내지 않습니다(Pro V2 계열). '
         +'IKAWA 라이브러리에서 <b>Inlet 프로파일은 쓰지 마세요</b> — 배기 기준 프로파일만 맞습니다.'}</p></div>`;
   $("ik_save").disabled=ikCurve.length<5;
+  /* 연달아 볶으면 앞 배치가 떼어져 있다. 담을 길을 열어 둔다 — 예전에는 안내만 하고 길이 없었다. */
+  { const sp=$("ik_saveprev");
+    if(sp){ sp.hidden=!ikSegs.length;
+      if(ikSegs.length) sp.textContent=`지난 배치 담기 (${ikSegs.length}번째)`; } }
   const coach=ikCoach();
   if(coach) coach.notes.forEach(nt=>ikEvent("note:"+(nt.c||nt.lv),nt.t,
     String(nt.d||"").replace(/<[^>]+>/g,""),nt.lv,nt.k));
@@ -6956,7 +7646,8 @@ function ikRenderLive(st){
       + (()=>{ const rs=rorSeries(vcur,30);
           const rt=rs.length?{t:rs[rs.length-1][0],v:rs[rs.length-1][1]}:null;
           return rorSvg(rs,rt,shift(ikRorCurve)); })()
-      + powerSvg(shift(ikFanCurve),shift(ikHeatCurve),tMax);
+      + powerSvg(shift(ikFanCurve),shift(ikHeatCurve),tMax,
+                 ikGaps.map(g=>[g[0]-t0,g[1]-t0]).filter(g=>g[1]>=0));
   }
   /* 그래프 바로 아래 한 줄 띠 — 지금 판정을 압축해서 곡선 옆에 붙여 둔다 */
   if(coach&&coach.notes.length){
@@ -6996,8 +7687,28 @@ async function ikConnect(all){
       $("ik_connect").disabled=false; $("ik_disconnect").disabled=true;
       $("ik_send").disabled=true; $("ik_readback").disabled=true; $("ik_readinfo").disabled=true;
       ikQ.drops++; ikQ.lastAsk=0;
-      ikLog("연결이 끊겼습니다."); ikSyncLog(true);
-      ikEvent("link","연결 끊김","블루투스가 끊겼습니다. 자동으로 다시 붙습니다.","warn");
+      const R=ikDropReason();
+      ikQ.log.push({at:Date.now(),
+                    roastT:ikCurve.length?Math.max(0,Math.round(ikNow-ikZero())):null,
+                    silent:R.silent, up:R.up, avg:R.avg, loss:R.loss, verdict:R.verdict});
+      if(ikQ.log.length>40) ikQ.log.shift();
+      const rt=ikCurve.length&&ikRoastT0!=null?Math.max(0,Math.round(ikNow-ikZero())):null;
+      ikLog(`연결이 끊겼습니다. — ${R.verdict}${rt!=null?` · 로스팅 ${fmt(rt)} 지점`:" · 로스팅 전"}`);
+      { const same=ikQ.log.filter(x=>x.roastT!=null&&rt!=null&&Math.abs(x.roastT-rt)<=20);
+        if(same.length>=1) ikLog(`  ※ 지난번에도 ${same.map(x=>fmt(x.roastT)).join(" · ")} 즈음에 끊겼습니다`
+          +` — 매번 같은 때라면 전파가 아니라 그 시점에 벌어지는 일(팬·히터 최대, 특정 단계)을 보세요.`); }
+      ikLog(`  ${R.up!=null?`이번 연결은 ${Math.round(R.up/1000)}초 버텼고, `:""}`
+           +`${R.silent!=null?`마지막 응답 뒤 ${(R.silent/1000).toFixed(1)}초 만에 끊겼습니다.`:""}`
+           +`${R.avg!=null?` 직전 평균 응답 ${Math.round(R.avg)}ms · 놓침 ${Math.round(R.loss*100)}%`:""}`);
+      ikLog(`  ${R.why}`);
+      ikSyncLog(true);
+      ikEvent("link","연결 끊김 — "+R.verdict,R.why,"warn","drop"+ikQ.drops);
+      ikSessUpdate();
+      ikWatchRow("link",`끊김 — ${R.verdict}`
+        +`${R.up!=null?` · ${Math.round(R.up/1000)}초 버팀`:""}`
+        +`${R.silent!=null?` · 마지막 응답 뒤 ${(R.silent/1000).toFixed(1)}초`:""}`
+        +`${R.avg!=null?` · 직전 평균 ${Math.round(R.avg)}ms`:""}`
+        +` · ${ikNetText(ikNetNow())}`);
       document.title="⚠ 연결 끊김 — 로스트포인트";
       tBeep(2);
       if(!ikUserStop) ikReconnect();          // 사용자가 끊은 게 아니면 스스로 다시 붙는다
@@ -7042,6 +7753,8 @@ async function ikAttach(server){
       ikLog(`◀ 원시 ${b.length}B  ${hex(b).slice(0,120)}`);   // 해석 전에 무조건 남긴다
       ikOnPacket(b);
     });
+    ikQ.upAt=Date.now(); ikQ.lastRx=0;        // 이번 연결이 얼마나 버티는지 재기 시작
+    if(!ikSess) ikSessStart();
     ikSetState("연결됨 · 응답 대기","pill");
     $("ik_connect").disabled=true; $("ik_disconnect").disabled=false;
     $("ik_send").disabled=false; $("ik_readback").disabled=false;
@@ -7093,9 +7806,13 @@ function ikReconnect(){
     try{
       const server=await ikDev.gatt.connect();
       await ikAttach(server);
+      const back=ikQ.log[ikQ.log.length-1];
+      if(back){ back.backIn=Date.now()-back.at; }
       ikQ.reTry=0;
-      ikLog("✓ 다시 붙었습니다.");
+      ikLog(`✓ 다시 붙었습니다.${back?` (끊긴 지 ${Math.round(back.backIn/1000)}초 만 — `
+        +`이 구간 ${Math.round(back.backIn/1000)}초의 곡선은 비어 있습니다)`:""}`);
       ikEvent("link","연결 복구","블루투스가 다시 붙었습니다.","info");
+      ikWatchRow("link",`다시 붙었습니다${back?` (끊긴 지 ${Math.round(back.backIn/1000)}초 만)`:""}`);
       tBeep(1);
     }catch(e){
       ikLog("↻ 실패: "+e.message);
@@ -7107,6 +7824,7 @@ function ikDisconnect(){
   ikUserStop=true;
   if(ikReTimer){ clearTimeout(ikReTimer); ikReTimer=null; }
   ikStopTick();
+  ikSessUpdate(); ikSess=null;
   if(ikNegot){ clearTimeout(ikNegot); ikNegot=null; }
   try{ if(ikDev&&ikDev.gatt.connected) ikDev.gatt.disconnect(); }catch(e){}
   ikSetState("끊김"); $("ik_connect").disabled=false; $("ik_disconnect").disabled=true;
@@ -7267,7 +7985,7 @@ let micCurve=[];                     // [[t, 초당 터짐 정도]]
    ① 오디오를 <b>빠짐없이</b> 듣는다(옛 코드는 21%만 봤다)
    ② 기준을 <b>계속 새로 잡는다</b>(팬이 커지면 따라 올라간다)
    ③ 한 번 튀었다고 크랙이라 하지 않는다(다섯 개째가 크랙) */
-let micPops=[], micFloor=0, micRun=0, micFrames=0, micLast=-99, micNode=null;
+let micPops=[], micFloor=0, micRun=0, micFrames=0, micLast=-99, micNode=null, micMaxR=0;
 
 function micGate(){
   /* ROEST 는 원두 185℃ 에서 창을 연다. 우리는 배기온도를 재므로 그 값으로 연다.
@@ -7290,6 +8008,7 @@ function micFrame(e){
   micFloor = micFloor===0 ? e : (e<micFloor ? micFloor*0.9+e*0.1 : micFloor*0.999+e*0.001);
   micRun   = micRun===0   ? e : micRun*0.9995+e*0.0005;
   if(micFrames<500) return;                       // 5초는 바닥만 잡는다
+  if(micFloor>0) micMaxR=Math.max(micMaxR, e/micFloor);   // 마이크가 쓸만한지 재는 값
   const g=micGate();
   if(!g.open) return;
   const t=micTime();
@@ -7312,7 +8031,7 @@ async function micOn(){
   const hp=micCtx.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=POPCFG.lo;
   const lp=micCtx.createBiquadFilter(); lp.type="lowpass";  lp.frequency.value=POPCFG.hi;
   src.connect(hp); hp.connect(lp);
-  micPops=[]; micFloor=0; micRun=0; micFrames=0; micLast=-99; micCurve=[];
+  micPops=[]; micFloor=0; micRun=0; micFrames=0; micLast=-99; micCurve=[]; micMaxR=0;
   const FR=Math.round(micCtx.sampleRate*0.01);     // 10ms
   /* AudioWorklet 이 있으면 그걸로 — 없으면 ScriptProcessor 로 내려간다.
      어느 쪽이든 <b>표본을 하나도 빠뜨리지 않는 것</b>이 핵심이다. */
@@ -7352,6 +8071,10 @@ async function micOn(){
     micCurve.push([t,+(n/W).toFixed(2)]);
     if(micCurve.length>4000) micCurve.shift();
     const g=micGate();
+    const hh=popHealth(micMaxR, micFrames*0.01);
+    if(hh&&hh.k!=="ok"&&$("mic_hint"))
+      $("mic_hint").innerHTML=`<span class="pill ${hh.k==="bad"?"warn":""}">마이크</span> ${hh.d}`;
+    else if($("mic_hint")) $("mic_hint").innerHTML=hh?`<span class="pill ok">마이크</span> ${hh.d}`:"";
     $("mic_msg").innerHTML=g.open
       ? `<span class="pill ok">듣는 중</span> 터짐 ${micPops.length}회 · ${g.why}`
       : `<span class="pill">대기</span> ${g.temp
@@ -7407,12 +8130,14 @@ window.micTake=t=>{
 
 function ikSaveBatch(){
   if(ikCurve.length<5) return;
-  /* 앞 배치가 있으면 이번 배치의 시작점부터만 본다 — 안 그러면 둘이 한 곡선이 된다 */
-  if(ikSegs.length&&ikRoastT0!=null)
-    ikCurve=ikCurve.filter(x=>x[0]>=ikSegs[ikSegs.length-1].drop);
+  /* 앞 배치가 있으면 이번 배치의 시작점부터만 본다 — 안 그러면 둘이 한 곡선이 된다.
+     예전에는 ikCurve 자체를 잘랐다. 그러면 앞 배치를 아직 안 담았을 때 그 곡선을
+     영영 잃는다 — 연달아 볶으면 첫 배치가 통째로 날아갔다. 사본으로만 본다. */
+  let src=(ikSegs.length&&ikRoastT0!=null)
+    ? ikCurve.filter(x=>x[0]>=ikSegs[ikSegs.length-1].drop) : ikCurve.slice();
   /* 냉각 구간을 먼저 떼어낸다. 안 떼면 마지막 점이 냉각 끝 온도라
      배출온도·총시간이 둘 다 엉뚱해진다. */
-  let src=ikCurve, tail=0;
+  let tail=0;
   if(ikDropAt!=null){
     const keep=ikCurve.filter(x=>x[0]<=ikDropAt);
     if(keep.length>=5){ tail=ikCurve.length-keep.length; src=keep; }
@@ -7441,7 +8166,9 @@ function ikSaveBatch(){
   }
   if(!c){ const r=ikTrim(src); c=r.c; cut=r.cut; }
   const t0=c[0][0];
-  c.forEach(p=>p[0]-=t0);                    // 자른 뒤 시각을 0부터 다시 센다
+  /* 사본을 만들어 당긴다. filter/slice 는 안쪽 점 배열을 그대로 공유하므로
+     여기서 p[0] 을 빼면 <b>살아 있는 곡선의 시각까지</b> 밀려 그래프가 뒤엉킨다. */
+  c=c.map(p=>[p[0]-t0,p[1]]);                // 자른 뒤 시각을 0부터 다시 센다
   const dur=c[c.length-1][0], drop=c[c.length-1][1];
   $("r_dur").value=Math.round(dur); $("r_drop").value=drop.toFixed(1);
   $("r_pre").value=c[0][1].toFixed(1);
@@ -7489,13 +8216,37 @@ function ikSaveBatch(){
       — 예열이 ${c[0][1].toFixed(1)}℃로 잡혔습니다. 아니면 「곡선 지우기」 후 다시 받으세요.</span>`:"");
   document.querySelector('nav button[data-p="roasts"]').click();
 }
+/* 떼어 둔 앞 배치를 담는다. 담는 규칙(냉각 떼기·마커 옮기기·DTR 계산)을 두 벌로
+   두면 반드시 갈리므로, 잠깐 그 배치인 척하고 같은 함수를 그대로 태운다. */
+function ikSavePrev(i){
+  const seg=ikSegs[i];
+  if(!seg){ $("ik_savemsg").textContent="떼어 둔 앞 배치가 없습니다."; return; }
+  const keep={c:ikCurve,t0:ikRoastT0,d:ikDropAt,m:ikMarks,tl:ikTL,saw:ikSawRoast,segs:ikSegs};
+  try{
+    ikCurve=keep.c.filter(x=>x[0]>=seg.t0&&x[0]<=seg.drop);
+    if(ikCurve.length<5){ $("ik_savemsg").innerHTML=
+      `<span class="pill warn">담지 않았습니다</span> ${seg.n}번째 배치의 곡선이 ${ikCurve.length}점뿐입니다.`;
+      return; }
+    ikRoastT0=seg.t0; ikDropAt=seg.drop;
+    ikMarks=seg.marks||{cc:null,crack:null};
+    ikTL=seg.tl||[]; ikSawRoast=true; ikSegs=[];
+    ikSaveBatch();
+  } finally {
+    ikCurve=keep.c; ikRoastT0=keep.t0; ikDropAt=keep.d;
+    ikMarks=keep.m; ikTL=keep.tl; ikSawRoast=keep.saw; ikSegs=keep.segs;
+  }
+}
 function ikInit(){
   $("ik_crc").innerHTML=CRCV.map((v,i)=>`<option value="${i}">${v.n}</option>`).join("");
   $("ik_crc").addEventListener("change",()=>{ ikCrc=CRCV[+$("ik_crc").value];
     ikLog("CRC 방식을 손으로 바꿨습니다 — "+ikCrc.n); });
   $("ik_support").innerHTML = navigator.bluetooth
     ? `<span class="pill ok">사용 가능</span> 이 브라우저는 웹 블루투스를 지원합니다.
-       머신을 켜고 <b>IKAWA 앱과의 연결을 끊은 뒤</b> 연결하세요 — 동시에 붙으면 불안정할 수 있습니다.`
+       머신을 켜고 <b>IKAWA 앱과의 연결을 끊은 뒤</b> 연결하세요 — 동시에 붙으면 불안정할 수 있습니다.
+       <br><b>윈도우 설정에 이 머신이 페어링돼 있으면 「장치 제거」로 빼세요.</b>
+       브라우저 연결은 윈도우 페어링과 <b>다른 층</b>입니다 — 페어링해 둘 필요가 없고,
+       해 두면 윈도우가 따로 붙으려 들어 브라우저 연결과 다툽니다.
+       블루투스 기기는 보통 <b>한 번에 한 곳</b>하고만 이어집니다.`
     : `<span class="pill warn">사용 불가</span> 이 브라우저는 웹 블루투스를 지원하지 않습니다.
        <b>PC의 크롬이나 엣지</b>에서 열어주세요. 아이폰·사파리는 지원하지 않습니다.`;
   $("ik_connect").onclick=()=>ikConnect(false);
@@ -7508,6 +8259,35 @@ function ikInit(){
       $("ik_logmsg").innerHTML="다시 흐릅니다."; }
     else $("ik_logmsg").innerHTML=`<span class="pill ok">멈춤</span> 화면만 세웠습니다 —
       기록은 계속 쌓입니다. 이제 글자를 잡아 복사하거나 아래 「복사」를 누르세요.`;
+  };
+  /* 통신 기록은 400줄이고 대부분 원시 패킷이라 사람이 읽거나 남에게 보내기 어렵다.
+     끊김에 대해서만 짧게 추려 한 번에 복사하게 한다 — 물어보러 갈 때 이것만 있으면 된다. */
+  ikLinkRender();                       // 지난 연결 이력을 탭을 열 때 바로 보여 준다
+  $("ik_watchstart").onclick=()=>{ ikWatch.on?ikWatchStop():ikWatchStart(); };
+  $("ik_watchmark").onclick=()=>{
+    const v=($("ik_watchnote").value||"").trim();
+    if(!ikWatch.on){ $("ik_watchstat").innerHTML=`<span class="pill warn">감시 중이 아닙니다</span>`; return; }
+    ikWatchRow("mark",v||"(표시만)");
+    $("ik_watchnote").value="";
+  };
+  $("ik_watchnote").addEventListener("keydown",e=>{ if(e.key==="Enter") $("ik_watchmark").click(); });
+  $("ik_wake").onclick=e=>ikWakeLock(e.target.checked);
+  $("ik_watchclear").onclick=()=>{ ikWatch.rows=[]; ikWatchRender(); };
+  $("ik_watchcopy").onclick=async()=>{
+    const t=ikWatchReport();
+    try{ await navigator.clipboard.writeText(t);
+      $("ik_watchstat").innerHTML=`<span class="pill ok">복사됨</span> ${ikWatch.rows.length}줄 + 끊김 진단. 그대로 붙여넣으시면 됩니다.`;
+    }catch(err){ $("ik_watchlog").textContent=t;
+      $("ik_watchstat").innerHTML=`<span class="pill warn">자동 복사 실패</span> 아래 칸에서 골라 복사하세요.`; }
+  };
+  $("ik_dropcopy").onclick=async()=>{
+    const t=ikDropReport();
+    try{ await navigator.clipboard.writeText(t);
+      $("ik_logmsg").innerHTML=`<span class="pill ok">복사됨</span> 끊김 ${ikQ.log.length}건 요약. 그대로 붙여넣으시면 됩니다.`;
+    }catch(e){
+      $("ik_log").textContent=t; ikFrozen=true; $("ik_pause").textContent="이어보기";
+      $("ik_logmsg").innerHTML=`<span class="pill warn">자동 복사 실패</span> 아래 칸에 요약을 띄웠습니다 — 골라서 복사하세요.`;
+    }
   };
   $("ik_copy").onclick=async()=>{
     const t=ikLogText();
@@ -7556,7 +8336,8 @@ function ikInit(){
   $("ik_crack").onclick=()=>mark("crack","1차 크랙");
   $("ik_undo").onclick=()=>{ ikMarks={cc:null,crack:null}; $("ik_undo").disabled=true;
     $("ik_markmsg").textContent="마커를 지웠습니다."; if(ikCurve.length>2) ikRenderLive({}); };
-  $("ik_save").onclick=ikSaveBatch;
+  $("ik_save").onclick=()=>ikSaveBatch();
+  $("ik_saveprev").onclick=()=>ikSavePrev(ikSegs.length-1);
   $("sim_play").onclick=simStart;
   $("sim_stop").onclick=()=>{ simStop();
     $("sim_msg").innerHTML=`<span class="pill">멈춤</span> 「재생」을 다시 누르면 이어서 갑니다.`; };
@@ -7824,7 +8605,226 @@ document.addEventListener("visibilitychange",()=>{
       ikEvent("hide",`탭 가림 ${fmt(sec)}`,"다른 탭·창을 보는 동안입니다. 수집은 이어졌습니다.","info"); }
   }
 });
-restore().then(bootTab,bootTab);
+/* ---------- 표 정렬 ----------
+   표는 곳곳에서 innerHTML 로 통째로 다시 그려진다. 그래서 그리는 쪽마다 정렬을 심으면
+   다시 그릴 때마다 잃는다. 대신 클릭을 문서 하나에서 받아 <tr> 을 그 자리에서 옮긴다 —
+   어느 함수가 그린 표든 상관없이 동작하고, 다시 그리면 원래 순서로 돌아온다.
+   ※ 계보(pf_table)와 원시 필드(ik_fields)는 뺐다. 줄 순서 자체가 뜻을 갖는 표라
+      정렬하면 정보가 사라진다 — 부모·자식 관계와 프로토콜 필드 번호가 그것이다. */
+/* 정렬에서 뺄 표. 줄 순서 자체가 정보라 흐트러뜨리면 안 되는 것만 적는다.
+   원시 필드는 프로토콜 필드 번호 순서가 곧 뜻이다. */
+const SORTSKIP=["ik_fields"];
+/* 칸의 값을 견줄 수 있는 수로 바꾼다.
+   날짜와 시:분:초를 따로 보지 않으면 「2026-08-01」이 전부 2026 으로 읽혀 정렬이 안 됐다.
+   「5:20」도 5 로 읽혀 5:03 과 구별되지 않았다. */
+function cellKey(t){
+  const s=String(t==null?"":t).trim();
+  if(!s||s==="-"||s==="\u2013") return null;
+  let m=s.match(/(\d{4})[-./](\d{1,2})[-./](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/);
+  if(m) return (((+m[1])*10000+(+m[2])*100+(+m[3]))*10000)+((+(m[4]||0))*100+(+(m[5]||0)));
+  m=s.match(/^(\d{1,3}):(\d{2})(?::(\d{2}))?/);
+  if(m) return m[3]!==undefined?(+m[1])*3600+(+m[2])*60+(+m[3]):(+m[1])*60+(+m[2]);
+  m=s.replace(/,/g,"").match(/-?\d+(?:\.\d+)?/);
+  return m?parseFloat(m[0]):null;
+}
+/* 숫자 칸인가. 「파카마라 워시드 v1.0」처럼 이름에 든 숫자를 값으로 오해하면 안 되므로,
+   숫자로 시작하고 단위 몇 글자 말고는 남는 글자가 없을 때만 숫자로 본다. */
+function isNumCell(t){
+  const s=String(t==null?"":t).trim();
+  return /^[\d]/.test(s) && s.replace(/[\d\s,.:%\-\/+~\u2013\u2103()]/g,"").length<=3;
+}
+document.addEventListener("click",e=>{
+  const th=e.target&&e.target.closest?e.target.closest("th"):null;
+  if(!th) return;
+  const tb=th.closest("table");
+  /* 화면 곳곳에서 이름 없이 그려지는 표까지 함께 걸리도록 감싸개(.tbl)로 고른다 */
+  if(!tb||!tb.closest(".tbl")||SORTSKIP.indexOf(tb.id)>=0) return;
+  const rows=[...tb.rows];
+  const hi=rows.findIndex(r=>r.querySelector("th"));
+  if(hi<0) return;
+  const head=rows[hi];
+  const i=[...head.cells].indexOf(th);
+  if(i<0) return;
+  /* 「아직 없습니다」 같은 안내 줄은 칸 수가 달라 자연히 걸러진다 */
+  const body=rows.slice(hi+1).filter(r=>r.cells.length===head.cells.length);
+  if(body.length<2) return;
+  const val=r=>(r.cells[i].textContent||"").trim();
+  const filled=body.map(val).filter(x=>x&&x!=="\u2013"&&x!=="-");
+  const numeric=filled.length?filled.filter(isNumCell).length>=filled.length*0.6:false;
+  const dir=th.dataset.dir==="asc"?-1:1;
+  [...head.cells].forEach(c=>{ c.dataset.dir="";
+    const a=c.querySelector(".sarrow"); if(a) a.remove(); });
+  th.dataset.dir=dir===1?"asc":"desc";
+  th.insertAdjacentHTML("beforeend",`<span class="sarrow"> ${dir===1?"\u25b2":"\u25bc"}</span>`);
+  body.map((r,k)=>[r,k]).sort((A,B)=>{
+    let d;
+    if(numeric){
+      const x=cellKey(val(A[0])), y=cellKey(val(B[0]));
+      /* 값이 없는 줄은 방향과 무관하게 늘 아래로 — 위로 올라오면 표를 못 읽는다 */
+      if(x==null&&y==null) d=0;
+      else if(x==null) return 1;
+      else if(y==null) return -1;
+      else d=x-y;
+    }else d=val(A[0]).localeCompare(val(B[0]),"ko");
+    return d?d*dir:A[1]-B[1];                     // 같으면 원래 순서를 지킨다
+  }).forEach(x=>tb.appendChild(x[0]));
+});
+
+/* ---------- 글 편집 ----------
+   화면에 그대로 적힌 글(제목·설명문·안내문·소제목·칸 이름)을 앱 안에서 직접 고친다.
+   프로그램이 그때그때 만드는 판정 문구는 다시 그릴 때 덮어써지므로 여기 들어오지 않는다 —
+   그래서 「붙박이 글」만 고른다. 붙박이인지는 처음 켤 때 글자가 들어 있는지로 가린다.
+
+   고친 글은 원문 글자를 열쇠로 저장한다. 그래서 나중에 원문이 바뀌면 그 수정은 스스로 풀리고
+   새 원문이 나온다. 새 문장이 조용히 묻히는 것보다 낫지만 반대로 수정이 조용히 사라질 수도
+   있으므로, 풀린 수정은 「데이터」 탭에 목록으로 남겨 둔다. */
+const COPYSEL="h2,p.lead,p.note,p.tagline,label";
+const COPYORIG={};                      // 열쇠 → 원래 innerHTML
+const COPYPRE=new WeakMap();            // 편집 켜기 직전의 화면 — 손 안 댄 것은 이대로 되돌린다
+let copyOn=false;
+function copyHash(s){
+  let h=5381;
+  for(let i=0;i<s.length;i++) h=((h*33)^s.charCodeAt(i))>>>0;
+  return h.toString(36);
+}
+/* 굵게와 작은 회색만 글자로 표현한다. 편집은 평문으로 하되 이 둘은 잃지 않게 왕복시킨다. */
+function copyToText(html){
+  return String(html)
+    .replace(/<b>([\s\S]*?)<\/b>/gi,"*$1*")
+    .replace(/<span class="note">([\s\S]*?)<\/span>/gi,"~$1~")
+    .replace(/<br\s*\/?>/gi,"\n")
+    .replace(/<[^>]+>/g,"")
+    .replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">")
+    .replace(/[ \t]+/g," ").trim();
+}
+function copyToHtml(t){
+  return String(t)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/\*([^*\n]+)\*/g,"<b>$1</b>")
+    .replace(/~([^~\n]+)~/g,'<span class="note">$1</span>')
+    .replace(/\n/g,"<br>");
+}
+/* 원문을 먼저 기억해 둔다. 반드시 저장된 수정을 얹기 <b>전에</b> 불러야 한다. */
+function copyInit(){
+  const seen={};
+  document.querySelectorAll(COPYSEL).forEach(el=>{
+    if(el.closest("#ik_log,#ik_watchlog,#ik_remotelog")) return;
+    const html=el.innerHTML.trim();
+    const txt=copyToText(html);
+    if(txt.length<2) return;                       // 비어 있으면 프로그램이 채우는 자리다
+    let k=el.tagName.toLowerCase()[0]+copyHash(txt);
+    if(seen[k]!=null){ seen[k]++; k+="-"+seen[k]; } else seen[k]=0;
+    el.dataset.ck=k;
+    COPYORIG[k]=html;
+  });
+}
+function copyApply(){
+  const M=(DB.settings&&DB.settings.copy)||{};
+  document.querySelectorAll("[data-ck]").forEach(el=>{
+    const v=M[el.dataset.ck];
+    if(v!=null) el.innerHTML=copyToHtml(v);
+    else if(COPYORIG[el.dataset.ck]!=null) el.innerHTML=COPYORIG[el.dataset.ck];
+  });
+  copyCount();
+}
+function copyCount(){
+  const M=(DB.settings&&DB.settings.copy)||{};
+  const all=Object.keys(M);
+  const live=all.filter(k=>COPYORIG[k]!=null);
+  const orphan=all.filter(k=>COPYORIG[k]==null);
+  const e=$("cp_stat");
+  if(e) e.innerHTML=all.length
+    ? `<span class="pill ok">고친 문장 ${live.length}</span>`
+      +(orphan.length?` <span class="pill warn">풀린 수정 ${orphan.length}</span>
+         원문이 바뀌어 더는 붙지 않는 것입니다 — 아래에서 확인하고 버리세요.`:"")
+    : `<span class="pill">고친 문장 없음</span> 화면에서 <b>「글 편집」</b>을 켜고 문장을 눌러 고치세요.`;
+  const o=$("cp_orphan");
+  if(o) o.innerHTML=orphan.length
+    ? orphan.map(k=>`<p class="note" style="margin:0 0 4px">· ${copyToHtml(M[k]).replace(/<[^>]+>/g,"")}</p>`).join("")
+      +`<button class="ghost sm" id="cp_drop">풀린 수정 ${orphan.length}개 버리기</button>`
+    : "";
+  if($("cp_drop")) $("cp_drop").onclick=()=>{
+    orphan.forEach(k=>delete DB.settings.copy[k]); persist(); copyCount();
+  };
+  const b=$("cp_toggle");
+  if(b) b.textContent=copyOn?"글 편집 끄기":"글 편집";
+  return {live:live.length, orphan:orphan.length};
+}
+function copyEdit(on){
+  /* 끄기 전에 값을 먼저 읽는다. 편집 중에는 줄바꿈이 보이도록 pre-wrap 을 걸어 두는데,
+     그것이 풀린 뒤에 읽으면 여러 줄짜리 문장의 줄바꿈이 뭉개져 「고쳤다」고 잘못 잡힌다.
+     실제로 켰다 끄기만 해도 수정 7개가 생겼다 — 전부 <br> 이 든 문장이었다. */
+  if(!on) document.querySelectorAll("[data-ck]").forEach(el=>{
+    if(el.dataset.cksrc!==undefined)
+      el.dataset.cknow=(el.innerText||el.textContent||"").replace(/[ \t]+/g," ").trim();
+  });
+  copyOn=!!on;
+  document.body.classList.toggle("copyedit",copyOn);
+  document.querySelectorAll("[data-ck]").forEach(el=>{
+    if(copyOn){
+      COPYPRE.set(el,el.innerHTML);
+      el.dataset.cksrc=copyToText(el.innerHTML);
+      el.textContent=el.dataset.cksrc;             // 편집은 평문으로 — 태그가 섞이지 않게
+      el.contentEditable="true";
+      el.spellcheck=false;
+    }else{
+      el.contentEditable="false";
+      copySave(el);
+      delete el.dataset.cksrc;
+    }
+  });
+  if(copyOn) $("cp_hint").hidden=false; else $("cp_hint").hidden=true;
+  copyCount();
+}
+/* 손대지 않은 문장은 절대 건드리지 않는다.
+   예전에는 편집을 끌 때 모든 문장을 「지금 화면 글자」로 저장했다. 그래서 프로그램이
+   그때그때 채우는 자리(상태 알림 따위)까지 수정으로 잡혔고, 「전부 되돌리기」를 누르면
+   도리어 수정 47개가 새로 생겼다. */
+function copySave(el){
+  const k=el.dataset.ck; if(!k) return;
+  const src=el.dataset.cksrc;
+  if(src===undefined) return;                      // 이번에 편집을 켠 적이 없다
+  const now=el.dataset.cknow!==undefined
+    ? el.dataset.cknow
+    : (el.innerText||el.textContent||"").replace(/[ \t]+/g," ").trim();
+  delete el.dataset.cknow;
+  if(now===src){                                   // 손대지 않았다 — 켜기 직전 모습 그대로 둔다
+    const pre=COPYPRE.get(el);
+    if(pre!=null) el.innerHTML=pre;
+    return;
+  }
+  const orig=copyToText(COPYORIG[k]||"");
+  DB.settings.copy=DB.settings.copy||{};
+  if(!now||now===orig){                            // 비우면 원래대로 — 되돌리는 가장 쉬운 길
+    delete DB.settings.copy[k];
+    el.innerHTML=COPYORIG[k]||"";
+  }else{
+    DB.settings.copy[k]=now;
+    el.innerHTML=copyToHtml(now);
+  }
+  persist();
+}
+/* 고친 글을 파일로 — 이걸 주시면 소스에 영구히 넣는다. 그러면 원문이 바뀌어도 안 풀린다. */
+function copyExport(){
+  const M=(DB.settings&&DB.settings.copy)||{};
+  const out=Object.keys(M).map(k=>({key:k, 원문:copyToText(COPYORIG[k]||"(원문 없음 — 풀린 수정)"), 고친글:M[k]}));
+  const b=new Blob([JSON.stringify({v:"copy-1", at:new Date().toISOString(), items:out},null,1)],
+    {type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(b);
+  a.download="roastpoint-문장수정-"+new Date().toISOString().slice(0,10)+".json";
+  a.click(); URL.revokeObjectURL(a.href);
+}
+$("cp_toggle").onclick=()=>copyEdit(!copyOn);
+$("cp_done").onclick=()=>copyEdit(false);
+$("cp_export").onclick=copyExport;
+$("cp_reset").onclick=()=>{
+  if(!confirm("고친 문장을 전부 원래대로 되돌립니다. 계속할까요?")) return;
+  if(copyOn) copyEdit(false);                     // 편집 중이면 먼저 끈다 — 순서를 바꾸면 되살아난다
+  if(DB.settings) DB.settings.copy={};
+  persist(); copyApply();
+};
+copyInit();                                   // 원문을 먼저 기억한다
+restore().then(()=>{ copyApply(); bootTab(); },()=>{ copyApply(); bootTab(); });
 </script>
 </body>
 </html>

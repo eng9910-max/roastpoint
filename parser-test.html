@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>생두 파서 회귀 시험</title>
+<style>
+:root{--paper:#F2F4F3;--ink:#17282D;--ink-2:#4A5F64;--muted:#9AA8A5;--rule:#CBD4D2;
+      --bad:#C4462A;--ok:#3F7A5E}
+body{margin:0;background:var(--paper);color:var(--ink);padding:20px 22px 60px;
+     font-family:system-ui,-apple-system,"Segoe UI","Noto Sans KR",sans-serif;line-height:1.6}
+h1{font-size:19px;margin:0 0 4px}
+p.lead{font-size:14px;color:var(--ink-2);max-width:76ch;margin:0 0 14px}
+table{border-collapse:collapse;width:100%;background:#fff;margin-bottom:18px;font-size:13.5px}
+th,td{border:1px solid var(--rule);padding:4px 8px;text-align:left;vertical-align:top}
+th{background:#E6EAE9;font-size:11.5px;letter-spacing:.05em;color:var(--ink-2)}
+td.k{white-space:nowrap;color:var(--ink-2)}
+tr.bad td{background:#FBECE8}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+h2{font-size:14px;margin:16px 0 6px}
+.tag{display:inline-block;border-radius:2px;padding:0 7px;font-size:12px;border:1px solid}
+.tag.ok{color:var(--ok);border-color:var(--ok)}
+.tag.bad{color:var(--bad);border-color:var(--bad)}
+#sum{font-size:15px;margin:10px 0 18px}
+iframe{width:0;height:0;border:0;position:absolute;left:-9999px}
+</style>
+</head>
+<body>
+<h1>생두 파서 회귀 시험</h1>
+<p class="lead">판매처마다 형식이 다르므로, 한 곳에 맞춰 고치면 다른 곳이 깨질 수 있습니다.
+이 페이지는 index.html 을 그대로 띄워 놓고 붙여넣기 원문을 넣어 본 뒤 기대값과 대조합니다.
+<b>파서를 고칠 때마다 이 페이지를 열어 전부 초록인지 보세요.</b><br>
+새 형식에서 틀렸다면 그 원문을 아래 <span class="mono">CASES</span> 에 통째로 넣고,
+<span class="mono">want</span> 에 <b>맞아야 할 값만</b> 적으면 됩니다. 적지 않은 칸은 검사하지 않고,
+<span class="mono">""</span> 로 적으면 <b>비어 있어야 한다</b>는 뜻입니다 —
+원문에 없는 것을 지어내지 않는지도 시험해야 하기 때문입니다.</p>
+<div id="sum">돌리는 중…</div>
+<div id="out"></div>
+<iframe id="app" src="index.html"></iframe>
+
+<script>
+/* 시험할 칸. index.html 의 b_* 입력에서 앞 두 글자를 뗀 이름이다. */
+const KEYS=["name","origin","region","farm","alt","var","proc","harvest","grade","screen","moist","dens","notes"];
+
+const CASES=[
+{
+  name:"① 2단 표 — 탭으로 갈린 줄 (클라우드 OCR)",
+  text:`에티오피아 구지 사키소 사와나 G1 워시드
+ETHIOPIA GUJI SHAKISSO SAWANA G1 WASHED
+
+COFFEE INFORMATION
+
+커피 소개
+
+나라\tEthiopia
+
+지역\tShakisso , Guji
+
+재배 고도\t1,800-2,200m
+
+품종\tEthiopian Heirloom
+
+가공방식\tWashed
+
+수학년도\t2025/2026
+
+수분량( %)\t1차: 9.7 / 2차: 9.7 / 3차 : 9.6
+
+밀도(grm/L)\t1차 : 817 / 2차 : 817 / 3차 : 816
+
+스크린 사이즈(SC)\tSC19+ : 1 % / SC18: 3 % / SC17 : 12 % / SC16 : 28 % / SC15 : 37 % / SC14 : 15% / SC14미만: 5%
+#수분량/밀도 측정 일 : 2026/06/04
+
+CUP NOTE
+
+컵노트
+
+블루베리\t레몬\t복숭아\t허니\t캐러멜\t밀크 초콜릿
+
+Blueberry\tLemon\tPeach\tHoney\tCaramel\tMilk Chocolate
+
+농장 소개
+
+에티오피아 남부 오로미아(Oromia) 주 에 위치한 구지(Guji) 지역 은 과거 시다모에 속해 있었으나 현재는 독립적인 스페셜티 산지로 확고한 위상을 자랑합니다.
+사키 소의 웅장한 자연 이 빚어 낸 잠재력 은 사와나 (Sawana ) 가공소의 까다로운 가공을 거쳐 완성됩니다.`,
+  want:{name:"에티오피아 구지 사키소 사와나 G1 워시드",origin:"에티오피아",alt:"1,800-2,200m",
+        var:"Ethiopian Heirloom",proc:"워시드",harvest:"2025/2026",grade:"G1",
+        moist:"9.7",dens:"817",
+        /* 농장은 원문 표에 없다. 사와나는 가공소이고 본문 문장 속에만 나온다 — 지어내면 안 된다. */
+        farm:""}
+},
+{
+  name:"② 2단 표가 한 줄로 눌린 것 — 라벨 뭉치 뒤에 값 뭉치",
+  text:`에티오피아 구지 사키소 사와나 G1 워시드
+ETHIOPIA GUJI SHAKISSO SAWANA G1 WASHED
+
+나라
+지역
+재배고도
+품종
+가공방식
+수학년도
+수분량(%)
+COFFEE INFORMATION
+커피 소개
+Ethiopia
+Shakisso, Guji
+1,800-2,200m
+Ethiopian Heirloom
+Washed
+2025/2026
+1차 : 9.7 / 2차: 9.7 / 3차 : 9.6
+1차: 817 / 2차: 817 / 3차 : 816
+밀도(grm/L)
+스크린 사이즈(SC)
+SC19+: 1% 1
+SC18: 3%`,
+  want:{name:"에티오피아 구지 사키소 사와나 G1 워시드",origin:"에티오피아",alt:"1,800-2,200m",
+        var:"Ethiopian Heirloom",proc:"워시드",harvest:"2025/2026",grade:"G1",
+        moist:"9.7",dens:"817",farm:""}
+},
+{
+  name:"③ 라벨과 값이 한 줄씩 번갈아 (세로 나열)",
+  text:`[신규] 콜롬비아 엘 파라이소 리치
+원산지
+콜롬비아
+농장명/농장주명
+엘 파라이소
+지역
+우일라
+가공방식
+더블 아네로빅 워시드
+품종
+카스티요
+재배고도
+1,700 - 1,900m
+커핑노트
+리치, 청포도, 장미
+수분
+10.5
+밀도
+780
+판매가
+32,000원`,
+  want:{name:"콜롬비아 엘 파라이소 리치",origin:"콜롬비아",region:"우일라",farm:"엘 파라이소",
+        alt:"1,700 - 1,900m",var:"카스티요",proc:"더블 아네로빅 워시드",
+        notes:"리치, 청포도, 장미",moist:"10.5",dens:"780"}
+},
+{
+  name:"④ 「라벨 : 값」 한 줄",
+  text:`과테말라 안티구아 산타루시아 SHB
+원산지 : 과테말라
+지역 : 안티구아
+농장 : 산타 루시아
+가공방식 : 워시드
+품종 : 부르봉
+고도 : 1,600m
+등급 : SHB
+수분 : 11.2 %
+밀도 : 745 g/L
+컵노트 : 초콜릿, 오렌지, 캐러멜`,
+  want:{name:"과테말라 안티구아 산타루시아 SHB",origin:"과테말라",region:"안티구아",farm:"산타 루시아",
+        alt:"1,600m",var:"부르봉",proc:"워시드",grade:"SHB",
+        moist:"11.2",dens:"745",notes:"초콜릿, 오렌지, 캐러멜"}
+},
+{
+  name:"⑤ 「라벨 값」 한 줄 + 괄호 단위",
+  text:`케냐 니에리 AA 워시드
+원산지 케냐
+지역 니에리
+가공방식 워시드
+품종 SL28, SL34
+재배고도 1,750m
+수분(%) 10.8
+밀도(g/L) 812
+스크린 사이즈 AA
+커핑노트 블랙커런트, 자몽, 토마토`,
+  want:{name:"케냐 니에리 AA 워시드",origin:"케냐",region:"니에리",proc:"워시드",
+        var:"SL28, SL34",alt:"1,750m",moist:"10.8",dens:"812",screen:"AA",
+        notes:"블랙커런트, 자몽, 토마토"}
+},
+{
+  name:"⑥ 값이 하나도 없는 글 — 지어내지 않는지",
+  text:`오늘 아침에 내린 커피가 참 맛있었습니다.
+향이 좋아서 한 잔 더 마셨습니다.
+다음에 또 사야겠다고 생각했습니다.`,
+  want:{origin:"",region:"",farm:"",alt:"",var:"",proc:"",harvest:"",grade:"",
+        screen:"",moist:"",dens:"",notes:""}
+}
+];
+
+const esc=s=>String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+function run(){
+  const W=document.getElementById("app").contentWindow;
+  if(!W||typeof W.parseText!=="function"){
+    document.getElementById("sum").innerHTML=
+      '<span class="tag bad">못 돌림</span> index.html 을 못 읽었습니다. '
+      +'파일을 두 번 눌러 여는 대신 <b>서버로 열어야</b> 합니다(로컬 서버 주소로 접속).';
+    return;
+  }
+  const ALL=KEYS.map(k=>"b_"+k);
+  let pass=0, fail=0, html="";
+  for(const c of CASES){
+    ALL.concat(["b_raw","b_url"]).forEach(id=>{ const e=W.document.getElementById(id); if(e) e.value=""; });
+    let got={}, err=null;
+    try{
+      W.parseText(c.text);
+      KEYS.forEach(k=>{ const e=W.document.getElementById("b_"+k); got[k]=e?e.value:"(칸 없음)"; });
+    }catch(e){ err=String(e&&e.message||e); }
+    const rows=[];
+    let bad=0;
+    if(err){ bad=1; rows.push(`<tr class="bad"><td class="k">터짐</td><td colspan="3" class="mono">${esc(err)}</td></tr>`); }
+    else for(const k of KEYS){
+      const want=c.want[k];
+      const checked=Object.prototype.hasOwnProperty.call(c.want,k);
+      const ok=!checked||got[k]===want;
+      if(checked&&!ok) bad++;
+      rows.push(`<tr class="${checked&&!ok?"bad":""}">
+        <td class="k">${k}</td>
+        <td class="mono">${checked?esc(want)||'<span style="color:#9AA8A5">(비어 있어야 함)</span>':'<span style="color:#9AA8A5">— 안 봄</span>'}</td>
+        <td class="mono">${esc(got[k])||'<span style="color:#9AA8A5">(빈칸)</span>'}</td>
+        <td>${!checked?"":(ok?'<span class="tag ok">맞음</span>':'<span class="tag bad">틀림</span>')}</td></tr>`);
+    }
+    bad?fail++:pass++;
+    html+=`<h2>${esc(c.name)} ${bad?'<span class="tag bad">틀림 '+bad+'</span>':'<span class="tag ok">모두 맞음</span>'}</h2>`
+      +`<table><tr><th>칸</th><th>기대</th><th>실제</th><th></th></tr>${rows.join("")}</table>`;
+  }
+  document.getElementById("sum").innerHTML=
+    `<span class="tag ${fail?"bad":"ok"}">${pass} / ${pass+fail} 통과</span>`
+    +(fail?` — 아래 붉은 줄을 보세요.`:` — 지금 형식들은 전부 정상입니다.`);
+  document.getElementById("out").innerHTML=html;
+}
+document.getElementById("app").addEventListener("load",run);
+</script>
+</body>
+</html>
