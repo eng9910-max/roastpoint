@@ -138,7 +138,7 @@ body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v9.8</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v9.9</span>
   <button class="ghost sm" id="cp_toggle" style="align-self:center">글 편집</button>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
@@ -244,7 +244,10 @@ body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
           <p class="note" id="b_notecats"></p></div>
         <div class="wide"><label>추가 정보 — 수상 경력, 농장 이야기, 특이사항</label>
           <textarea id="b_memo" style="min-height:52px"></textarea></div>
-        <div class="wide"><label>원문 (검색용, 통째로 보관)</label><textarea id="b_raw" style="min-height:52px"></textarea></div>
+        <div class="wide"><label>원문 (검색용, 통째로 보관)
+          <span class="note" style="font-weight:400">— 여기 붙여넣어도 읽습니다</span></label>
+          <textarea id="b_raw" style="min-height:52px"></textarea>
+          <p class="note" id="b_rawmsg" style="margin:4px 0 0"></p></div>
       </div>
       <p class="note">판매처 컵노트는 나중에 내 컵 평가와 나란히 놓고 보기 위한 것입니다. 농장·수확연도는 같은 농장의 다른 해 로트를 비교할 때 쓰입니다.</p>
     </div>
@@ -1014,10 +1017,10 @@ body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
-<script src="theory.js?v=9.8"></script>
+<script src="theory.js?v=9.9"></script>
 <script>
 "use strict";
-const APP_V="9.8";                       // 화면 오른쪽 위 표시와 같아야 한다
+const APP_V="9.9";                       // 화면 오른쪽 위 표시와 같아야 한다
 const $=id=>document.getElementById(id);
 const DB={beans:[],roasts:[],profiles:[],settings:{},trash:{},link:[]};
 let editingId=null;
@@ -1184,6 +1187,16 @@ function scanValues(txt){
   if(!$("b_dens").value){
     const v=num(["밀\\s*도","density","bulk\\s*density"],"[0-9]{3,4}(?:\\.[0-9])?");
     if(v&&+v>=500&&+v<=1000){ $("b_dens").value=v; n++; }
+  }
+  /* 스크린 분포는 표가 눌리면서 「SC19+: 1% 1」 처럼 칸 구분자(1)가 섞여 들어온다.
+     한 줄만 집으면 앞부분만 남으므로, 글 전체에서 SCxx:nn% 를 모아 다시 세운다. */
+  const sc=[...txt.matchAll(/SC\s*(\d{2})\s*(\+|미만)?\s*[::]?\s*(\d{1,2})\s*%/gi)]
+    .map(m=>`SC${m[1]}${m[2]||""}:${m[3]}%`);
+  if(sc.length>=3){
+    const uniq=[...new Set(sc)].join(" / ");
+    if(!$("b_screen").value||$("b_screen").value.length<uniq.length){
+      $("b_screen").value=uniq; n++;
+    }
   }
   if(!$("b_harvest").value){
     const m=txt.match(/(20\d{2}\s*\/\s*(?:20)?\d{2}|20\d{2}\s*(?:crop|하베스트|수확|년))|(\d{1,2}\s*[~\-]\s*\d{1,2}\s*월)/i);
@@ -1409,6 +1422,21 @@ function parseText(txt){
   if(!$("b_raw").value) $("b_raw").value=txt.slice(0,4000);
   return hit;
 }
+/* 붙여넣기 칸이 둘이라 헷갈린다 — 위 ① 칸에만 파서가 붙어 있어서
+   「원문」에 넣으면 아무 일도 안 일어났다. 실제로 그렇게 넣으신 분이 있었다.
+   parseText 는 <b>비어 있는 칸만</b> 채우므로 여기서도 돌려도 안전하다. */
+let rawTimer=null;
+$("b_raw").addEventListener("input",()=>{
+  clearTimeout(rawTimer);
+  rawTimer=setTimeout(()=>{
+    const t=$("b_raw").value.trim();
+    if(t.length<10){ $("b_rawmsg").textContent=""; return; }
+    const n=parseText(t);
+    $("b_rawmsg").innerHTML=n
+      ? `<span class="pill ok">${n}개</span> 이 원문에서 읽어 위 칸을 채웠습니다 — 확인해 주세요.`
+      : `<span class="pill">읽은 것 없음</span> 이미 채워져 있거나 표기가 다릅니다.`;
+  },400);
+});
 let pasteTimer=null;
 $("paste").addEventListener("input",()=>{
   clearTimeout(pasteTimer);

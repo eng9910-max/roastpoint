@@ -44,6 +44,41 @@ const KEYS=["name","origin","region","farm","alt","var","proc","harvest","grade"
 
 const CASES=[
 {
+  name:"①′ 실제로 붙여넣으신 것 — 「수확」이 「수학」으로 오타 나 있고, 표 꼬리에 칸 구분자(1)와 측정일이 섞임",
+  text:`에티오피아 구지 사키소 사와나 G1 워시드
+ETHIOPIA GUJI SHAKISSO SAWANA G1 WASHED
+
+나라
+지역
+재배고도
+품종
+가공방식
+수학년도
+수분량(%)
+COFFEE INFORMATION
+커피 소개
+Ethiopia
+Shakisso, Guji
+1,800-2,200m
+Ethiopian Heirloom
+Washed
+2025/2026
+1차 : 9.7 / 2차: 9.7 / 3차 : 9.6
+1차: 817 / 2차: 817 / 3차 : 816
+밀도(grm/L)
+스크린 사이즈(SC)
+SC19+: 1% 1
+SC18: 3%
+1
+SC17:12% 1 SC16:28% 1 SC15:37%
+/ SC14:15% / SC14미만 : 5%
+#수분량/밀도 측정일 : 2026/06/04`,
+  want:{name:"에티오피아 구지 사키소 사와나 G1 워시드", origin:"에티오피아",
+    alt:"1,800-2,200m", var:"Ethiopian Heirloom", proc:"워시드",
+    harvest:"2025/2026", grade:"G1", moist:"9.7", dens:"817",
+    screen:"SC19+:1% / SC18:3% / SC17:12% / SC16:28% / SC15:37% / SC14:15% / SC14미만:5%"}
+},
+{
   name:"① 2단 표 — 탭으로 갈린 줄 (클라우드 OCR)",
   text:`에티오피아 구지 사키소 사와나 G1 워시드
 ETHIOPIA GUJI SHAKISSO SAWANA G1 WASHED
