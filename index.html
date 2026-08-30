@@ -138,7 +138,7 @@ body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v9.9</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v10.0</span>
   <button class="ghost sm" id="cp_toggle" style="align-self:center">글 편집</button>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
@@ -1017,10 +1017,10 @@ body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
-<script src="theory.js?v=9.9"></script>
+<script src="theory.js?v=10.0"></script>
 <script>
 "use strict";
-const APP_V="9.9";                       // 화면 오른쪽 위 표시와 같아야 한다
+const APP_V="10.0";                       // 화면 오른쪽 위 표시와 같아야 한다
 const $=id=>document.getElementById(id);
 const DB={beans:[],roasts:[],profiles:[],settings:{},trash:{},link:[]};
 let editingId=null;
@@ -5388,6 +5388,21 @@ function selfTest(){
       a&&a.k==="ok"&&b&&b.k==="bad"&&c&&c.k==="weak"&&d===null&&/20~30cm/.test(b.d),
       `69배→${a&&a.k} · 7배→${c&&c.k} · 3.5배→${b&&b.k} · 30초→아직 말하지 않음`);
   });
+  chk("배출점 잡기",()=>{
+    /* 실제로 겪은 것 — 208℃ 까지 올랐다가 초당 12℃ 로 식는데
+       상태값이 5초 늦게 잡혀 끝점이 148℃ 로 읽혔다. */
+    const c=[]; for(let t=0;t<=400;t+=5) c.push([t, 140+68*t/400]);   // 140 → 208
+    for(let t=405;t<=520;t+=5) c.push([t, Math.max(30, 208-12*(t-400))]);
+    const late=roastCut(c, 405+40);        // 상태값이 40초 늦게 잡힌 경우
+    const none=roastCut(c, null);          // 상태값이 아예 없는 경우
+    const cool=roastCut(c.slice(81), 600); // 냉각 도중에 연결한 경우 — 못 고쳐야 정상
+    const endOf=r=>r.pts[r.pts.length-1][1];
+    ok("배출점 잡기",
+      Math.abs(endOf(late)-208)<0.01 && Math.abs(endOf(none)-208)<0.01
+      && endOf(cool)<100,
+      `늦은 상태값 → ${endOf(late).toFixed(1)}℃ · 상태값 없음 → ${endOf(none).toFixed(1)}℃ · `
+      +`냉각만 연결 → ${endOf(cool).toFixed(1)}℃ (막혀야 정상)`);
+  });
   chk("배치 나누기",()=>{
     /* 한 배치짜리는 나누면 안 되고, 두 배치짜리는 갈라야 한다 */
     const one=[],two=[];
@@ -8165,11 +8180,11 @@ function ikSaveBatch(){
     ? ikCurve.filter(x=>x[0]>=ikSegs[ikSegs.length-1].drop) : ikCurve.slice();
   /* 냉각 구간을 먼저 떼어낸다. 안 떼면 마지막 점이 냉각 끝 온도라
      배출온도·총시간이 둘 다 엉뚱해진다. */
-  let tail=0;
-  if(ikDropAt!=null){
-    const keep=ikCurve.filter(x=>x[0]<=ikDropAt);
-    if(keep.length>=5){ tail=ikCurve.length-keep.length; src=keep; }
-  }
+  /* 냉각을 뗀다. 상태값(ikDropAt)은 몇 초 늦을 수 있고 IKAWA 냉각은 초당 10℃ 넘게
+     떨어져서 그 몇 초가 배출온도를 수십 도 깎는다 — 실제로 208℃ 배치가 115.9℃ 로 읽혀
+     저장이 막혔다. roastCut 이 꼭대기를 찾아 끝점을 바로잡는다. */
+  const rc=roastCut(src, ikDropAt);
+  let tail=rc.tail; src=rc.pts;
   /* 냉각을 떼어낸 뒤에도 곡선이 내려가기만 한다면, 이 연결은 로스팅을 못 본 것이다.
      냉각 도중에 연결하거나 새로 고치면 그렇게 된다 — 실제로 겪었다(냉각 161점만 남음).
      그걸 저장하면 배출온도·총시간이 둘 다 냉각 끝 값이 되어 배치가 망가진다.
@@ -8180,7 +8195,7 @@ function ikSaveBatch(){
       이 곡선에는 <b>로스팅 구간이 없습니다</b> —
       ${!ikSawRoast?"연결한 뒤로 머신이 「로스팅 중」이 된 적이 없습니다":
         `온도가 ${hi.toFixed(1)}℃까지 올랐다가 ${end.toFixed(1)}℃로 내려온 것만 담겨 있습니다`}.
-      <br><span class="note">냉각 도중에 연결하거나 새로 고치면 이렇게 됩니다.
+      <br><span class="note">곡선이 처음부터 내려가기만 합니다 — 냉각 도중에 연결하거나 새로 고치면 이렇게 됩니다.
       그대로 저장하면 배출온도가 <b>${end.toFixed(1)}℃</b>, 총시간이
       <b>${fmt(Math.round(src[src.length-1][0]-src[0][0]))}</b>로 들어가 배치가 망가집니다.
       <b>「곡선 지우기」</b> 를 누르고, 다음 배치는 <b>예열 전에</b> 연결해 두세요.</span>`;

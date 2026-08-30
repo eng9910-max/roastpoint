@@ -11,7 +11,7 @@
 /* 판본 — 기록장·스튜디오가 「지금 쓰는 판정 코드가 몇 판인가」를 확인할 수 있게 박아 둔다.
    서비스워커가 옛 theory.js 를 계속 내주는 바람에 화면은 새것이고 판정만 옛것인 상태로
    돌던 적이 있다. 눈으로는 절대 못 알아챈다. 그래서 숫자로 맞춰 본다. */
-const THEORY_V="9.9";
+const THEORY_V="10.0";
 
 /* ── 1층 : 교과서 상수 ───────────────────────────────
    SCA 로스팅 커리큘럼과 로스팅 문헌에서 통용되는 값. 임의로 손대지 않는다.
@@ -399,6 +399,22 @@ function popCrack(pops, cfg){
 
    나누는 단서는 <b>식었다가 다시 오르는 지점</b>이다. 배출하면 온도가 뚝 떨어지고,
    다음 생두를 넣으면 다시 올라간다. 그 골이 배치의 경계다. */
+/* 로스팅의 끝점을 찾는다 — 배출 뒤에는 온도가 내려가기만 하므로 <b>꼭대기가 배출</b>이다.
+   머신 상태값으로 잡은 배출 시각(dropAt)은 몇 초 늦을 수 있는데,
+   IKAWA 냉각은 초당 10℃ 넘게 떨어져서 그 몇 초가 배출온도를 수십 도 깎는다.
+   그래서 상태값은 냉각을 크게 떼는 데만 쓰고 끝점은 곡선에서 찾는다. */
+function roastCut(pts, dropAt){
+  if(!pts||pts.length<5) return {pts:pts||[], tail:0};
+  let src=pts, tail=0;
+  if(dropAt!=null){
+    const keep=src.filter(x=>x[0]<=dropAt);
+    if(keep.length>=5){ tail+=src.length-keep.length; src=keep; }
+  }
+  let pi=0;
+  for(let i=1;i<src.length;i++) if(src[i][1]>=src[pi][1]) pi=i;
+  if(pi>=4&&pi<src.length-1){ tail+=src.length-1-pi; src=src.slice(0,pi+1); }
+  return {pts:src, tail};
+}
 function splitBatches(act, opt){
   const O=Object.assign({drop:40, rise:30, minLen:120}, opt||{});
   if(!act||act.length<40) return [];
