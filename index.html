@@ -138,7 +138,7 @@ body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v10.1</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v10.2</span>
   <button class="ghost sm" id="cp_toggle" style="align-self:center">글 편집</button>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
@@ -1017,10 +1017,10 @@ body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
-<script src="theory.js?v=10.1"></script>
+<script src="theory.js?v=10.2"></script>
 <script>
 "use strict";
-const APP_V="10.1";                       // 화면 오른쪽 위 표시와 같아야 한다
+const APP_V="10.2";                       // 화면 오른쪽 위 표시와 같아야 한다
 const $=id=>document.getElementById(id);
 const DB={beans:[],roasts:[],profiles:[],settings:{},trash:{},link:[]};
 let editingId=null;
@@ -2290,6 +2290,7 @@ async function restore(){
     $("savestate").textContent="저장 영역을 쓸 수 없습니다"; $("savestate").className="pill warn";
   }
   applySettings(); renderBeans(); renderRoasts(); renderProfiles(); renderWaiting(); stats(); gdRender();
+  ikLiveRestore();   // 새로 고쳤어도 살아 있던 곡선은 되살린다 (머신 탭을 안 열어도)
   if(DB.settings.cupDesc){ $("c_descon").checked=true; $("cupdesc").hidden=$("c_descstd").hidden=false; }
   if(DB.settings.syncKey) $("y_key").value=DB.settings.syncKey;
   keyHint();
@@ -7359,6 +7360,44 @@ function ikDropReport(){
   return head+NL+`연결 유지 중 끊김 ${L.length}회 (전파 쪽 ${rf} · 컴퓨터 쪽 ${L.length-rf})`+NL
     +rows+cluster;
 }
+/* 여태 살아 있는 곡선은 <b>메모리에만</b> 있었다. 새로 고치거나 브라우저가 죽으면
+   볶은 배치가 통째로 날아간다 — 실제로 「새로고침하면 다 날아가는 것 같은데」라는
+   지적을 받고서야 알았다. 10초마다 남겨 두고, 열 때 되살린다.
+   담고 나면 지운다(ikLiveClear). */
+let ikLiveAt=0;
+async function ikLiveSave(force){
+  if(!ikCurve.length) return;
+  const now=Date.now();
+  if(!force&&now-ikLiveAt<10000) return;
+  ikLiveAt=now;
+  try{
+    await idbSet("live",{ at:now,
+      c:ikCurve, heat:ikHeatCurve, fan:ikFanCurve, ror:ikRorCurve, inlet:ikInlet,
+      t0:ikRoastT0, drop:ikDropAt, saw:ikSawRoast, segs:ikSegs,
+      marks:ikMarks, tl:ikTL, gaps:ikGaps, base:ikTBase, prev:ikTPrev,
+      ref:ikRef, mic:(typeof micPops!=="undefined"?micPops:[]) });
+  }catch(e){}
+}
+async function ikLiveClear(){ try{ await idbDel("live"); }catch(e){} }
+/* 열 때 되살린다. 기계는 다시 이어야 하지만 <b>곡선은 남는다.</b> */
+async function ikLiveRestore(){
+  if(ikLiveRestore.done||ikCurve.length) return;   // 이미 곡선이 있으면 덮지 않는다
+  ikLiveRestore.done=true;
+  let v=null; try{ v=await idbGet("live"); }catch(e){}
+  if(!v||!v.c||v.c.length<5) return;
+  ikCurve=v.c; ikHeatCurve=v.heat||[]; ikFanCurve=v.fan||[]; ikRorCurve=v.ror||[];
+  ikInlet=v.inlet||[]; ikRoastT0=v.t0??null; ikDropAt=v.drop??null;
+  ikSawRoast=!!v.saw; ikSegs=v.segs||[]; ikMarks=v.marks||{cc:null,crack:null};
+  ikTL=v.tl||[]; ikGaps=v.gaps||[]; ikTBase=v.base||0; ikTPrev=v.prev??null;
+  ikRef=v.ref||null; if(typeof micPops!=="undefined") micPops=v.mic||[];
+  ikNow=ikCurve[ikCurve.length-1][0];
+  const mins=Math.round((Date.now()-(v.at||Date.now()))/60000);
+  $("ik_save").disabled=false;
+  $("ik_savemsg").innerHTML=`<span class="pill ok">곡선을 되살렸습니다</span>
+    ${ikCurve.length}점 · ${mins<1?"방금":mins+"분 전"} 것입니다.
+    <b>기계에 다시 잇지 않아도 담을 수 있습니다.</b>`;
+  try{ ikRenderLive(ikLastSt||{}); }catch(e){}
+}
 function ikSyncLog(force){
   const now=Date.now();
   if(!force&&now-ikSyncAt<10000) return;
@@ -7579,6 +7618,7 @@ function ikOnStatus(st){
     ikLastState=st.state; ikSyncLog(true);
   }
   ikSyncLog(false);
+  ikLiveSave(false);          // 살아 있는 곡선을 10초마다 남긴다
   ikLastSt=st;
   ikRenderLive(st);
 }
@@ -8260,6 +8300,7 @@ function ikSaveBatch(){
               heat:cut2(ikHeatCurve), fan:cut2(ikFanCurve), mror:cut2(ikRorCurve),
               cool:ikCoolStat()};                   // 곡선은 안 담고 요약만
   recalc();
+  ikLiveClear();              // 담았으니 보관본은 지운다
   $("ik_savemsg").innerHTML=`<span class="pill ok">옮겼습니다</span> 로스팅 기록 탭에서
     생두와 중량을 채우고 저장하세요. 실측 곡선 ${c.length}점${mk}이 함께 담깁니다.`
     +($("r_dtr").value?`<br><span class="note">DTR ${$("r_dtr").value}%`
@@ -8376,7 +8417,8 @@ function ikInit(){
     ikGaps=[]; ikTL=[]; ikTLLast={}; micCurve=[]; micDraw();
     ikMarks={cc:null,crack:null}; $("ik_chart").innerHTML=""; $("ik_elapsed").textContent="";
     $("ik_save").disabled=true; $("ik_savemsg").textContent="";
-    $("ik_undo").disabled=true; $("ik_markmsg").textContent="곡선을 지웠습니다."; };
+    $("ik_undo").disabled=true; $("ik_markmsg").textContent="곡선을 지웠습니다.";
+    ikLiveClear(); };
   const mark=(k,label)=>{
     ikMarks[k]=Math.round(ikNow);
     const z=ikZero(), rel=v=>fmt(Math.max(0,v-z));
