@@ -138,7 +138,7 @@ body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v10.0</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v10.1</span>
   <button class="ghost sm" id="cp_toggle" style="align-self:center">글 편집</button>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
@@ -1017,10 +1017,10 @@ body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
-<script src="theory.js?v=10.0"></script>
+<script src="theory.js?v=10.1"></script>
 <script>
 "use strict";
-const APP_V="10.0";                       // 화면 오른쪽 위 표시와 같아야 한다
+const APP_V="10.1";                       // 화면 오른쪽 위 표시와 같아야 한다
 const $=id=>document.getElementById(id);
 const DB={beans:[],roasts:[],profiles:[],settings:{},trash:{},link:[]};
 let editingId=null;
@@ -5388,6 +5388,18 @@ function selfTest(){
       a&&a.k==="ok"&&b&&b.k==="bad"&&c&&c.k==="weak"&&d===null&&/20~30cm/.test(b.d),
       `69배→${a&&a.k} · 7배→${c&&c.k} · 3.5배→${b&&b.k} · 30초→아직 말하지 않음`);
   });
+  chk("새 배치 가리기",()=>{
+    /* 냉각 중에 상태값이 한 번 튄 것을 새 배치로 오해하면 배출 시각이 지워지고
+       저장이 막힌다 — 실제로 겪었다. 식은 뒤에 온 것만 새 배치다. */
+    const flickerSoon = isNewBatch(400+5, 400, 208, 150);   // 배출 5초 뒤, 아직 뜨겁다
+    const flickerWarm = isNewBatch(400+90, 400, 208, 190);  // 시간은 지났으나 안 식었다
+    const real        = isNewBatch(400+180, 400, 208, 60);  // 식었고 시간도 지났다
+    const noDrop      = isNewBatch(400, null, 208, 60);     // 아직 배출한 적 없다
+    ok("새 배치 가리기",
+      !flickerSoon && !flickerWarm && real && !noDrop,
+      `5초 뒤 튐→${flickerSoon?"오해":"무시"} · 안 식음→${flickerWarm?"오해":"무시"} · `
+      +`진짜 새 배치→${real?"인식":"놓침"} · 배출 전→${noDrop?"오해":"무시"}`);
+  });
   chk("배출점 잡기",()=>{
     /* 실제로 겪은 것 — 208℃ 까지 올랐다가 초당 12℃ 로 식는데
        상태값이 5초 늦게 잡혀 끝점이 148℃ 로 읽혔다. */
@@ -7530,7 +7542,11 @@ function ikOnStatus(st){
     /* 이미 한 배치를 끝낸 뒤 다시 「로스팅 중」이 되면 <b>새 배치</b>다.
        예전에는 투입 시각과 배출 시각을 한 번만 잡아서 두 배치가 한 곡선에 이어 붙었다.
        앞 배치를 아직 안 담으셨을 수 있으므로 지우지 않고 <b>따로 떼어 둔다.</b> */
-    if(st.state===3&&ikDropAt!=null){
+    /* 상태값이 잠깐 튄 것을 새 배치로 오해하면 배출 시각을 지워 버린다 —
+       그러면 저장할 때 냉각을 못 떼고 막힌다. 식은 뒤에 온 것만 새 배치로 본다. */
+    if(st.state===3&&isNewBatch(t, ikDropAt,
+        ikCurve.length?Math.max(...ikCurve.map(x=>x[1])):0,
+        ikCurve.length?ikCurve[ikCurve.length-1][1]:0)){
       ikSegs.push({t0:ikRoastT0, drop:ikDropAt, n:ikSegs.length+1,
                    marks:Object.assign({},ikMarks), tl:ikTL.map(x=>Object.assign({},x))});
       ikRoastT0=null; ikDropAt=null;

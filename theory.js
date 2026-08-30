@@ -11,7 +11,7 @@
 /* 판본 — 기록장·스튜디오가 「지금 쓰는 판정 코드가 몇 판인가」를 확인할 수 있게 박아 둔다.
    서비스워커가 옛 theory.js 를 계속 내주는 바람에 화면은 새것이고 판정만 옛것인 상태로
    돌던 적이 있다. 눈으로는 절대 못 알아챈다. 그래서 숫자로 맞춰 본다. */
-const THEORY_V="10.0";
+const THEORY_V="10.1";
 
 /* ── 1층 : 교과서 상수 ───────────────────────────────
    SCA 로스팅 커리큘럼과 로스팅 문헌에서 통용되는 값. 임의로 손대지 않는다.
@@ -403,6 +403,20 @@ function popCrack(pops, cfg){
    머신 상태값으로 잡은 배출 시각(dropAt)은 몇 초 늦을 수 있는데,
    IKAWA 냉각은 초당 10℃ 넘게 떨어져서 그 몇 초가 배출온도를 수십 도 깎는다.
    그래서 상태값은 냉각을 크게 떼는 데만 쓰고 끝점은 곡선에서 찾는다. */
+/* 「로스팅 중」이 다시 뜨면 새 배치인가, 아니면 상태값이 잠깐 튄 것인가.
+   머신 상태는 1초 주기로 물어보므로 냉각 중에 3 이 한 번 스칠 수 있다.
+   그걸 새 배치로 오해하면 배출 시각(ikDropAt)을 지워 버려, 저장할 때
+   냉각을 떼지 못하고 「로스팅 구간이 없다」며 막힌다 — 실제로 그렇게 막혔다.
+
+   진짜 새 배치라면 <b>식은 다음에</b> 온다. 그래서 둘을 요구한다 —
+   배출 뒤 시간이 충분히 지났고, 온도가 꼭대기에서 크게 내려왔을 것. */
+const NEWBATCH = { minGap:60, minFall:40 };
+function isNewBatch(now, dropAt, peak, temp){
+  if(dropAt==null) return false;
+  if(!(now-dropAt>=NEWBATCH.minGap)) return false;
+  if(!(peak>0&&temp<peak-NEWBATCH.minFall)) return false;
+  return true;
+}
 function roastCut(pts, dropAt){
   if(!pts||pts.length<5) return {pts:pts||[], tail:0};
   let src=pts, tail=0;
