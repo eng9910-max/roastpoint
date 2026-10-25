@@ -138,7 +138,7 @@ body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v10.3</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v10.4</span>
   <button class="ghost sm" id="cp_toggle" style="align-self:center">글 편집</button>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
@@ -297,6 +297,15 @@ body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
 
     <div class="extra" id="recbox" hidden>
       <div id="rec_out"></div>
+      <div class="row" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--rule)">
+        <label style="margin:0;white-space:nowrap">추천 대신 직접 고르기</label>
+        <select id="p_mine" style="flex:1;min-width:200px;max-width:420px"></select>
+        <button class="ghost sm" id="p_mineuse">이 프로파일로</button>
+      </div>
+      <p class="note" style="margin:4px 0 0">추천 표에는 상위 5개만 나옵니다.
+      <b>쓰던 곡선을 그대로 다시 쓰려면</b> 여기서 고르세요 — 고른 뒤에도
+      이 생두 목표와 견준 점수와 손볼 곳은 똑같이 알려드립니다.</p>
+
       <div class="row" style="margin-top:10px">
         <button id="p_machine" disabled>머신에서 바로 로스팅 →</button>
         <button class="ghost" id="p_send" disabled>스튜디오에서 고치기 ↗</button>
@@ -1017,10 +1026,10 @@ body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
-<script src="theory.js?v=10.3"></script>
+<script src="theory.js?v=10.4"></script>
 <script>
 "use strict";
-const APP_V="10.3";                       // 화면 오른쪽 위 표시와 같아야 한다
+const APP_V="10.4";                       // 화면 오른쪽 위 표시와 같아야 한다
 const $=id=>document.getElementById(id);
 const DB={beans:[],roasts:[],profiles:[],settings:{},trash:{},link:[]};
 let editingId=null;
@@ -2392,6 +2401,7 @@ function allProfiles(){
 function profById(id){ return allProfiles().find(p=>p.id===id)||null; }
 
 function renderProfiles(){
+  if(typeof fillMineSel==="function") fillMineSel();   // 계획 화면의 직접 고르기 목록도 같이 갱신
   const showArch=$("pf_arch")&&$("pf_arch").checked;
   const list=allProfiles().filter(p=>showArch||!p.archived);
   const nAll=list.length;
@@ -2460,7 +2470,7 @@ function renderProfiles(){
   $("pf_table").innerHTML=`<tr><th>계보 · 버전</th><th style="min-width:190px">닮은 산지 곡선 <span class="pill warn">추정</span></th>
     <th>출처</th><th class="num">예열</th><th class="num">배출</th>
     <th class="num">시간</th><th class="num">쓴 횟수</th><th class="num">평균 감량</th>
-    <th class="num">평균 DTR</th><th class="num">평균 컵</th><th style="width:96px"></th></tr>`+
+    <th class="num">평균 DTR</th><th class="num">평균 컵</th><th style="width:150px"></th></tr>`+
     (view.length?view.map(({g,hits,at})=>{
       const head=g.ps[0];
       const open=at>0;                       // 걸린 게 아랫버전이면 펼쳐서 보여준다
@@ -2491,11 +2501,16 @@ function renderProfiles(){
 function profRow(p,title,want,fit,hit,trAttr,tdStyle){
   const st=profStat(p.pts), a=profAgg(p);
   const ix=DB.profiles.indexOf(p);
-  const act=p.builtin
-    ? `<span class="pill">내장</span>`
-    : `<button class="ghost sm" onclick="renameProfile(${ix})">이름</button>
+  /* 이 곡선으로 바로 계획을 세우러 간다 — 그동안은 계획에서 추천 5개 안에 들어야만
+     고를 수 있어서, 쓰던 곡선을 다시 쓰려면 길이 없었다. */
+  const plan=ix>=0&&!p.archived
+    ? `<button class="ghost sm" onclick="planWith(${ix})" title="이 곡선으로 로스팅 계획 세우기">계획 →</button>`
+    : "";
+  const act=plan+(p.builtin
+    ? ` <span class="pill">내장</span>`
+    : ` <button class="ghost sm" onclick="renameProfile(${ix})">이름</button>
        <button class="ghost sm" onclick="archProfile(${ix})">${p.archived?"복원":"보관"}</button>
-       <button class="ghost sm" onclick="delProfile(${ix})">삭제</button>`;
+       <button class="ghost sm" onclick="delProfile(${ix})">삭제</button>`);
   return `<tr ${trAttr||""}>
     <td style="${tdStyle||""}">${title}</td>
     <td>${fitCell(p,want,fit,hit)}</td>
@@ -4866,13 +4881,72 @@ function showRec(){
     <p class="note">항목마다 허용폭이 다릅니다 — 배출온도는 2℃, 발달 기울기는 1.2℃/분 안이면 거의 감점이 없고,
     예열은 14℃까지 봅니다. 시작 온도보다 <b>구간별로 열을 얼마나 넣는가</b>가 결과를 가르기 때문입니다.</p>`;
   $("rec_out").innerHTML=html;
+  fillMineSel();
 }
 window.fixLevel=lv=>{ $("r_level").value=lv; showRec(); };
+
+/* ---------- 추천 밖에서 직접 고르기 ----------
+   추천 표는 상위 5개만 보여 준다. 그래서 「지난번에 쓰던 그 곡선」을 다시 쓰려면
+   순위 안에 들어야만 했다. 순위는 이 생두 목표와의 거리이지 「쓰고 싶은가」가 아니다.
+   고르는 길만 따로 열고, 고른 뒤의 판정(점수·게이트·손볼 곳)은 추천과 똑같이 태운다 —
+   직접 골랐다고 해서 무엇을 손봐야 하는지를 덜 알아야 할 이유가 없다. */
+function fillMineSel(){
+  const e=$("p_mine"); if(!e) return;
+  const ps=DB.profiles.filter(p=>!p.archived&&p.pts&&p.pts.length>1)
+    .slice().sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),"ko"));
+  const keep=e.value;
+  e.innerHTML=ps.length
+    ? `<option value="">— 내 프로파일 고르기 —</option>`
+      +ps.map(p=>{ const st=profStat(p.pts);
+        return `<option value="${p.id}">${p.name} — 배출 ${st.drop.toFixed(1)}℃ · ${fmt(st.dur)}</option>`; }).join("")
+    : `<option value="">저장된 프로파일이 없습니다</option>`;
+  if(keep) e.value=keep;
+}
+let mineIdx=null;                     // 직접 고른 것이 __ranked 에서 차지하는 자리
+window.pickMine=id=>{
+  const b=DB.beans.find(x=>x.id===$("r_bean").value);
+  if(!b){ $("recbox").hidden=true;
+    $("r_bean").scrollIntoView({behavior:"smooth",block:"center"});
+    return false; }
+  const p=DB.profiles.find(x=>x.id===id);
+  if(!p||!p.pts||p.pts.length<2) return false;
+  if($("recbox").hidden||!window.__target) showRec();          // 목표가 있어야 견줄 수 있다
+  const ch=profChar(p.pts);
+  const item={id:p.id,name:p.name,src:p.src||"내 기록",pts:p.pts};
+  const r=Object.assign({p:item,ch},matchScore(ch,window.__target,item,b));
+  window.__ranked=window.__ranked||[];
+  if(mineIdx==null||mineIdx>=window.__ranked.length) mineIdx=window.__ranked.length;
+  window.__ranked[mineIdx]=r;                                  // 자리를 재활용한다
+  const e=$("p_mine"); if(e) e.value=p.id;
+  pickProfile(mineIdx);
+  return true;
+};
+/* 프로파일 탭에서 계획으로 — 생두가 아직 없으면 거기부터 고르게 한다 */
+window.planWith=ix=>{
+  const p=DB.profiles[ix]; if(!p) return;
+  goTab("plan");
+  setTimeout(()=>{
+    fillMineSel();
+    if(!pickMine(p.id)){
+      $("p_pick").innerHTML=`<span class="pill warn">생두를 먼저 고르세요</span>
+        <b>${p.name}</b> 로 계획을 세우려면 이 로스팅에 쓸 생두가 있어야 합니다 —
+        생두마다 목표가 달라 같은 곡선도 평가가 달라지기 때문입니다.`;
+      $("recbox").hidden=false;
+    }
+  },60);
+};
 function syncBean(from){
   const v=$(from).value;
   ["r_bean","r_bean2"].forEach(id=>{ const e=$(id); if(e&&e.value!==v) e.value=v; });
   showRec();
 }
+$("p_mineuse").onclick=()=>{
+  const id=$("p_mine").value;
+  if(!id){ $("p_pick").innerHTML=`<span class="pill warn">고르지 않았습니다</span>
+    왼쪽 목록에서 프로파일을 먼저 고르세요.`; return; }
+  pickMine(id);
+};
+$("p_mine").addEventListener("change",()=>{ if($("p_mine").value) pickMine($("p_mine").value); });
 $("r_bean").addEventListener("change",()=>syncBean("r_bean"));
 if($("r_bean2")) $("r_bean2").addEventListener("change",()=>syncBean("r_bean2"));
 ["r_use","r_level"].forEach(id=>{ const e=$(id); if(e) e.addEventListener("change",showRec); });
