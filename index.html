@@ -138,7 +138,7 @@ body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
 
 <header>
   <h1>로스트포인트 <span style="font-weight:400;color:var(--ink-2)">기록장</span></h1>
-  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v10.4</span>
+  <span class="pill" id="savestate" style="align-self:center">불러오는 중…</span><span class="ver mono">v10.5</span>
   <button class="ghost sm" id="cp_toggle" style="align-self:center">글 편집</button>
   <nav>
     <button class="on" data-p="plan">로스팅 계획</button>
@@ -299,8 +299,11 @@ body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
       <div id="rec_out"></div>
       <div class="row" style="margin-top:12px;padding-top:10px;border-top:1px solid var(--rule)">
         <label style="margin:0;white-space:nowrap">추천 대신 직접 고르기</label>
+        <input type="search" id="p_minefind" placeholder="찾기 — 이름·배출온도"
+          style="width:auto;flex:0 1 190px;min-width:130px">
         <select id="p_mine" style="flex:1;min-width:200px;max-width:420px"></select>
         <button class="ghost sm" id="p_mineuse">이 프로파일로</button>
+        <span class="note" id="p_minecount"></span>
       </div>
       <p class="note" style="margin:4px 0 0">추천 표에는 상위 5개만 나옵니다.
       <b>쓰던 곡선을 그대로 다시 쓰려면</b> 여기서 고르세요 — 고른 뒤에도
@@ -575,6 +578,7 @@ body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
       <input type="text" id="pf_find" placeholder="이름 · 출처 · 산지 · 품종으로 찾기"
              style="flex:1;min-width:180px">
       <button class="ghost sm" id="pf_clear" disabled>지우기</button>
+      <span class="note" id="pf_findmsg"></span>
     </div>
     <div class="extra" style="margin-bottom:9px">
       <p class="tagline">거꾸로 찾기 — 쓰려는 생두 쪽에서 프로파일을 고릅니다</p>
@@ -808,7 +812,10 @@ body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
     <h2>③ 프로파일 보내기</h2>
     <p class="lead">프로파일을 머신으로 <b>직접</b> 올립니다. 폰이 필요 없습니다.</p>
     <div class="row" style="margin-bottom:8px">
+      <input type="search" id="ik_proffind" placeholder="찾기 — 이름·배출온도"
+        style="width:auto;flex:0 1 180px;min-width:120px">
       <select id="ik_prof" style="width:auto;flex:1;min-width:220px"></select>
+      <span class="note" id="ik_profcount"></span>
       <button id="ik_send" disabled>머신으로 보내기</button>
       <button class="ghost" id="ik_readback" disabled>머신에서 읽어 확인</button>
       <span class="note" id="ik_profmsg"></span>
@@ -1026,10 +1033,10 @@ body.copyedit [data-ck]:focus{outline:2px solid var(--actual);background:#fff}
 <!-- 인쇄 전용 — 화면에는 보이지 않고 인쇄할 때만 나타난다 -->
 <div id="printroot"></div>
 
-<script src="theory.js?v=10.4"></script>
+<script src="theory.js?v=10.5"></script>
 <script>
 "use strict";
-const APP_V="10.4";                       // 화면 오른쪽 위 표시와 같아야 한다
+const APP_V="10.5";                       // 화면 오른쪽 위 표시와 같아야 한다
 const $=id=>document.getElementById(id);
 const DB={beans:[],roasts:[],profiles:[],settings:{},trash:{},link:[]};
 let editingId=null;
@@ -2452,14 +2459,29 @@ function renderProfiles(){
   });
   if(filtering) view=view.filter(x=>x.at>=0);
   if(q){
-    const terms=findTerms(q);
-    view=view.filter(x=>{
-      const hay=(x.g.ps.map(p=>`${p.name} ${p.src||""} `
-          +fitFor(p).ranked.slice(0,3).map(r=>`${r.a.n} ${r.a.w} ${r.a.co.join(" ")} ${r.a.va.join(" ")}`).join(" ")
-        ).join(" ")).toLowerCase();
-      return terms.some(t=>hay.includes(t));
-    });
-  }
+    /* 낱말마다 따로 보고 <b>모두</b> 들어간 것만 남긴다. 다른 표기(게이샤/geisha)는 그 낱말 안에서만 OR 다.
+       예전에는 입력 전체를 한 낱말로 보고 OR 로 걸렀다. 그래서 「게이샤 워시드」가
+       그 구절이 통째로 든 것만 찾았고, 둘로 좁히려 할수록 되레 안 나왔다 —
+       찾기 칸은 목록이 길 때 쓰는 것인데 정작 좁혀지지 않았다. */
+    const words=q.split(/\s+/).filter(Boolean).map(w=>findTerms(w));
+    const hit=(hay)=>words.every(ts=>ts.some(t=>hay.includes(t)));
+    const hayName=x=>x.g.ps.map(p=>{ const st=profStat(p.pts);
+        return `${p.name} ${p.src||""} ${st.drop.toFixed(1)} ${fmt(st.dur)}`; }).join(" ").toLowerCase();
+    const hayAll=x=>(hayName(x)+" "+x.g.ps.map(p=>
+        fitFor(p).ranked.slice(0,3).map(r=>`${r.a.n} ${r.a.w} ${r.a.co.join(" ")} ${r.a.va.join(" ")}`).join(" ")
+      ).join(" ")).toLowerCase();
+    /* 이름에 있으면 이름으로만 — 「거꾸로 찾기」용 산지 낱말까지 섞으면 흔한 말 하나에
+       거의 전부가 남는다. 실제로 「게이샤 내추럴」에 Typica Natural 이 걸렸다.
+       이름으로 하나도 못 찾을 때만 산지 추정까지 넓혀 본다. 넓혔다는 사실은 적어 둔다 —
+       왜 엉뚱해 보이는 줄이 남았는지 모르면 찾기를 믿을 수 없다. */
+    const byName=view.filter(x=>hit(hayName(x)));
+    const wide=byName.length===0;
+    view=wide?view.filter(x=>hit(hayAll(x))):byName;
+    if($("pf_findmsg")) $("pf_findmsg").innerHTML=wide
+      ? (view.length?`<span class="pill warn">이름에 없음</span> 산지 추정까지 넓혀 ${view.length}개를 찾았습니다`
+                    :`<span class="pill warn">못 찾음</span> 다른 말로 찾아보세요`)
+      : `<span class="pill ok">이름으로 ${view.length}개</span>`;
+  }else if($("pf_findmsg")) $("pf_findmsg").innerHTML="";
   if(filtering) view.sort((a,b)=>b.best-a.best);
 
   $("pf_count").textContent = (filtering||q)
@@ -4890,17 +4912,36 @@ window.fixLevel=lv=>{ $("r_level").value=lv; showRec(); };
    순위 안에 들어야만 했다. 순위는 이 생두 목표와의 거리이지 「쓰고 싶은가」가 아니다.
    고르는 길만 따로 열고, 고른 뒤의 판정(점수·게이트·손볼 곳)은 추천과 똑같이 태운다 —
    직접 골랐다고 해서 무엇을 손봐야 하는지를 덜 알아야 할 이유가 없다. */
+/* ---------- 목록 추리기 ----------
+   프로파일이 쌓이면 이름을 알아도 고를 수가 없다. 긴 목록을 스크롤하는 것은 찾는 게 아니다.
+   낱말을 띄어 쓰면 <b>모두</b> 들어간 것만 남는다 — 「게이샤 워시드」처럼 좁혀 갈 수 있다.
+   이름만이 아니라 화면에 보이는 글 전체를 훑으므로 「207」 같은 배출온도로도 찾힌다. */
+function profMatch(text,q){
+  const t=String(text).toLowerCase().replace(/\s+/g," ");
+  return String(q||"").toLowerCase().split(/\s+/).filter(Boolean).every(w=>t.includes(w));
+}
+function profLabel(p){
+  const st=profStat(p.pts);
+  return `${p.name} — 배출 ${st.drop.toFixed(1)}℃ · ${fmt(st.dur)}`;
+}
 function fillMineSel(){
   const e=$("p_mine"); if(!e) return;
-  const ps=DB.profiles.filter(p=>!p.archived&&p.pts&&p.pts.length>1)
-    .slice().sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),"ko"));
+  const q=(($("p_minefind")||{}).value||"").trim();
+  const all=DB.profiles.filter(p=>!p.archived&&p.pts&&p.pts.length>1)
+    .slice().sort((a,b)=>String(a.name||"").localeCompare(String(b.name||""),"ko"))
+    .map(p=>({id:p.id,text:profLabel(p)}));
+  const ps=q?all.filter(r=>profMatch(r.text,q)):all;
   const keep=e.value;
-  e.innerHTML=ps.length
-    ? `<option value="">— 내 프로파일 고르기 —</option>`
-      +ps.map(p=>{ const st=profStat(p.pts);
-        return `<option value="${p.id}">${p.name} — 배출 ${st.drop.toFixed(1)}℃ · ${fmt(st.dur)}</option>`; }).join("")
-    : `<option value="">저장된 프로파일이 없습니다</option>`;
-  if(keep) e.value=keep;
+  e.innerHTML=!all.length
+    ? `<option value="">저장된 프로파일이 없습니다</option>`
+    : (ps.length
+      ? `<option value="">— 내 프로파일 고르기 —</option>`
+        +ps.map(r=>`<option value="${r.id}">${bEsc(r.text)}</option>`).join("")
+      : `<option value="">찾는 것이 없습니다 — 다른 말로 찾아보세요</option>`);
+  if(keep&&ps.some(r=>r.id===keep)) e.value=keep;
+  const c=$("p_minecount");
+  if(c) c.textContent=!all.length?"":(q?`${all.length}개 중 ${ps.length}개`:`${all.length}개`);
+  return ps;
 }
 let mineIdx=null;                     // 직접 고른 것이 __ranked 에서 차지하는 자리
 window.pickMine=id=>{
@@ -4940,6 +4981,13 @@ function syncBean(from){
   ["r_bean","r_bean2"].forEach(id=>{ const e=$(id); if(e&&e.value!==v) e.value=v; });
   showRec();
 }
+$("p_minefind").addEventListener("input",()=>fillMineSel());
+/* 하나만 남았을 때 엔터 — 목록으로 내려가 고를 필요가 없다 */
+$("p_minefind").addEventListener("keydown",e=>{
+  if(e.key!=="Enter") return;
+  const ps=fillMineSel();
+  if(ps&&ps.length===1) pickMine(ps[0].id);
+});
 $("p_mineuse").onclick=()=>{
   const id=$("p_mine").value;
   if(!id){ $("p_pick").innerHTML=`<span class="pill warn">고르지 않았습니다</span>
@@ -8492,6 +8540,7 @@ function ikInit(){
        블루투스 기기는 보통 <b>한 번에 한 곳</b>하고만 이어집니다.`
     : `<span class="pill warn">사용 불가</span> 이 브라우저는 웹 블루투스를 지원하지 않습니다.
        <b>PC의 크롬이나 엣지</b>에서 열어주세요. 아이폰·사파리는 지원하지 않습니다.`;
+  $("ik_proffind").addEventListener("input",ikFillProf);
   $("ik_connect").onclick=()=>ikConnect(false);
   $("ik_connectall").onclick=()=>ikConnect(true);
   $("ik_disconnect").onclick=ikDisconnect;
@@ -8650,19 +8699,33 @@ function ikOpen(){
   if(!ikInit.done){ ikInit(); ikInit.done=true; }
   simFill();
   ikRemote();
-  const list=allProfiles().filter(p=>!p.archived);
-  const keep=$("ik_prof").value;
-  $("ik_prof").innerHTML=list.map(p=>
-    `<option value="${p.id}">${p.name} — 배출 ${profStat(p.pts).drop.toFixed(1)}℃ · ${fmt(profStat(p.pts).dur)}</option>`).join("");
+  const list=ikFillProf();
   /* 계획 탭이나 스튜디오에서 고른 프로파일을 띄운다.
      내장 프로파일에는 id 가 없어 이름으로 맞춘다.
      한 번 띄운 뒤에는 손으로 바꾼 선택을 덮지 않는다. */
   const want=ikWant(), hit=want?list.find(p=>p.name===want):null;
   if(hit&&want!==ikWantAt){
+    /* 찾기 칸에 글자가 남아 있으면 가져온 것이 목록에서 빠져 고를 수가 없다 — 먼저 비운다 */
+    if($("ik_proffind")&&$("ik_proffind").value){ $("ik_proffind").value=""; ikFillProf(); }
     $("ik_prof").value=hit.id; ikWantAt=want;
     $("ik_profmsg").innerHTML=`<span class="pill ok">가져왔습니다</span>
       <b>${hit.name}</b> — 연결한 뒤 「머신으로 보내기」를 누르세요.`;
-  } else if(keep) $("ik_prof").value=keep;
+  }
+}
+function ikFillProf(){
+  const sel=$("ik_prof"); if(!sel) return [];
+  const q=(($("ik_proffind")||{}).value||"").trim();
+  const list=allProfiles().filter(p=>!p.archived);
+  const rows=list.map(p=>({p,text:profLabel(p)}));
+  const show=q?rows.filter(r=>profMatch(r.text,q)):rows;
+  const keep=sel.value;
+  sel.innerHTML=show.length
+    ? show.map(r=>`<option value="${r.p.id}">${bEsc(r.text)}</option>`).join("")
+    : `<option value="">찾는 것이 없습니다 — 다른 말로 찾아보세요</option>`;
+  if(keep&&show.some(r=>r.p.id===keep)) sel.value=keep;
+  const c=$("ik_profcount");
+  if(c) c.textContent=q?`${list.length}개 중 ${show.length}개`:`${list.length}개`;
+  return list;
 }
 let ikWantAt=null;
 function ikWant(){
